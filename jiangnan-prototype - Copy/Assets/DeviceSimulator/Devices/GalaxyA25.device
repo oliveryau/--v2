@@ -1,0 +1,15 @@
+{
+  "friendlyName": "Galaxy A25 5G",
+  "version": 1,
+  "screens": [
+    {
+      "width": 1080,
+      "height": 2340,
+      "dpi": 396,
+      "orientation": "Portrait"
+    }
+  ],
+  "systemInfo": {
+    "operatingSystem": "Android"
+  }
+}

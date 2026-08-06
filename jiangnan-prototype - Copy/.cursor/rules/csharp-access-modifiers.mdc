@@ -1,0 +1,78 @@
+---
+description: C# access modifier conventions for Unity scripts
+globs: Assets/Scripts/**/*.cs
+alwaysApply: false
+---
+
+# Explicit Access Modifiers
+
+Always write access modifiers explicitly. Do not rely on C# defaults.
+
+## Fields
+
+```csharp
+// BAD — implicit private
+[SerializeField] Camera _camera;
+Plane _groundPlane;
+
+// GOOD
+[SerializeField] private Camera _camera;
+private Plane _groundPlane;
+private const int MaxEnergy = 3;
+```
+
+## Methods
+
+```csharp
+// BAD — implicit private
+void Update() { }
+void HandleTouch() { }
+
+// GOOD
+private void Update() { }
+private void HandleTouch() { }
+```
+
+## Public surface
+
+Only expose what other classes need:
+
+```csharp
+public class GameManager : MonoBehaviour
+{
+    public static GameManager Instance { get; private set; }
+
+    public void StartBusiness() { }
+
+    private void Awake() { }
+    private void InitSystems() { }
+}
+```
+
+## Unity lifecycle
+
+Unity invokes private lifecycle methods via reflection — keep them private:
+
+```csharp
+private void Awake() { }
+private void OnEnable() { }
+private void Update() { }
+private void OnValidate() { }
+private void OnDrawGizmosSelected() { }
+```
+
+## Plain C# classes
+
+Same rule applies to domain/system classes under `Assets/Scripts/`:
+
+```csharp
+public sealed class Customer
+{
+    public CustomerState State { get; private set; }
+
+    private float _eatTimer;
+
+    public void Tick(float deltaTime) { }
+    private void TransitionTo(CustomerState next) { }
+}
+```

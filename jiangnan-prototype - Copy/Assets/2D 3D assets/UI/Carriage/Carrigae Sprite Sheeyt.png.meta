@@ -1,0 +1,997 @@
+fileFormatVersion: 2
+guid: 49a8303f9e1c27142a9d8a4ea6668003
+TextureImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 0
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 3
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 4096
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 0
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Android
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_0
+      rect:
+        serializedVersion: 2
+        x: 192
+        y: 3830
+        width: 915
+        height: 629
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 4a5fc64660c9ae745b50e1640c3f1988
+      internalID: 1265884755
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_1
+      rect:
+        serializedVersion: 2
+        x: 1516
+        y: 3830
+        width: 911
+        height: 629
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 34329f221b54ff948ab150a886b6d8f8
+      internalID: 1803045654
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_3
+      rect:
+        serializedVersion: 2
+        x: 2846
+        y: 3830
+        width: 898
+        height: 629
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 6af6fc5b2ed49aa419ca5b06d4566622
+      internalID: 1272615396
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_5
+      rect:
+        serializedVersion: 2
+        x: 4171
+        y: 3830
+        width: 894
+        height: 625
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: a897e69c363e88b48b0f93fb48b4b944
+      internalID: -1621509163
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_7
+      rect:
+        serializedVersion: 2
+        x: 5501
+        y: 3830
+        width: 885
+        height: 625
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 0835250cfa15c3042970ad605ccc391d
+      internalID: 1777277688
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_9
+      rect:
+        serializedVersion: 2
+        x: 6831
+        y: 3830
+        width: 875
+        height: 629
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 644dcb6cfe04a9445a9d3167aad96726
+      internalID: 449270914
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_11
+      rect:
+        serializedVersion: 2
+        x: 8160
+        y: 3831
+        width: 867
+        height: 628
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 8e1e4b2f8ea292c4c86935eae923bbe6
+      internalID: -669654110
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_13
+      rect:
+        serializedVersion: 2
+        x: 240
+        y: 3071
+        width: 863
+        height: 629
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 520bd495201ed5a41990778bff058c9b
+      internalID: 495721185
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_15
+      rect:
+        serializedVersion: 2
+        x: 1561
+        y: 3076
+        width: 860
+        height: 624
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 4734134a637af384999d2b8fd40a7952
+      internalID: -1285191078
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_17
+      rect:
+        serializedVersion: 2
+        x: 2878
+        y: 3076
+        width: 866
+        height: 624
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: a99d56147433cd8458ffa92219c57129
+      internalID: -336035563
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_19
+      rect:
+        serializedVersion: 2
+        x: 4202
+        y: 3076
+        width: 863
+        height: 624
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: f389a58f759bdc54daa5829b13b20f1d
+      internalID: -1050944428
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_21
+      rect:
+        serializedVersion: 2
+        x: 5523
+        y: 3076
+        width: 863
+        height: 624
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 75427955e4f596f42ba7a848de925fc0
+      internalID: 14015322
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_23
+      rect:
+        serializedVersion: 2
+        x: 6844
+        y: 3076
+        width: 862
+        height: 624
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 78915790e97c6cd4a8473cb28b534150
+      internalID: -2056276297
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_25
+      rect:
+        serializedVersion: 2
+        x: 8165
+        y: 3071
+        width: 865
+        height: 629
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: e4173dea6cdfb5644bb6f7991f0e1762
+      internalID: 512267269
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_27
+      rect:
+        serializedVersion: 2
+        x: 249
+        y: 2308
+        width: 863
+        height: 633
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 7852dad1423bb424080b1ade3cff2c3e
+      internalID: -369696620
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_29
+      rect:
+        serializedVersion: 2
+        x: 1570
+        y: 2308
+        width: 862
+        height: 633
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 706e20944995bc14794a242b19547419
+      internalID: 1716372373
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_31
+      rect:
+        serializedVersion: 2
+        x: 2882
+        y: 2312
+        width: 875
+        height: 629
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: c8938b926533ac94e908157124ec8280
+      internalID: -1544772626
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_33
+      rect:
+        serializedVersion: 2
+        x: 4176
+        y: 2312
+        width: 902
+        height: 624
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: e72915056a64d1342a13a7e7165c5a8b
+      internalID: -361240165
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_35
+      rect:
+        serializedVersion: 2
+        x: 5478
+        y: 2316
+        width: 921
+        height: 620
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 3e4a6262cc9517c408c0b84b2417cb92
+      internalID: -955249471
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_37
+      rect:
+        serializedVersion: 2
+        x: 6794
+        y: 2316
+        width: 926
+        height: 618
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: c94096accc2214b4f8846b82ae71a2db
+      internalID: 249146121
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_39
+      rect:
+        serializedVersion: 2
+        x: 8115
+        y: 2312
+        width: 926
+        height: 620
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 263b66e066658c34890f60714e233561
+      internalID: -1278416384
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_41
+      rect:
+        serializedVersion: 2
+        x: 204
+        y: 1549
+        width: 917
+        height: 623
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 1f8f2e2708e73394cb76edb6b2e54b7d
+      internalID: -1098859190
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_42
+      rect:
+        serializedVersion: 2
+        x: 1534
+        y: 1548
+        width: 907
+        height: 624
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 9b5c4a6d67fc6db4eb80d677cb389a55
+      internalID: 853226377
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_43
+      rect:
+        serializedVersion: 2
+        x: 2868
+        y: 1548
+        width: 894
+        height: 624
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: f90e45b1737fe1b47bf514df8c1edb8f
+      internalID: -741005873
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_45
+      rect:
+        serializedVersion: 2
+        x: 4200
+        y: 1548
+        width: 883
+        height: 624
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: cc9c124352a7a4f47a25ff7c62d44c24
+      internalID: 1113421372
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_46
+      rect:
+        serializedVersion: 2
+        x: 5532
+        y: 1548
+        width: 872
+        height: 629
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 9b7bc284d0722e249a9bdf343d631d76
+      internalID: 1909431486
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_47
+      rect:
+        serializedVersion: 2
+        x: 6853
+        y: 1548
+        width: 871
+        height: 629
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 50739793525ec714fb14ebd8cbad95bf
+      internalID: -1893494509
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_48
+      rect:
+        serializedVersion: 2
+        x: 8174
+        y: 1548
+        width: 875
+        height: 633
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b62288480fbe83d45a4088e4d0a767d5
+      internalID: -1545908173
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_56
+      rect:
+        serializedVersion: 2
+        x: 258
+        y: 789
+        width: 872
+        height: 633
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: a8befd0189278564c90cb5fac392080b
+      internalID: -397167414
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_58
+      rect:
+        serializedVersion: 2
+        x: 1579
+        y: 789
+        width: 875
+        height: 637
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 7da3cea7dda783c41a83d71037f7a88b
+      internalID: 873153248
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_60
+      rect:
+        serializedVersion: 2
+        x: 2900
+        y: 789
+        width: 876
+        height: 638
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: eaed2eb36129504498d552ab756597b9
+      internalID: -1319143838
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_62
+      rect:
+        serializedVersion: 2
+        x: 4225
+        y: 789
+        width: 871
+        height: 641
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: cd0f27a8b0d6608488bc62e092cda18e
+      internalID: -190076930
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_64
+      rect:
+        serializedVersion: 2
+        x: 5546
+        y: 789
+        width: 875
+        height: 642
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 9f475531ae10b4e4e9442b328346aa9e
+      internalID: 1362571073
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_66
+      rect:
+        serializedVersion: 2
+        x: 6867
+        y: 789
+        width: 875
+        height: 642
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: f9ea4135d85137841856b3ca4a385929
+      internalID: 227306367
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_68
+      rect:
+        serializedVersion: 2
+        x: 8192
+        y: 789
+        width: 875
+        height: 641
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: a71f65edf6d56d642b64b4b7e1e16439
+      internalID: 44195473
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_69
+      rect:
+        serializedVersion: 2
+        x: 263
+        y: 29
+        width: 885
+        height: 638
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: bd7ef62ab8f4f7e4299f5cfc58c9c57a
+      internalID: 758146331
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_70
+      rect:
+        serializedVersion: 2
+        x: 1561
+        y: 29
+        width: 910
+        height: 638
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 5d99d20b972f9e340ac236ee0a59c063
+      internalID: -1010362840
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Carrigae Sprite Sheeyt_71
+      rect:
+        serializedVersion: 2
+        x: 2868
+        y: 29
+        width: 926
+        height: 634
+      alignment: 8
+      pivot: {x: 1, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: cb0c5a769cd9e8249a3a25ed52f7185e
+      internalID: -1869696595
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    physicsShape: []
+    bones: []
+    spriteID: 05f23cf717e80e442aa56b2b2a5ea527
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    nameFileIdTable:
+      Carrigae Sprite Sheeyt_0: 1265884755
+      Carrigae Sprite Sheeyt_1: 1803045654
+      Carrigae Sprite Sheeyt_10: 2042737543
+      Carrigae Sprite Sheeyt_11: -669654110
+      Carrigae Sprite Sheeyt_12: 172877408
+      Carrigae Sprite Sheeyt_13: 495721185
+      Carrigae Sprite Sheeyt_14: 762105136
+      Carrigae Sprite Sheeyt_15: -1285191078
+      Carrigae Sprite Sheeyt_16: 2072879945
+      Carrigae Sprite Sheeyt_17: -336035563
+      Carrigae Sprite Sheeyt_18: -1417138329
+      Carrigae Sprite Sheeyt_19: -1050944428
+      Carrigae Sprite Sheeyt_2: -578676684
+      Carrigae Sprite Sheeyt_20: -62558625
+      Carrigae Sprite Sheeyt_21: 14015322
+      Carrigae Sprite Sheeyt_22: 1575142580
+      Carrigae Sprite Sheeyt_23: -2056276297
+      Carrigae Sprite Sheeyt_24: 737117
+      Carrigae Sprite Sheeyt_25: 512267269
+      Carrigae Sprite Sheeyt_26: 145335311
+      Carrigae Sprite Sheeyt_27: -369696620
+      Carrigae Sprite Sheeyt_28: -283564325
+      Carrigae Sprite Sheeyt_29: 1716372373
+      Carrigae Sprite Sheeyt_3: 1272615396
+      Carrigae Sprite Sheeyt_30: -1611658616
+      Carrigae Sprite Sheeyt_31: -1544772626
+      Carrigae Sprite Sheeyt_32: -2031576515
+      Carrigae Sprite Sheeyt_33: -361240165
+      Carrigae Sprite Sheeyt_34: -1206136454
+      Carrigae Sprite Sheeyt_35: -955249471
+      Carrigae Sprite Sheeyt_36: 2118307056
+      Carrigae Sprite Sheeyt_37: 249146121
+      Carrigae Sprite Sheeyt_38: 629046135
+      Carrigae Sprite Sheeyt_39: -1278416384
+      Carrigae Sprite Sheeyt_4: -21000687
+      Carrigae Sprite Sheeyt_40: -985189513
+      Carrigae Sprite Sheeyt_41: -1098859190
+      Carrigae Sprite Sheeyt_42: 853226377
+      Carrigae Sprite Sheeyt_43: -741005873
+      Carrigae Sprite Sheeyt_44: 1331225823
+      Carrigae Sprite Sheeyt_45: 1113421372
+      Carrigae Sprite Sheeyt_46: 1909431486
+      Carrigae Sprite Sheeyt_47: -1893494509
+      Carrigae Sprite Sheeyt_48: -1545908173
+      Carrigae Sprite Sheeyt_49: 1793291615
+      Carrigae Sprite Sheeyt_5: -1621509163
+      Carrigae Sprite Sheeyt_50: -233366067
+      Carrigae Sprite Sheeyt_51: 1406309386
+      Carrigae Sprite Sheeyt_52: -972497501
+      Carrigae Sprite Sheeyt_53: 852887327
+      Carrigae Sprite Sheeyt_54: 1553124165
+      Carrigae Sprite Sheeyt_55: 1869478600
+      Carrigae Sprite Sheeyt_56: -397167414
+      Carrigae Sprite Sheeyt_57: -1883740120
+      Carrigae Sprite Sheeyt_58: 873153248
+      Carrigae Sprite Sheeyt_59: -1448729179
+      Carrigae Sprite Sheeyt_6: 802775523
+      Carrigae Sprite Sheeyt_60: -1319143838
+      Carrigae Sprite Sheeyt_61: -823818464
+      Carrigae Sprite Sheeyt_62: -190076930
+      Carrigae Sprite Sheeyt_63: -1587104935
+      Carrigae Sprite Sheeyt_64: 1362571073
+      Carrigae Sprite Sheeyt_65: -70112721
+      Carrigae Sprite Sheeyt_66: 227306367
+      Carrigae Sprite Sheeyt_67: 932891707
+      Carrigae Sprite Sheeyt_68: 44195473
+      Carrigae Sprite Sheeyt_69: 758146331
+      Carrigae Sprite Sheeyt_7: 1777277688
+      Carrigae Sprite Sheeyt_70: -1010362840
+      Carrigae Sprite Sheeyt_71: -1869696595
+      Carrigae Sprite Sheeyt_8: 416421368
+      Carrigae Sprite Sheeyt_9: 449270914
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

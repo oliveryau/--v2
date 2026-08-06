@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f5a6b7c8d9e04123b4c5d6e7f8901234, type: 3}
+  m_Name: VipCompetitorCatalog
+  m_EditorClassIdentifier: 
+  _profiles:
+  - Competitor: 0
+    TownShopIndex: 1
+    RestaurantName: "\u6234\u5A01\u996D\u5E97"
+    DisplayName: "\u6234\u5A01"
+    RestaurantRating: 4.2
+    SignatureDishes:
+    - dishIndex: 1
+      displayName: "\u53EB\u82B1\u9E21"
+      fightRating: 80
+  - Competitor: 1
+    TownShopIndex: 2
+    RestaurantName: "\u5609\u6052\u996D\u5E97"
+    DisplayName: "\u5609\u6052"
+    RestaurantRating: 3.5
+    SignatureDishes:
+    - dishIndex: 8
+      displayName: "\u4F5B\u8DF3\u5899"
+      fightRating: 74
+  - Competitor: 2
+    TownShopIndex: 3
+    RestaurantName: "\u6625\u534E\u996D\u5E97"
+    DisplayName: "\u6625\u534E"
+    RestaurantRating: 3.3
+    SignatureDishes:
+    - dishIndex: 0
+      displayName: "\u4E1C\u5761\u8089"
+      fightRating: 75
+  - Competitor: 3
+    TownShopIndex: 4
+    RestaurantName: "\u7EA2\u59D0\u996D\u5E97"
+    DisplayName: "\u7EA2\u59D0"
+    RestaurantRating: 4
+    SignatureDishes:
+    - dishIndex: 7
+      displayName: "\u9EBB\u5A46\u8C46\u8150"
+      fightRating: 81
