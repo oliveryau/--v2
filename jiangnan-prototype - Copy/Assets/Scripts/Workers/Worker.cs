@@ -15,6 +15,8 @@ public class Worker : MonoBehaviour
     [SerializeField] private NavMeshAgent _agent;
     [SerializeField] private NavMeshLocomotion _locomotion;
     [SerializeField] private WorkerEnergy _energy;
+    [Tooltip("When true, this waiter only serves VIP / second-floor customers.")]
+    [SerializeField] private bool _servesVipFloorOnly;
 
     private WorkerState _state = WorkerState.Wait;
 
@@ -25,6 +27,7 @@ public class Worker : MonoBehaviour
     public WorkerState State => _state;
     public RectTransform EnergyUiRoot => _energyUiRoot;
     public Transform WaitPoint => _waitPoint;
+    public bool ServesVipFloorOnly => _servesVipFloorOnly;
     public bool IsAvailable => _state == WorkerState.Wait;
     public bool IsResting => _state == WorkerState.Rest;
 
@@ -167,9 +170,19 @@ public class Worker : MonoBehaviour
     private void OnEnable()
     {
         TryRegister();
+        ApplyFloorViewLayer();
 
         if (RestaurantSceneMode.UsesWorkerEnergyUi)
             UIManager.Instance?.RegisterWorkerEnergyUi(this);
+    }
+
+    private void ApplyFloorViewLayer()
+    {
+        if (!_servesVipFloorOnly)
+            return;
+
+        // Follow elevation so stove pickups on floor 1 stay visible while player is downstairs.
+        RestaurantFloorUtil.SyncActorFloorViewLayerByElevation(gameObject);
     }
 
     private void OnDisable()

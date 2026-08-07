@@ -48,9 +48,7 @@ public class WorkerMovement : MonoBehaviour
             yield break;
         }
 
-        Vector3 spawnPosition = spot.WalkInSpawn != null
-            ? spot.WalkInSpawn.position
-            : spot.transform.position;
+        Vector3 spawnPosition = ResolveWalkInSpawnPosition(spot);
         float spawnInterval = Mathf.Max(0f, spot.WalkInSpawnInterval);
 
         Vector3[] targetPositions = new Vector3[workers.Length];
@@ -105,5 +103,42 @@ public class WorkerMovement : MonoBehaviour
         worker.gameObject.SetActive(false);
         worker.WarpTo(spawnPosition);
         worker.gameObject.SetActive(true);
+    }
+
+    private static Vector3 ResolveWalkInSpawnPosition(HireSpot spot)
+    {
+        if (spot == null)
+            return Vector3.zero;
+
+        Vector3 spawnPosition = spot.WalkInSpawn != null
+            ? spot.WalkInSpawn.position
+            : spot.transform.position;
+
+        if (spot.Floor != RestaurantFloor.Second)
+            return spawnPosition;
+
+        // Outer spawn is on the ground floor; lift second-floor hires onto the upstairs plane.
+        Transform endpoint = GetFirstWalkInEndpoint(spot);
+
+        if (endpoint != null)
+            spawnPosition.y = endpoint.position.y;
+
+        return spawnPosition;
+    }
+
+    private static Transform GetFirstWalkInEndpoint(HireSpot spot)
+    {
+        Transform[] endpoints = spot != null ? spot.WalkInEndpoints : null;
+
+        if (endpoints == null)
+            return null;
+
+        for (int i = 0; i < endpoints.Length; i++)
+        {
+            if (endpoints[i] != null)
+                return endpoints[i];
+        }
+
+        return null;
     }
 }

@@ -66,7 +66,7 @@ public static class NavMeshMovement
 
     public static Vector3 ResolveReachablePosition(Vector3 position, float sampleRadius = 2f)
     {
-        if (NavMesh.SamplePosition(position, out NavMeshHit hit, sampleRadius, NavMesh.AllAreas))
+        if (TrySampleSameFloor(position, sampleRadius, out NavMeshHit hit))
             return hit.position;
 
         return position;
@@ -77,14 +77,29 @@ public static class NavMeshMovement
         if (agent == null)
             return false;
 
-        if (NavMesh.SamplePosition(position, out NavMeshHit hit, sampleRadius, NavMesh.AllAreas))
+        if (TrySampleSameFloor(position, sampleRadius, out NavMeshHit hit))
         {
             agent.Warp(hit.position);
             return true;
         }
 
-        agent.transform.position = position;
+        // Keep authored height (e.g. second-floor wait points) instead of snapping to ground NavMesh.
+        agent.Warp(position);
         return agent.isOnNavMesh;
+    }
+
+    private static bool TrySampleSameFloor(Vector3 position, float sampleRadius, out NavMeshHit hit)
+    {
+        const float maxFloorDelta = 1.25f;
+
+        if (NavMesh.SamplePosition(position, out hit, sampleRadius, NavMesh.AllAreas)
+            && Mathf.Abs(hit.position.y - position.y) <= maxFloorDelta)
+        {
+            return true;
+        }
+
+        hit = default;
+        return false;
     }
 
     public static bool CanControl(NavMeshAgent agent)

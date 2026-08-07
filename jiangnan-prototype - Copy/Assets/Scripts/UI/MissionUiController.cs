@@ -123,6 +123,16 @@ public class MissionUiController : MonoBehaviour
         RefreshUi();
     }
 
+    public void SyncPlacedCounts(int receptions, int stoves, int tables, int stairs, int vipTables)
+    {
+        SetPlacedCount(PlaceableType.Reception, receptions);
+        SetPlacedCount(PlaceableType.Stove, stoves);
+        SetPlacedCount(PlaceableType.Table, tables);
+        SetPlacedCount(PlaceableType.Stairs, stairs);
+        SetPlacedCount(PlaceableType.VipTable, vipTables);
+        RefreshUi();
+    }
+
     public void SetHiredCounts(int chefs, int waiters)
     {
         SyncHiredCounts(chefs, waiters);
@@ -264,12 +274,21 @@ public class MissionUiController : MonoBehaviour
         if (_missionRoot == null)
             return;
 
-        bool hasPart = _missionCatalog != null && _missionCatalog.TryGetPart(_currentPartIndex, out _);
+        bool hasActivePart = _missionCatalog != null
+            && _missionCatalog.TryGetPart(_currentPartIndex, out _);
         bool shouldShow = RestaurantSceneMode.IsMainScene
-            && hasPart
+            && hasActivePart
+            && !AreAllMissionsComplete()
             && (state == GameState.Building || state == GameState.Business);
 
         _missionRoot.SetActive(shouldShow);
+    }
+
+    private bool AreAllMissionsComplete()
+    {
+        return _missionCatalog != null
+            && _missionCatalog.PartCount > 0
+            && _currentPartIndex >= _missionCatalog.PartCount;
     }
 
     private void ClampCurrentPartIndex()
@@ -277,12 +296,19 @@ public class MissionUiController : MonoBehaviour
         if (_missionCatalog == null || _missionCatalog.PartCount <= 0)
             return;
 
-        int lastIndex = _missionCatalog.PartCount - 1;
+        // PartCount is the sentinel for "all missions finished".
+        int maxIndex = _missionCatalog.PartCount;
+        int clamped = _currentPartIndex;
 
-        if (_currentPartIndex <= lastIndex)
+        if (clamped < 0)
+            clamped = 0;
+        else if (clamped > maxIndex)
+            clamped = maxIndex;
+
+        if (clamped == _currentPartIndex)
             return;
 
-        _currentPartIndex = lastIndex;
+        _currentPartIndex = clamped;
         PlayerProfileStorage.SetMainSceneMissionPartIndexForCurrentPlayer(_currentPartIndex);
     }
 
@@ -291,6 +317,9 @@ public class MissionUiController : MonoBehaviour
         EnsureInitialized();
 
         if (_missionCatalog == null || _isAdvancingPart)
+            return false;
+
+        if (AreAllMissionsComplete())
             return false;
 
         int completedIndex = _currentPartIndex;
@@ -311,14 +340,15 @@ public class MissionUiController : MonoBehaviour
             if (hasNextPart)
             {
                 _currentPartIndex = nextIndex;
-                PlayerProfileStorage.SetMainSceneMissionPartIndexForCurrentPlayer(_currentPartIndex);
-                GameEvents.RaiseMissionPartChanged(_currentPartIndex);
             }
             else
             {
-                ClampCurrentPartIndex();
+                // Move past the last part so the mission UI can hide.
+                _currentPartIndex = _missionCatalog.PartCount;
             }
 
+            PlayerProfileStorage.SetMainSceneMissionPartIndexForCurrentPlayer(_currentPartIndex);
+            GameEvents.RaiseMissionPartChanged(_currentPartIndex);
             GameEvents.RaiseMissionPartCompleted(completedIndex);
 
             return hasNextPart;
@@ -332,6 +362,9 @@ public class MissionUiController : MonoBehaviour
     private bool IsCurrentPartComplete()
     {
         EnsureInitialized();
+
+        if (AreAllMissionsComplete())
+            return false;
 
         if (_missionCatalog == null || !_missionCatalog.TryGetPart(_currentPartIndex, out MissionPartDefinition part))
             return false;

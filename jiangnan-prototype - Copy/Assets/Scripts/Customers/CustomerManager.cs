@@ -11,7 +11,6 @@ public class CustomerManager : MonoBehaviour
     [Header("References")]
     [SerializeField] private CustomerPool _customerPool;
     [SerializeField] private CustomerQueue _customerQueue;
-    [SerializeField] private TableSeat[] _seats;
     [SerializeField] private Transform _spawnPoint;
     [SerializeField] private Transform _exitPoint;
 
@@ -118,17 +117,6 @@ public class CustomerManager : MonoBehaviour
             EvacuateAllCustomers();
     }
 
-    private void Start()
-    {
-        RegisterConfiguredSeats();
-    }
-
-    private void RegisterConfiguredSeats()
-    {
-        if (_seats != null && _seats.Length > 0)
-            RegisterSeats(_seats);
-    }
-
     public void RemoveCustomerImmediately(Customer customer)
     {
         if (customer == null)
@@ -211,7 +199,7 @@ public class CustomerManager : MonoBehaviour
 
     public void CompletePayment(Customer customer)
     {
-        if (customer == null || customer.State != CustomerState.Paying)
+        if (customer == null || !IsAwaitingPayment(customer))
             return;
 
         MarkPaymentCompleted(customer);
@@ -526,8 +514,14 @@ public class CustomerManager : MonoBehaviour
         {
             DiningTable table = tables[i];
 
-            if (table != null && table.isActiveAndEnabled && table.gameObject.activeInHierarchy)
-                count++;
+            if (table == null || !table.isActiveAndEnabled || !table.gameObject.activeInHierarchy)
+                continue;
+
+            // VIP / second-floor tables don't expand the ground-floor customer cap.
+            if (table.IsVipTable)
+                continue;
+
+            count++;
         }
 
         return count;
@@ -586,41 +580,60 @@ public class CustomerManager : MonoBehaviour
 
     private bool ShouldSpawnVip()
     {
-        if (IsVipPranksterAlternationEnabled())
-        {
-            if (_customerPool == null || !_customerPool.HasVipPrefabs)
-                return false;
+        if (_customerPool == null || !_customerPool.HasVipPrefabs)
+            return false;
 
-            if (_pranksterManager == null)
-                _pranksterManager = FindFirstObjectByType<PranksterManager>();
-
-            if (_pranksterManager != null && _pranksterManager.IsVisitActive)
-                return false;
-
-            if (_pranksterManager != null && _pranksterManager.IsAwaitingPranksterSpawn)
-                return false;
-
-            if (GetActiveVipCountForAlternation() > 0)
-                return false;
-
-            if (!_awaitingVipAfterPrankster)
-                return false;
-
-            if (_customersSincePranksterLeft < Mathf.Max(1, _vipSpawnInterval))
-                return false;
-
-            _awaitingVipAfterPrankster = false;
-            _customersSincePranksterLeft = 0;
-            return true;
-        }
-
-        if (_vipSpawnInterval <= 0 || _customerPool == null || !_customerPool.HasVipPrefabs)
+        if (!MeetsVipSpawnRequirements())
             return false;
 
         if (GetActiveVipCount() >= Mathf.Max(1, _maxActiveVips))
             return false;
 
+        if (RestaurantSceneMode.IsMainScene)
+        {
+            if (_pranksterManager == null)
+                _pranksterManager = FindFirstObjectByType<PranksterManager>();
+
+            // Don't overlap an active / imminent prankster visit.
+            if (_pranksterManager != null
+                && (_pranksterManager.IsVisitActive || _pranksterManager.IsAwaitingPranksterSpawn))
+            {
+                return false;
+            }
+        }
+
+        if (_vipSpawnInterval <= 0)
+            return false;
+
         return _spawnCount % _vipSpawnInterval == 0;
+    }
+
+    private bool MeetsVipSpawnRequirements()
+    {
+        if (WorkerManager.Instance == null || !WorkerManager.Instance.HasVipFloorWaiterHired())
+            return false;
+
+        return HasAvailableVipSeat();
+    }
+
+    private bool HasAvailableVipSeat()
+    {
+        for (int i = 0; i < _registeredSeats.Count; i++)
+        {
+            TableSeat seat = _registeredSeats[i];
+
+            if (seat == null || !seat.isActiveAndEnabled)
+                continue;
+
+            DiningTable table = FindTableForSeat(seat);
+
+            if (table == null || !table.IsVipTable || table.IsBroken)
+                continue;
+
+            return true;
+        }
+
+        return false;
     }
 
     private static bool IsVipPranksterAlternationEnabled()
@@ -709,7 +722,7 @@ public class CustomerManager : MonoBehaviour
 
         while (seat == null && waitTimer < _queueWaitTimeout)
         {
-            seat = FindFreeSeat();
+            seat = FindFreeSeat(customer);
 
             if (seat == null)
             {
@@ -793,32 +806,16 @@ public class CustomerManager : MonoBehaviour
             yield break;
         }
 
+        // Normal customers auto-collect; UIManager plays the coin FX on Paying.
+        CompletePayment(customer);
         ReleaseCustomerSeatAndNotify(customer, seat);
-        yield return LeaveWhileAwaitingPayment(customer);
-    }
-
-    private IEnumerator LeaveWhileAwaitingPayment(Customer customer)
-    {
-        if (_exitPoint != null && CustomerMovement.Instance != null)
-            yield return CustomerMovement.Instance.MoveTo(customer, _exitPoint.position);
-
-        _activeFlows.Remove(customer);
-
-        while (!_completedPayments.Contains(customer))
-            yield return null;
-
-        _completedPayments.Remove(customer);
-        customer.ClearPendingPayment();
-        customer.SetState(CustomerState.Leaving);
-
-        if (_customerQueue != null && customer.QueueSlotIndex >= 0)
-            _customerQueue.Release(customer.QueueSlotIndex);
-
-        ReleaseCustomerToPool(customer);
+        yield return Leave(customer);
     }
 
     private IEnumerator Leave(Customer customer)
     {
+        bool wasVip = customer != null && customer.IsVip;
+
         customer.ClearPendingPayment();
         customer.SetState(CustomerState.Leaving);
 
@@ -833,6 +830,9 @@ public class CustomerManager : MonoBehaviour
 
         ReleaseCustomerSeatAndNotify(customer);
         ReleaseCustomerToPool(customer);
+
+        if (wasVip && GetActiveVipCount() <= 0)
+            UIManager.Instance?.HideVipUi();
     }
 
     private IEnumerator TryWalkCustomerToSeat(Customer customer, TableSeat preferredSeat, System.Action<TableSeat> onComplete)
@@ -842,7 +842,7 @@ public class CustomerManager : MonoBehaviour
 
         for (int attempt = 0; attempt < maxAttempts; attempt++)
         {
-            TableSeat seat = attempt == 0 ? preferredSeat : FindFreeSeat();
+            TableSeat seat = attempt == 0 ? preferredSeat : FindFreeSeat(customer);
 
             if (seat == null)
                 break;
@@ -967,11 +967,12 @@ public class CustomerManager : MonoBehaviour
         StartCoroutine(Leave(customer));
     }
 
-    private TableSeat FindFreeSeat()
+    private TableSeat FindFreeSeat(Customer customer)
     {
         if (_registeredSeats.Count == 0)
             return null;
 
+        bool wantsVipSeat = customer != null && customer.IsVip;
         TableSeat chosen = null;
         int availableCount = 0;
 
@@ -985,6 +986,11 @@ public class CustomerManager : MonoBehaviour
             DiningTable table = FindTableForSeat(seat);
 
             if (table != null && table.IsBroken)
+                continue;
+
+            bool isVipSeat = table != null && table.IsVipTable;
+
+            if (wantsVipSeat != isVipSeat)
                 continue;
 
             availableCount++;

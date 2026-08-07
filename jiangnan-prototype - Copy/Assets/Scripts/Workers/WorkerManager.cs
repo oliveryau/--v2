@@ -268,22 +268,50 @@ public class WorkerManager : MonoBehaviour
         if (_stoveStation == null || _readyOrders.Count == 0 || !_stoveStation.HasAvailablePickup)
             return false;
 
-        Worker waiter = FindAvailableWorker(_waiters);
-
-        if (waiter == null || !_stoveStation.TryReservePickup(waiter, out int pickupIndex))
+        if (!TryDequeueOrderForAvailableWaiter(out DishOrder order, out Worker waiter))
             return false;
 
-        DishOrder order = DequeuePrioritizedOrder(_readyOrders);
-
-        if (order == null)
+        if (!_stoveStation.TryReservePickup(waiter, out int pickupIndex))
         {
-            _stoveStation.ReleasePickup(waiter);
+            _readyOrders.Enqueue(order);
             return false;
         }
 
         Coroutine task = StartCoroutine(DeliverOrderRoutine(waiter, order, pickupIndex));
         _activeTasks[waiter] = task;
         return true;
+    }
+
+    private bool TryDequeueOrderForAvailableWaiter(out DishOrder order, out Worker waiter)
+    {
+        order = null;
+        waiter = null;
+
+        if (_readyOrders.Count == 0)
+            return false;
+
+        // Prefer VIP orders when a VIP waiter is free.
+        DishOrder vipOrder = DequeueFirstMatchingOrder(_readyOrders, candidate =>
+            IsVipOrder(candidate) && FindAvailableWaiterForOrder(candidate) != null);
+
+        if (vipOrder != null)
+        {
+            order = vipOrder;
+            waiter = FindAvailableWaiterForOrder(vipOrder);
+            return waiter != null;
+        }
+
+        DishOrder normalOrder = DequeueFirstMatchingOrder(_readyOrders, candidate =>
+            IsAssignableOrder(candidate)
+            && !IsVipOrder(candidate)
+            && FindAvailableWaiterForOrder(candidate) != null);
+
+        if (normalOrder == null)
+            return false;
+
+        order = normalOrder;
+        waiter = FindAvailableWaiterForOrder(normalOrder);
+        return waiter != null;
     }
 
     private IEnumerator CookOrderRoutine(Worker chef, DishOrder order)
@@ -532,6 +560,52 @@ public class WorkerManager : MonoBehaviour
         }
 
         return null;
+    }
+
+    private Worker FindAvailableWaiterForOrder(DishOrder order)
+    {
+        for (int i = 0; i < _waiters.Count; i++)
+        {
+            Worker waiter = _waiters[i];
+
+            if (waiter == null || !waiter.isActiveAndEnabled || !waiter.IsAvailable || waiter.IsResting)
+                continue;
+
+            if (waiter.Energy != null && waiter.Energy.ShouldRest)
+                continue;
+
+            if (_activeTasks.ContainsKey(waiter))
+                continue;
+
+            if (!CanWaiterServeOrder(waiter, order))
+                continue;
+
+            return waiter;
+        }
+
+        return null;
+    }
+
+    private static bool CanWaiterServeOrder(Worker waiter, DishOrder order)
+    {
+        if (waiter == null || order == null)
+            return false;
+
+        bool vipOrder = IsVipOrder(order);
+        return waiter.ServesVipFloorOnly ? vipOrder : !vipOrder;
+    }
+
+    public bool HasVipFloorWaiterHired()
+    {
+        for (int i = 0; i < _waiters.Count; i++)
+        {
+            Worker waiter = _waiters[i];
+
+            if (waiter != null && waiter.isActiveAndEnabled && waiter.ServesVipFloorOnly)
+                return true;
+        }
+
+        return false;
     }
 
     private void RefreshWorkerRoster()

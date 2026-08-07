@@ -26,6 +26,8 @@ public class DiningTable : MonoBehaviour
     [SerializeField] private Transform _paymentAnchor;
     [SerializeField] private Transform _deliveryTarget;
     [SerializeField] private Transform _vfxPoint;
+    [Tooltip("VIP / second-floor table. Only VIP customers may sit here.")]
+    [SerializeField] private bool _isVipTable;
     [Header("Broken State")]
     [Tooltip("Gold required to repair this table and its stools after a prankster breaks them.")]
     [SerializeField] private int _repairCost = 500;
@@ -47,9 +49,13 @@ public class DiningTable : MonoBehaviour
     public bool IsBroken => _isBroken;
     public bool IsRepairing => _isRepairing;
     public int RepairCost => _repairCost;
-    public bool CanBeBrokenByPrankster => !_isBroken && !_isUpgrading && !_isRepairing;
+    public bool IsVipTable => _isVipTable;
+    public RestaurantFloor Floor => _isVipTable
+        ? RestaurantFloor.Second
+        : RestaurantFloorUtil.ResolveFloor(transform);
+    public bool CanBeBrokenByPrankster => !_isVipTable && !_isBroken && !_isUpgrading && !_isRepairing;
     public int MaxTableLevel => MaxLevel;
-    public bool CanUpgrade => _level < MaxLevel && !_isUpgrading && !_isBroken && !_isRepairing;
+    public bool CanUpgrade => !_isVipTable && _level < MaxLevel && !_isUpgrading && !_isBroken && !_isRepairing;
     public bool IsUpgrading => _isUpgrading;
     public Transform StatusPoint => _statusPoint != null ? _statusPoint : transform;
     public Transform PaymentAnchor => GetPaymentAnchor();
@@ -86,13 +92,18 @@ public class DiningTable : MonoBehaviour
         }
 
         EnsureTapCollider();
+
+        // VIP tables are static (no upgrades / broken variants / save index).
+        if (_isVipTable)
+            return;
+
         ApplySavedTableLevel();
         EnsureBrokenTableReferences();
     }
 
     private void OnEnable()
     {
-        if (_isBroken)
+        if (_isBroken || _isVipTable)
             return;
 
         RefreshVisualsForBuild();
@@ -100,10 +111,12 @@ public class DiningTable : MonoBehaviour
 
     private void Start()
     {
-        if (!_isBroken)
+        if (!_isBroken && !_isVipTable)
             RefreshVisualsForBuild();
 
-        ApplySavedBrokenState();
+        if (!_isVipTable)
+            ApplySavedBrokenState();
+
         RegisterSeatsWithCustomerManager();
         GameEvents.RaiseTableStatusChanged(this);
     }
@@ -114,7 +127,7 @@ public class DiningTable : MonoBehaviour
     /// </summary>
     public void RefreshVisualsForBuild()
     {
-        if (_isBroken)
+        if (_isBroken || _isVipTable)
             return;
 
         RestoreVisualLevel(_level);
@@ -471,6 +484,10 @@ public class DiningTable : MonoBehaviour
         if (HasValidRuntimeSeats())
             return;
 
+        // VIP seats are inspector-authored on the table itself — never rebuild from level visuals.
+        if (_isVipTable)
+            return;
+
         RefreshRuntimeReferences();
     }
 
@@ -733,7 +750,7 @@ public class DiningTable : MonoBehaviour
             if (seat == null)
                 continue;
 
-            seat.Configure(seat.transform, paymentAnchor);
+            seat.EnsureMissingAnchors(seat.transform, paymentAnchor);
         }
     }
 
@@ -950,6 +967,9 @@ public class DiningTable : MonoBehaviour
 
     private void ApplySavedTableLevel()
     {
+        if (_isVipTable)
+            return;
+
         int saveIndex = ResolveSaveIndex();
 
         if (saveIndex < 0)
@@ -960,6 +980,9 @@ public class DiningTable : MonoBehaviour
 
     private int ResolveSaveIndex()
     {
+        if (_isVipTable)
+            return -1;
+
         if (_saveIndexResolved)
             return _cachedSaveIndex;
 

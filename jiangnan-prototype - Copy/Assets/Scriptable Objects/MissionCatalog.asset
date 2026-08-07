@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: MissionCatalog
   m_EditorClassIdentifier: 
   _parts:
-  - title: "\u51C6\u5907\u5EFA\u9020"
+  - title: "\u51C6\u5907\u5F00\u5E97"
     tasks:
     - taskKind: 0
       description: "\u5EFA\u9020\u67DC\u53F0"
@@ -27,7 +27,7 @@ MonoBehaviour:
       requiredCount: 1
     revealSecondFloorWhenComplete: 0
     startHiringWhenComplete: 1
-  - title: "\u62DB\u8058\u5458\u5DE5"
+  - title: "\u8BF7\u5458\u5DE5"
     tasks:
     - taskKind: 1
       description: "\u62DB\u53A8\u5E08"
@@ -41,7 +41,7 @@ MonoBehaviour:
       requiredCount: 1
     revealSecondFloorWhenComplete: 0
     startHiringWhenComplete: 0
-  - title: "\u5EFA\u9020\u684C\u5B50"
+  - title: "\u5F00\u684C"
     tasks:
     - taskKind: 0
       description: "\u5EFA\u90202\u684C\u5B50"
@@ -50,11 +50,20 @@ MonoBehaviour:
       requiredCount: 2
     revealSecondFloorWhenComplete: 0
     startHiringWhenComplete: 0
-  - title: "\u7B2C\u4E00\u5929\u5F00\u5E97"
+  - title: "\u5347\u7EA7\u996D\u5E97"
     tasks:
-    - taskKind: 2
-      description: "\u5F00\u5E97\u8425\u4E1A"
-      requiredType: 0
+    - taskKind: 0
+      description: "\u5EFA\u9020\u697C\u68AF"
+      requiredType: 3
+      requiredWorkerType: 0
+      requiredCount: 1
+    revealSecondFloorWhenComplete: 0
+    startHiringWhenComplete: 0
+  - title: "\u6B64\u540E\u8D35\u5BBE"
+    tasks:
+    - taskKind: 0
+      description: "\u5EFA\u9020VIP\u684C\u5B50"
+      requiredType: 4
       requiredWorkerType: 0
       requiredCount: 1
     revealSecondFloorWhenComplete: 0

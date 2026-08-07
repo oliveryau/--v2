@@ -36,7 +36,7 @@ public class MissionCatalog : ScriptableObject
     public const int StarterBuildMissionPartIndex = 0;
     public const int HireMissionPartIndex = 1;
     public const int TableBuildMissionPartIndex = 2;
-    public const int OpenBusinessMissionPartIndex = 3;
+    public const int OpenBusinessMissionPartIndex = 3; // Stairs mission — unlocks auto-open after tables.
 
     [SerializeField] private MissionPartDefinition[] _parts = CreateDefaultParts();
 
@@ -155,15 +155,32 @@ public class MissionCatalog : ScriptableObject
             },
             new MissionPartDefinition
             {
-                title = "开店",
+                title = "升级饭店",
                 revealSecondFloorWhenComplete = false,
                 startHiringWhenComplete = false,
                 tasks = new[]
                 {
                     new MissionTaskDefinition
                     {
-                        taskKind = MissionTaskKind.OpenBusiness,
-                        description = "开店营业",
+                        taskKind = MissionTaskKind.Build,
+                        description = "建造楼梯",
+                        requiredType = PlaceableType.Stairs,
+                        requiredCount = 1
+                    }
+                }
+            },
+            new MissionPartDefinition
+            {
+                title = "此后贵宾",
+                revealSecondFloorWhenComplete = false,
+                startHiringWhenComplete = false,
+                tasks = new[]
+                {
+                    new MissionTaskDefinition
+                    {
+                        taskKind = MissionTaskKind.Build,
+                        description = "建造VIP桌子",
+                        requiredType = PlaceableType.VipTable,
                         requiredCount = 1
                     }
                 }

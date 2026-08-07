@@ -1597,12 +1597,6 @@ MonoBehaviour:
   _waiterHirePulseSpeed: 8
   _seatPaymentUiRoot: {fileID: 0}
   _seatPaymentButton: {fileID: 0}
-  _seatPaymentPulseMinScale: 0.9
-  _seatPaymentPulseMaxScale: 1
-  _seatPaymentPulseSpeed: 18
-  _vipPaymentGlowPulseMinScale: 0.8
-  _vipPaymentGlowPulseMaxScale: 1.2
-  _vipPaymentGlowPulseSpeed: 26
   _coinVfxRoot: {fileID: 1146497815}
   _coinTrailTargetUi: {fileID: 2037003167}
   _coinTrailCount: 5
@@ -1610,10 +1604,10 @@ MonoBehaviour:
   _coinTrailDelay: 0.1
   _coinTrailDuration: 0.6
   _coinTrailArcHeight: 120
-  _vipImgTextRoot: {fileID: 0}
-  _vipAnnouncementFadeInDuration: 0.35
-  _vipAnnouncementHoldDuration: 1.5
-  _vipAnnouncementFadeOutDuration: 0.4
+  _vipUiRoot: {fileID: 0}
+  _vipFireworksRoot: {fileID: 0}
+  _vipFireworksHoldDuration: 3
+  _vipFireworksFadeOutDuration: 0.4
   _vipDoneEatingRoot: {fileID: 0}
   _vipDoneIconChad1: {fileID: 0}
   _vipDoneIconChad2: {fileID: 0}
@@ -1691,7 +1685,6 @@ MonoBehaviour:
   _nameInputField: {fileID: 0}
   _entryButton: {fileID: 0}
   _randomiserButton: {fileID: 0}
-  _resetDataButton: {fileID: 0}
   _loanRoot: {fileID: 1394851580}
   _getMoneyButton: {fileID: 512998578}
   _loanAmountText: {fileID: 891948781}

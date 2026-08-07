@@ -404,16 +404,6 @@ public class BuildSequenceController : MonoBehaviour
 
     private void RefreshSpotStates()
     {
-        // While a business session is running (or waiting for overview ack), hide unbuilt spots.
-        if (IsBusinessSessionActive() || IsBusinessCloseSummaryPending())
-        {
-            SetSpotGroupState(_starterSpots, activateUnbuilt: false);
-            SetSpotGroupState(_missionTableSpots, activateUnbuilt: false);
-            SetSpotGroupState(_groundFloorFollowUpSpots, activateUnbuilt: false);
-            SetSpotGroupState(_secondFloorBuildSpots, activateUnbuilt: false);
-            return;
-        }
-
         int missionPart = GetCurrentMissionPartIndex();
 
         // Mission 1: counter + stove only.
@@ -644,6 +634,8 @@ public class BuildSequenceController : MonoBehaviour
         int receptions = 0;
         int stoves = 0;
         int tables = 0;
+        int stairs = 0;
+        int vipTables = 0;
 
         for (int i = 0; i < _allSpots.Count; i++)
         {
@@ -663,10 +655,16 @@ public class BuildSequenceController : MonoBehaviour
                 case PlaceableType.Table:
                     tables++;
                     break;
+                case PlaceableType.Stairs:
+                    stairs++;
+                    break;
+                case PlaceableType.VipTable:
+                    vipTables++;
+                    break;
             }
         }
 
-        _missionUi.SyncPlacedCounts(receptions, stoves, tables);
+        _missionUi.SyncPlacedCounts(receptions, stoves, tables, stairs, vipTables);
     }
 
     private void RebuildSpotList()
@@ -832,23 +830,10 @@ public class BuildSequenceController : MonoBehaviour
         if (GameManager.Instance == null)
             return true;
 
-        if (GameManager.Instance.IsBusinessSessionActive
-            || GameManager.Instance.IsBusinessCloseSummaryPending)
-            return false;
-
         if (!IsBuildMissionActive())
             return false;
 
+        // Builds stay available during open business (no close/improve cycle).
         return GameManager.Instance.IsBuilding || GameManager.Instance.IsBusiness;
-    }
-
-    private static bool IsBusinessSessionActive()
-    {
-        return GameManager.Instance != null && GameManager.Instance.IsBusinessSessionActive;
-    }
-
-    private static bool IsBusinessCloseSummaryPending()
-    {
-        return GameManager.Instance != null && GameManager.Instance.IsBusinessCloseSummaryPending;
     }
 }

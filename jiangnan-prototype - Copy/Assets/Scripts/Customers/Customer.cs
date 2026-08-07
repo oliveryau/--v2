@@ -54,6 +54,7 @@ public class Customer : MonoBehaviour
         IgnoresVipCap = false;
         IsImmuneToCompetitorSteal = false;
         WasStolenByCompetitor = false;
+        RestaurantFloorUtil.SyncActorFloorViewLayerByElevation(gameObject);
     }
 
     public void ConfigureVipProtection(bool ignoresVipCap, bool immuneToCompetitorSteal)
@@ -79,6 +80,7 @@ public class Customer : MonoBehaviour
         _state = CustomerState.Queue;
         _locomotion.Release();
         _locomotion.Configure();
+        RestaurantFloorUtil.SetBelongsToSecondFloorView(gameObject, false);
     }
 
     public void WarpTo(Vector3 position)
@@ -108,6 +110,7 @@ public class Customer : MonoBehaviour
         Seat = null;
         ClearPendingPayment();
         _locomotion.Release();
+        RestaurantFloorUtil.SetBelongsToSecondFloorView(gameObject, false);
         gameObject.SetActive(false);
     }
 

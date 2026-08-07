@@ -38,8 +38,6 @@ public class UIManager : MonoBehaviour
     [Header("Hire UI")]
     [SerializeField] private Button _chefHireButton;
     [SerializeField] private Button _waiterHireButton;
-    [SerializeField] private GameObject _fingerSwipeUi;
-    [SerializeField] private float _fingerSwipeDisplayDuration = 3f;
     [SerializeField] private float _chefHirePulseMinScale;
     [SerializeField] private float _chefHirePulseMaxScale;
     [SerializeField] private float _chefHirePulseSpeed;
@@ -50,12 +48,6 @@ public class UIManager : MonoBehaviour
     [Header("Seat Payment UI")]
     [SerializeField] private RectTransform _seatPaymentUiRoot;
     [SerializeField] private Button _seatPaymentButton;
-    [SerializeField] private float _seatPaymentPulseMinScale;
-    [SerializeField] private float _seatPaymentPulseMaxScale;
-    [SerializeField] private float _seatPaymentPulseSpeed;
-    [SerializeField] private float _vipPaymentGlowPulseMinScale;
-    [SerializeField] private float _vipPaymentGlowPulseMaxScale;
-    [SerializeField] private float _vipPaymentGlowPulseSpeed;
 
     [Header("Coin Trail UI")]
     [SerializeField] private RectTransform _coinVfxRoot;
@@ -67,10 +59,10 @@ public class UIManager : MonoBehaviour
     [SerializeField] private float _coinTrailArcHeight;
 
     [Header("VIP UI")]
-    [SerializeField] private RectTransform _vipImgTextRoot;
-    [SerializeField] private float _vipAnnouncementFadeInDuration;
-    [SerializeField] private float _vipAnnouncementHoldDuration;
-    [SerializeField] private float _vipAnnouncementFadeOutDuration;
+    [SerializeField] private RectTransform _vipUiRoot;
+    [SerializeField] private RectTransform _vipFireworksRoot;
+    [SerializeField] private float _vipFireworksHoldDuration = 3f;
+    [SerializeField] private float _vipFireworksFadeOutDuration = 0.4f;
     [SerializeField] private RectTransform _vipDoneEatingRoot;
     [SerializeField] private Sprite _vipDoneIconChad1;
     [SerializeField] private Sprite _vipDoneIconChad2;
@@ -128,6 +120,9 @@ public class UIManager : MonoBehaviour
     [SerializeField] private GameObject _openBusinessRoot;
     [SerializeField] private Button _openBusinessButton;
     [SerializeField] private TextMeshProUGUI _businessTimerText;
+    [SerializeField] private float _openBusinessFadeInDuration = 0.4f;
+    [SerializeField] private float _openBusinessHoldDuration = 1.2f;
+    [SerializeField] private float _openBusinessFadeOutDuration = 0.5f;
 
     [Header("Business Overview UI")]
     [SerializeField] private GameObject _businessOverviewRoot;
@@ -165,7 +160,6 @@ public class UIManager : MonoBehaviour
     [SerializeField] private TMP_InputField _nameInputField;
     [SerializeField] private Button _entryButton;
     [SerializeField] private Button _randomiserButton;
-    [SerializeField] private Button _resetDataButton;
 
     [Header("Town Loan UI")]
     [SerializeField] private GameObject _loanRoot;
@@ -250,13 +244,15 @@ public class UIManager : MonoBehaviour
     private readonly List<RectTransform> _coinTrailPool = new();
     private readonly Dictionary<RectTransform, Coroutine> _activeCoinTrailAnimations = new();
     private Coroutine _coinTrailSequenceRoutine;
-    private Image _vipImgTextImage;
     private Image _vipDoneIconImage;
     private TextMeshProUGUI _vipDoneText;
     private Graphic[] _vipDoneEatingGraphics;
     private Color[] _vipDoneEatingTargetColors;
     private Coroutine _vipDoneEatingRoutine;
-    private Coroutine _vipAnnouncementRoutine;
+    private Graphic[] _vipFireworksGraphics;
+    private Color[] _vipFireworksTargetColors;
+    private Animator _vipFireworksAnimator;
+    private Coroutine _vipFireworksRoutine;
     private RectTransform _pranksterDialogueRootRuntime;
     private TextMeshProUGUI _pranksterDialogueText;
     private Image _pranksterDialogueIconImage;
@@ -265,7 +261,9 @@ public class UIManager : MonoBehaviour
     private Coroutine _pranksterDialogueRoutine;
     private Coroutine _dushRepairEffectRoutine;
     private bool _mainButtonsUiSuppressed;
-    private Coroutine _fingerSwipeRoutine;
+    private Coroutine _openBusinessSequenceRoutine;
+    private bool _openBusinessSequencePlayed;
+    private readonly HashSet<Button> _wiredHireSpotButtons = new();
 
     private Button _townFirstOptionButton;
     private Button _townCloseBuildingUiButton;
@@ -334,6 +332,8 @@ public class UIManager : MonoBehaviour
 
     private const string WorkerEnergyFillImageName = "Image";
     private const string CoinCollectionExtraGlowName = "Extra Glow";
+    private const string VipUiRootName = "VIP UI";
+    private const string VipFireworksName = "Fireworks";
     private const string VipDoneEatingRootName = "VIP Done Eating";
     private const string VipDoneIconName = "VIP Icon";
     private const string VipDoneTextName = "VIP Done Text";
@@ -470,12 +470,12 @@ public class UIManager : MonoBehaviour
         InitializePranksterUi();
         InitializeRepairTableUi();
 
-        HideVipAnnouncement();
+        HideVipUi();
         HideVipDoneEating();
         HideBuildSpotCostUi();
-        HideFingerSwipeUi();
         HideBusinessTimer();
         HideBusinessOverview();
+        HideOpenBusiness();
         HideTableBuildInfoUi();
         HideUpgradeTableUi();
         InitializeCreationSceneUi();
@@ -634,7 +634,7 @@ public class UIManager : MonoBehaviour
         if (_goldMinusAnimation != null)
             StopCoroutine(_goldMinusAnimation);
 
-        HideVipAnnouncement();
+        HideVipUi();
         HideVipDoneEating();
         StopAllCoinTrailAnimations();
         ClearSeatPaymentUis();
@@ -648,7 +648,7 @@ public class UIManager : MonoBehaviour
             _dushRepairEffectRoutine = null;
         }
 
-        StopFingerSwipeRoutine();
+        StopOpenBusinessSequence();
         ClearNotEnoughMoneyUis();
 
         SafeSetUiActive(_dushRepairUiRoot, false);
@@ -673,34 +673,33 @@ public class UIManager : MonoBehaviour
         UpdateCompetitorShopNameUiPositions();
         UpdateOwnShopNameUiPosition();
         UpdateOwnRatingUiPosition();
-        UpdateBusinessTimerUi();
         FlushPendingGoldDelta();
     }
 
-    public void PlayVipAnnouncement()
+    public void ShowVipUi()
     {
-        if (_vipImgTextRoot == null)
+        if (_vipUiRoot == null)
             return;
 
-        if (_vipAnnouncementRoutine != null)
-            StopCoroutine(_vipAnnouncementRoutine);
-
-        _vipAnnouncementRoutine = StartCoroutine(PlayVipAnnouncementCoroutine());
+        _vipUiRoot.gameObject.SetActive(true);
+        PlayVipFireworksIntro();
     }
 
-    private void HideVipAnnouncement()
+    public void HideVipUi()
     {
-        if (_vipAnnouncementRoutine != null)
-        {
-            StopCoroutine(_vipAnnouncementRoutine);
-            _vipAnnouncementRoutine = null;
-        }
+        StopVipFireworksRoutine();
 
-        if (_vipImgTextRoot == null)
-            return;
+        if (_vipFireworksRoot != null)
+            _vipFireworksRoot.gameObject.SetActive(false);
 
-        RestoreVipImgTextAlpha();
-        _vipImgTextRoot.gameObject.SetActive(false);
+        if (_vipUiRoot != null)
+            _vipUiRoot.gameObject.SetActive(false);
+    }
+
+    /// <summary>Legacy entry point used when the VIP reaches the entry waypoint.</summary>
+    public void PlayVipAnnouncement()
+    {
+        ShowVipUi();
     }
 
     public void PlayVipDoneEating()
@@ -1002,80 +1001,89 @@ public class UIManager : MonoBehaviour
         if (_screenCanvas == null)
             return;
 
-        if (_vipImgTextRoot == null)
-            _vipImgTextRoot = FindRectTransformByName(_screenCanvas.transform, "VIP ImgText");
+        if (_vipUiRoot == null)
+            _vipUiRoot = FindRectTransformByName(_screenCanvas.transform, VipUiRootName);
 
-        if (_vipImgTextRoot == null)
+        if (_vipUiRoot == null)
             return;
 
-        _vipImgTextImage = _vipImgTextRoot.GetComponent<Image>();
-
-        if (_vipImgTextImage != null)
-            _vipImgTextImage.raycastTarget = false;
-
-        _vipImgTextRoot.gameObject.SetActive(false);
-    }
-
-    private IEnumerator PlayVipAnnouncementCoroutine()
-    {
-        Image image = _vipImgTextImage != null ? _vipImgTextImage : _vipImgTextRoot.GetComponent<Image>();
-        Color baseColor = image != null ? image.color : Color.white;
-        float fullAlpha = baseColor.a > 0f ? baseColor.a : 1f;
-
-        _vipImgTextRoot.gameObject.SetActive(true);
-        SetVipImgTextAlpha(image, baseColor, 0f);
-
-        yield return FadeVipImgText(image, baseColor, 0f, fullAlpha, _vipAnnouncementFadeInDuration);
-
-        if (_vipAnnouncementHoldDuration > 0f)
-            yield return new WaitForSeconds(_vipAnnouncementHoldDuration);
-
-        yield return FadeVipImgText(image, baseColor, fullAlpha, 0f, _vipAnnouncementFadeOutDuration);
-
-        _vipImgTextRoot.gameObject.SetActive(false);
-        SetVipImgTextAlpha(image, baseColor, fullAlpha);
-        _vipAnnouncementRoutine = null;
-    }
-
-    private IEnumerator FadeVipImgText(Image image, Color baseColor, float fromAlpha, float toAlpha, float duration)
-    {
-        if (duration <= 0f)
+        if (_vipFireworksRoot == null)
         {
-            SetVipImgTextAlpha(image, baseColor, toAlpha);
-            yield break;
+            Transform fireworks = FindChildTransform(_vipUiRoot, VipFireworksName);
+            if (fireworks != null)
+                _vipFireworksRoot = fireworks as RectTransform;
         }
 
-        float elapsed = 0f;
-
-        while (elapsed < duration)
+        if (_vipFireworksRoot != null)
         {
-            elapsed += Time.deltaTime;
-            float t = Mathf.Clamp01(elapsed / duration);
-            SetVipImgTextAlpha(image, baseColor, Mathf.Lerp(fromAlpha, toAlpha, t));
-            yield return null;
+            _vipFireworksAnimator = _vipFireworksRoot.GetComponent<Animator>();
+            _vipFireworksGraphics = _vipFireworksRoot.GetComponentsInChildren<Graphic>(true);
+            _vipFireworksTargetColors = UiGraphicFade.CaptureColors(_vipFireworksGraphics);
+
+            for (int i = 0; i < _vipFireworksGraphics.Length; i++)
+            {
+                if (_vipFireworksGraphics[i] != null)
+                    _vipFireworksGraphics[i].raycastTarget = false;
+            }
+
+            _vipFireworksRoot.gameObject.SetActive(false);
         }
 
-        SetVipImgTextAlpha(image, baseColor, toAlpha);
+        DisableChildRaycastTargets(_vipUiRoot);
+        _vipUiRoot.gameObject.SetActive(false);
     }
 
-    private void RestoreVipImgTextAlpha()
+    private void PlayVipFireworksIntro()
     {
-        if (_vipImgTextImage == null)
+        if (_vipFireworksRoot == null)
             return;
 
-        Color color = _vipImgTextImage.color;
-        color.a = 1f;
-        _vipImgTextImage.color = color;
+        StopVipFireworksRoutine();
+        _vipFireworksRoutine = StartCoroutine(PlayVipFireworksIntroCoroutine());
     }
 
-    private static void SetVipImgTextAlpha(Image image, Color baseColor, float alpha)
+    private void StopVipFireworksRoutine()
     {
-        if (image == null)
-            return;
+        if (_vipFireworksRoutine != null)
+        {
+            StopCoroutine(_vipFireworksRoutine);
+            _vipFireworksRoutine = null;
+        }
 
-        Color color = baseColor;
-        color.a = alpha;
-        image.color = color;
+        if (_vipFireworksGraphics != null && _vipFireworksTargetColors != null)
+            UiGraphicFade.RestoreColors(_vipFireworksGraphics, _vipFireworksTargetColors);
+    }
+
+    private IEnumerator PlayVipFireworksIntroCoroutine()
+    {
+        _vipFireworksGraphics = _vipFireworksRoot.GetComponentsInChildren<Graphic>(true);
+        _vipFireworksTargetColors = UiGraphicFade.CaptureColors(_vipFireworksGraphics);
+
+        _vipFireworksRoot.gameObject.SetActive(true);
+        UiGraphicFade.RestoreColors(_vipFireworksGraphics, _vipFireworksTargetColors);
+
+        if (_vipFireworksAnimator != null)
+        {
+            _vipFireworksAnimator.enabled = true;
+            _vipFireworksAnimator.Rebind();
+            _vipFireworksAnimator.Update(0f);
+            _vipFireworksAnimator.Play(0, 0, 0f);
+        }
+
+        float holdDuration = Mathf.Max(0f, _vipFireworksHoldDuration);
+        if (holdDuration > 0f)
+            yield return new WaitForSeconds(holdDuration);
+
+        Color[] transparentColors = UiGraphicFade.BuildTransparentColors(_vipFireworksTargetColors);
+        yield return UiGraphicFade.FadeColors(
+            _vipFireworksGraphics,
+            _vipFireworksTargetColors,
+            transparentColors,
+            _vipFireworksFadeOutDuration);
+
+        _vipFireworksRoot.gameObject.SetActive(false);
+        UiGraphicFade.RestoreColors(_vipFireworksGraphics, _vipFireworksTargetColors);
+        _vipFireworksRoutine = null;
     }
 
     public void RegisterWorkerEnergyUi(Worker worker)
@@ -1109,7 +1117,7 @@ public class UIManager : MonoBehaviour
 
         WorkerEnergyUiEntry entry = CreateWorkerEnergyUiEntry(worker, binding);
         _activeWorkerEnergyUis[worker] = entry;
-        SetWorkerEnergyUiVisible(binding.Root, true);
+        SetWorkerEnergyUiVisible(binding.Root, ShouldShowWorkerEnergyUi(worker));
         RefreshWorkerEnergyUi(worker);
     }
 
@@ -1134,6 +1142,7 @@ public class UIManager : MonoBehaviour
 
         if (state != GameState.Business)
         {
+            HideVipUi();
             HideVipDoneEating();
             HideUpgradeTableUi();
         }
@@ -1395,6 +1404,7 @@ public class UIManager : MonoBehaviour
 
         if (GameManager.Instance != null
             && !GameManager.Instance.IsBuilding
+            && !GameManager.Instance.IsBusiness
             && !GameManager.Instance.IsBusinessDowntime)
         {
             if (spot != null
@@ -1517,6 +1527,7 @@ public class UIManager : MonoBehaviour
 
             bool show = GameManager.Instance == null
                 || GameManager.Instance.IsBuilding
+                || GameManager.Instance.IsBusiness
                 || GameManager.Instance.IsBusinessDowntime
                 ? spot.State == BuildSpotState.Active && IsSpotOnCurrentFloor(spot)
                 : false;
@@ -1533,30 +1544,28 @@ public class UIManager : MonoBehaviour
     private void HandleHireSpotStateChanged(HireSpot spot, HireSpotState state)
     {
         SyncAllHireSpotUi();
-
-        if (spot != null
-            && spot.WorkerType == WorkerType.Chef
-            && (state == HireSpotState.Hiring || state == HireSpotState.Hired))
-        {
-            HideFingerSwipeUi();
-        }
     }
 
     private void HandleRestaurantFloorChanged(int floor)
     {
         SyncAllPerSpotBuildCostUi();
         SyncActiveHireButtonForCurrentFloor();
+        SyncAllTableStatusUiForCurrentFloor();
+        SyncWorkerEnergyUiForCurrentFloor();
+        SyncSeatPaymentUiForCurrentFloor();
     }
 
     private void HandleSecondFloorUnlockedForUi()
     {
         SyncAllPerSpotBuildCostUi();
         SyncActiveHireButtonForCurrentFloor();
+        SyncAllTableStatusUiForCurrentFloor();
+        SyncWorkerEnergyUiForCurrentFloor();
+        SyncSeatPaymentUiForCurrentFloor();
     }
 
     private void HandleHiringCompleted()
     {
-        HideFingerSwipeUi();
         SyncOpenBusinessUiVisibility();
     }
 
@@ -1578,30 +1587,25 @@ public class UIManager : MonoBehaviour
     {
         StopWaitForBusinessFloorClear();
         _businessOverviewVisible = false;
+        _openBusinessSequencePlayed = true;
+        StopOpenBusinessSequence();
         HideOpenBusiness();
         HideBusinessOverview();
-        ShowBusinessTimer();
-        UpdateBusinessTimerUi();
+        HideBusinessTimer();
         SyncActiveUi();
         SyncAllPerSpotBuildCostUi();
+        SyncAllHireSpotUi();
     }
 
     private void HandleBusinessSessionEnded()
     {
         HideBusinessTimer();
-        HideOpenBusiness();
-        // Overview waits until all customers have left (BusinessFloorCleared).
-        StartWaitForBusinessFloorClear();
-        GameManager.Instance?.TryRaiseBusinessFloorClearedIfEmpty();
+        // Close/reopen overview cycle removed — session only pauses temporarily (e.g. fire).
     }
 
     private void HandleBusinessFloorCleared()
     {
-        if (GameManager.Instance == null || !GameManager.Instance.IsBusinessCloseSummaryPending)
-            return;
-
-        StopWaitForBusinessFloorClear();
-        ShowBusinessOverviewOrEnterClosed();
+        // Close-summary overview removed.
     }
 
     private void HandleBusinessDowntimeStarted()
@@ -1708,7 +1712,8 @@ public class UIManager : MonoBehaviour
 
         CacheOpenBusinessUiReferences();
         HideBusinessTimer();
-        // Visibility is synced after mission UI initializes so we don't force-hide the button.
+        DisableOpenBusinessInteraction();
+        // Visibility is synced after mission UI initializes.
     }
 
     private void InitializeBusinessOverviewUi()
@@ -1719,24 +1724,8 @@ public class UIManager : MonoBehaviour
 
     private void HandleOpenBusinessClicked()
     {
-        if (GameManager.Instance == null || GameManager.Instance.IsBusinessSessionActive)
-            return;
-
-        if (GameManager.Instance.IsBusinessCloseSummaryPending)
-            return;
-
-        if (!GameManager.Instance.TryOpenBusinessSession())
-            return;
-
-        AudioManager.Play(SfxId.OpenBusiness);
-        HideOpenBusiness();
-        HideBusinessOverview();
-
-        MissionUiController missionUi = FindFirstObjectByType<MissionUiController>();
-        missionUi?.NotifyOpenBusinessOpened();
-        SyncOpenBusinessUiVisibility();
-        SyncActiveUi();
-        SyncAllPerSpotBuildCostUi();
+        // Open Business is announcement-only now; kept for any leftover button wiring.
+        TryBeginOpenBusinessAnnouncement();
     }
 
     private void SyncOpenBusinessUiVisibility()
@@ -1749,9 +1738,9 @@ public class UIManager : MonoBehaviour
 
         CacheOpenBusinessUiReferences();
 
-        if (ShouldShowOpenBusinessButton())
-            ShowOpenBusiness();
-        else
+        if (ShouldPlayOpenBusinessAnnouncement())
+            TryBeginOpenBusinessAnnouncement();
+        else if (_openBusinessSequenceRoutine == null)
             HideOpenBusiness();
     }
 
@@ -1761,13 +1750,10 @@ public class UIManager : MonoBehaviour
             _openBusinessRoot = FindSceneUiObject("Open Business");
 
         if (_openBusinessButton == null && _openBusinessRoot != null)
-            _openBusinessButton = EnsureButtonOnObject(_openBusinessRoot);
+            _openBusinessButton = _openBusinessRoot.GetComponent<Button>()
+                ?? _openBusinessRoot.GetComponentInChildren<Button>(true);
 
-        if (_openBusinessButton != null)
-        {
-            _openBusinessButton.onClick.RemoveListener(HandleOpenBusinessClicked);
-            _openBusinessButton.onClick.AddListener(HandleOpenBusinessClicked);
-        }
+        DisableOpenBusinessInteraction();
 
         if (_businessTimerText == null)
         {
@@ -1776,20 +1762,37 @@ public class UIManager : MonoBehaviour
         }
     }
 
-    private static bool ShouldShowOpenBusinessButton()
+    private void DisableOpenBusinessInteraction()
     {
-        if (GameManager.Instance != null)
-        {
-            if (GameManager.Instance.IsBusinessOpen)
-                return false;
+        if (_openBusinessRoot == null)
+            return;
 
-            if (GameManager.Instance.IsBusinessCloseSummaryPending)
-                return false;
+        Button[] buttons = _openBusinessRoot.GetComponentsInChildren<Button>(true);
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            if (buttons[i] == null)
+                continue;
+
+            buttons[i].onClick.RemoveListener(HandleOpenBusinessClicked);
+            buttons[i].interactable = false;
+            buttons[i].enabled = false;
         }
 
-        // After the first open, always allow reopening during closed/improve time.
+        Graphic[] graphics = _openBusinessRoot.GetComponentsInChildren<Graphic>(true);
+        for (int i = 0; i < graphics.Length; i++)
+        {
+            if (graphics[i] != null)
+                graphics[i].raycastTarget = false;
+        }
+    }
+
+    private static bool ShouldPlayOpenBusinessAnnouncement()
+    {
+        if (GameManager.Instance != null && GameManager.Instance.IsBusinessOpen)
+            return false;
+
         if (PlayerProfileStorage.HasMainSceneBusinessStartedForCurrentPlayer())
-            return true;
+            return false;
 
         MissionUiController missionUi = FindFirstObjectByType<MissionUiController>();
         int missionPart = missionUi != null
@@ -1797,6 +1800,86 @@ public class UIManager : MonoBehaviour
             : PlayerProfileStorage.GetMainSceneMissionPartIndexForCurrentPlayer();
 
         return missionPart >= MissionCatalog.OpenBusinessMissionPartIndex;
+    }
+
+    private void TryBeginOpenBusinessAnnouncement()
+    {
+        if (_openBusinessSequencePlayed || _openBusinessSequenceRoutine != null)
+            return;
+
+        if (!ShouldPlayOpenBusinessAnnouncement())
+            return;
+
+        _openBusinessSequenceRoutine = StartCoroutine(PlayOpenBusinessAnnouncementRoutine());
+    }
+
+    private IEnumerator PlayOpenBusinessAnnouncementRoutine()
+    {
+        _openBusinessSequencePlayed = true;
+        CacheOpenBusinessUiReferences();
+
+        if (_openBusinessRoot == null)
+        {
+            OpenBusinessAutomatically();
+            _openBusinessSequenceRoutine = null;
+            yield break;
+        }
+
+        Graphic[] graphics = _openBusinessRoot.GetComponentsInChildren<Graphic>(true);
+        Color[] targetColors = UiGraphicFade.CaptureColors(graphics);
+        Color[] transparentColors = UiGraphicFade.BuildTransparentColors(targetColors);
+
+        _openBusinessRoot.SetActive(true);
+        UiGraphicFade.RestoreColors(graphics, transparentColors);
+
+        yield return UiGraphicFade.FadeColors(
+            graphics,
+            transparentColors,
+            targetColors,
+            _openBusinessFadeInDuration);
+
+        if (_openBusinessHoldDuration > 0f)
+            yield return new WaitForSeconds(_openBusinessHoldDuration);
+
+        yield return UiGraphicFade.FadeColors(
+            graphics,
+            targetColors,
+            transparentColors,
+            _openBusinessFadeOutDuration);
+
+        HideOpenBusiness();
+        UiGraphicFade.RestoreColors(graphics, targetColors);
+
+        OpenBusinessAutomatically();
+        _openBusinessSequenceRoutine = null;
+    }
+
+    private void OpenBusinessAutomatically()
+    {
+        if (GameManager.Instance == null || GameManager.Instance.IsBusinessSessionActive)
+            return;
+
+        if (!GameManager.Instance.TryOpenBusinessSession())
+            return;
+
+        AudioManager.Play(SfxId.OpenBusiness);
+        HideOpenBusiness();
+        HideBusinessOverview();
+
+        MissionUiController missionUi = FindFirstObjectByType<MissionUiController>();
+        missionUi?.NotifyOpenBusinessOpened();
+        SyncActiveUi();
+        SyncAllPerSpotBuildCostUi();
+        SyncAllHireSpotUi();
+    }
+
+    private void StopOpenBusinessSequence()
+    {
+        if (_openBusinessSequenceRoutine == null)
+            return;
+
+        StopCoroutine(_openBusinessSequenceRoutine);
+        _openBusinessSequenceRoutine = null;
     }
 
     private void ShowOpenBusiness()
@@ -2036,7 +2119,12 @@ public class UIManager : MonoBehaviour
             return;
 
         if (state == CustomerState.Paying)
-            ShowSeatPaymentUi(customer);
+        {
+            if (customer != null && customer.IsVip)
+                ShowSeatPaymentUi(customer);
+            else
+                PlayNormalCustomerAutoCollectFx(customer);
+        }
         else if (customer.Seat != null)
             TryHideSeatPaymentUi(customer.Seat.PaymentUiAnchor);
         else if (customer.PendingPaymentAnchor != null)
@@ -2131,8 +2219,8 @@ public class UIManager : MonoBehaviour
 
         HireSpot[] spots = FindObjectsByType<HireSpot>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         HireSpot activeSpotOnFloor = null;
-        bool hideChefButton = true;
-        bool hideWaiterButton = true;
+        bool chefButtonInUse = false;
+        bool waiterButtonInUse = false;
 
         for (int i = 0; i < spots.Length; i++)
         {
@@ -2142,6 +2230,7 @@ public class UIManager : MonoBehaviour
                 continue;
 
             Button hireButton = GetHireButtonForSpot(spot);
+            EnsureHireSpotButtonWired(spot, hireButton);
             RectTransform hireUiRoot = hireButton != null ? hireButton.transform as RectTransform : null;
 
             if (!ShouldDisplayHireSpotUi(spot))
@@ -2155,7 +2244,7 @@ public class UIManager : MonoBehaviour
             if (hireUiRoot == null)
                 continue;
 
-            if (!IsHireAnchorVisibleOnScreen(spot))
+            if (!IsWorldSpaceHireUi(hireUiRoot) && !IsHireAnchorVisibleOnScreen(spot))
             {
                 hireUiRoot.gameObject.SetActive(false);
                 continue;
@@ -2165,36 +2254,25 @@ public class UIManager : MonoBehaviour
             TryPositionHireSpotUi(hireUiRoot, spot);
             hireUiRoot.localScale = Vector3.one * GetHirePulseScale(spot.WorkerType);
 
-            if (spot.WorkerType == WorkerType.Chef)
-                hideChefButton = false;
-            else if (spot.WorkerType == WorkerType.Waiter)
-                hideWaiterButton = false;
+            if (hireButton == _chefHireButton)
+                chefButtonInUse = true;
+            else if (hireButton == _waiterHireButton)
+                waiterButtonInUse = true;
 
             if (spot.State == HireSpotState.Active && IsSpotOnCurrentFloor(spot))
                 activeSpotOnFloor = spot;
         }
 
-        if (hideChefButton && _chefHireButton != null)
+        if (!chefButtonInUse && _chefHireButton != null)
             _chefHireButton.gameObject.SetActive(false);
 
-        if (hideWaiterButton && _waiterHireButton != null)
+        if (!waiterButtonInUse && _waiterHireButton != null)
             _waiterHireButton.gameObject.SetActive(false);
 
         _activeHireSpot = activeSpotOnFloor;
 
         if (activeSpotOnFloor != null)
-        {
-            if (activeSpotOnFloor.WorkerType == WorkerType.Chef)
-                ShowFingerSwipeUi();
-            else
-                HideFingerSwipeUi();
-
             RefreshHireAffordability(activeSpotOnFloor);
-        }
-        else
-        {
-            HideFingerSwipeUi();
-        }
     }
 
     private bool ShouldDisplayHireSpotUi(HireSpot spot)
@@ -2215,16 +2293,14 @@ public class UIManager : MonoBehaviour
 
     private static bool ShouldKeepHireSpotsAvailableForUi()
     {
-        if (PlayerProfileStorage.HasMainSceneBusinessStartedForCurrentPlayer())
-            return false;
-
         if (GameManager.Instance == null)
             return false;
 
+        // Once business is open (or was started), hire UI stays available.
         if (GameManager.Instance.IsBusinessSessionActive
-            || GameManager.Instance.IsBusinessCloseSummaryPending)
+            || PlayerProfileStorage.HasMainSceneBusinessStartedForCurrentPlayer())
         {
-            return false;
+            return true;
         }
 
         return GameManager.Instance.IsBuilding || GameManager.Instance.IsHiring;
@@ -2235,7 +2311,30 @@ public class UIManager : MonoBehaviour
         if (spot == null)
             return null;
 
+        // Each hire spot owns its button (supports separate ground / second-floor waiter UIs).
+        Button ownButton = spot.GetComponent<Button>();
+
+        if (ownButton != null)
+            return ownButton;
+
         return spot.WorkerType == WorkerType.Chef ? _chefHireButton : _waiterHireButton;
+    }
+
+    private void EnsureHireSpotButtonWired(HireSpot spot, Button hireButton)
+    {
+        if (spot == null || hireButton == null || !_wiredHireSpotButtons.Add(hireButton))
+            return;
+
+        // Ground chef/waiter buttons are already wired in Awake.
+        if (hireButton == _chefHireButton || hireButton == _waiterHireButton)
+            return;
+
+        HireSpot capturedSpot = spot;
+        hireButton.onClick.AddListener(() =>
+        {
+            if (capturedSpot != null && capturedSpot.State == HireSpotState.Active)
+                capturedSpot.NotifyClicked();
+        });
     }
 
     private static Vector3 ResolveHireAnchorWorldPosition(HireSpot spot)
@@ -2289,7 +2388,53 @@ public class UIManager : MonoBehaviour
         if (hireUiRoot == null || spot == null)
             return;
 
+        Transform anchor = spot.HireUiAnchor != null ? spot.HireUiAnchor : spot.transform;
+
+        // World-space hire buttons stay parented to their world anchor so camera drag doesn't drift them.
+        if (IsWorldSpaceHireUi(hireUiRoot) || IsUnderWorldSpaceCanvas(anchor))
+        {
+            EnsureHireUiAnchoredToWorldPoint(hireUiRoot, anchor);
+            return;
+        }
+
         TryUpdateScreenUiPosition(hireUiRoot, ResolveHireAnchorWorldPosition(spot));
+    }
+
+    private static void EnsureHireUiAnchoredToWorldPoint(RectTransform hireUiRoot, Transform anchor)
+    {
+        if (hireUiRoot == null || anchor == null)
+            return;
+
+        if (hireUiRoot.parent != anchor)
+            hireUiRoot.SetParent(anchor, false);
+
+        hireUiRoot.anchorMin = new Vector2(0.5f, 0.5f);
+        hireUiRoot.anchorMax = new Vector2(0.5f, 0.5f);
+        hireUiRoot.pivot = new Vector2(0.5f, 0.5f);
+        hireUiRoot.anchoredPosition3D = Vector3.zero;
+        hireUiRoot.localRotation = Quaternion.identity;
+    }
+
+    private bool IsWorldSpaceHireUi(RectTransform hireUiRoot)
+    {
+        return IsUnderWorldSpaceCanvas(hireUiRoot);
+    }
+
+    private bool IsUnderWorldSpaceCanvas(Transform transform)
+    {
+        if (transform == null)
+            return false;
+
+        EnsureScreenUiCaches();
+
+        if (_worldCanvas == null)
+            _worldCanvas = FindWorldCanvas();
+
+        if (_worldCanvas == null)
+            return false;
+
+        return transform == _worldCanvas.transform
+            || transform.IsChildOf(_worldCanvas.transform);
     }
 
     private void SyncActiveHireButtonForCurrentFloor()
@@ -2314,6 +2459,14 @@ public class UIManager : MonoBehaviour
 
     private static bool IsHireMissionActiveForUi()
     {
+        // After business opens, any remaining active hire spots stay visible.
+        if (GameManager.Instance != null
+            && (GameManager.Instance.IsBusinessSessionActive
+                || PlayerProfileStorage.HasMainSceneBusinessStartedForCurrentPlayer()))
+        {
+            return true;
+        }
+
         int missionPart = GetCurrentMissionPartIndex();
 
         if (missionPart == MissionCatalog.HireMissionPartIndex)
@@ -2636,61 +2789,6 @@ public class UIManager : MonoBehaviour
         }
     }
 
-    private void ShowFingerSwipeUi()
-    {
-        CacheFingerSwipeUi();
-
-        if (_fingerSwipeUi == null)
-            return;
-
-        _fingerSwipeUi.SetActive(true);
-        RestartFingerSwipeRoutine();
-    }
-
-    private void HideFingerSwipeUi()
-    {
-        StopFingerSwipeRoutine();
-        CacheFingerSwipeUi();
-
-        if (_fingerSwipeUi != null)
-            _fingerSwipeUi.SetActive(false);
-    }
-
-    private void RestartFingerSwipeRoutine()
-    {
-        StopFingerSwipeRoutine();
-
-        if (_fingerSwipeDisplayDuration <= 0f)
-            return;
-
-        _fingerSwipeRoutine = StartCoroutine(HideFingerSwipeAfterDelay());
-    }
-
-    private void StopFingerSwipeRoutine()
-    {
-        if (_fingerSwipeRoutine == null)
-            return;
-
-        StopCoroutine(_fingerSwipeRoutine);
-        _fingerSwipeRoutine = null;
-    }
-
-    private IEnumerator HideFingerSwipeAfterDelay()
-    {
-        yield return new WaitForSeconds(_fingerSwipeDisplayDuration);
-        _fingerSwipeRoutine = null;
-        CacheFingerSwipeUi();
-
-        if (_fingerSwipeUi != null)
-            _fingerSwipeUi.SetActive(false);
-    }
-
-    private void CacheFingerSwipeUi()
-    {
-        if (_fingerSwipeUi == null)
-            _fingerSwipeUi = FindSceneUiObject("Finger Swipe");
-    }
-
     private void ShowSeatPaymentUi(Customer customer)
     {
         if (_seatPaymentUiRoot == null || customer == null || customer.Seat == null)
@@ -2716,11 +2814,26 @@ public class UIManager : MonoBehaviour
             ExtraGlowRoot = extraGlowRoot
         };
 
-        uiRoot.gameObject.SetActive(true);
+        uiRoot.gameObject.SetActive(IsPaymentAnchorOnCurrentFloor(paymentAnchor));
         uiRoot.localScale = Vector3.one;
         UpdateSeatPaymentExtraGlow(_activeSeatPaymentUis[paymentAnchor]);
-        UpdateScreenUiPosition(uiRoot, paymentAnchor.position);
+        if (uiRoot.gameObject.activeSelf)
+            UpdateScreenUiPosition(uiRoot, paymentAnchor.position);
         ApplyWorldAnchoredUiSiblingOrder();
+    }
+
+    private void PlayNormalCustomerAutoCollectFx(Customer customer)
+    {
+        if (customer == null)
+            return;
+
+        Transform paymentAnchor = customer.Seat != null
+            ? customer.Seat.PaymentUiAnchor
+            : customer.PendingPaymentAnchor;
+        Transform collectPoint = ResolveTableCollectPoint(paymentAnchor);
+
+        AudioManager.Play(SfxId.GoldCollect);
+        PlayCoinTrail(collectPoint, useVipCount: false);
     }
 
     public void TryHideSeatPaymentUi(Transform paymentAnchor)
@@ -2887,8 +3000,12 @@ public class UIManager : MonoBehaviour
 
     private static bool IsTableAvailableForStatusUi(DiningTable table)
     {
+        // VIP tables don't use status labels.
+        if (table == null || table.IsVipTable)
+            return false;
+
         // Unbuilt furniture stays inactive under its BuildSpot, so skip those tables.
-        return table != null && table.isActiveAndEnabled && table.gameObject.activeInHierarchy;
+        return table.isActiveAndEnabled && table.gameObject.activeInHierarchy;
     }
 
     private RectTransform CreateTableStatusUiRoot()
@@ -2915,7 +3032,7 @@ public class UIManager : MonoBehaviour
         if (table == null || !_activeTableStatusUis.TryGetValue(table, out TableStatusUiEntry entry) || entry.StatusText == null)
             return;
 
-        if (!IsTableAvailableForStatusUi(table))
+        if (!IsTableAvailableForStatusUi(table) || !IsTableOnCurrentFloor(table))
         {
             if (entry.UiRoot != null)
                 entry.UiRoot.gameObject.SetActive(false);
@@ -2948,6 +3065,27 @@ public class UIManager : MonoBehaviour
                 entry.StatusText.color = _tableStatusEmptySeatColor;
                 break;
         }
+    }
+
+    private void SyncAllTableStatusUiForCurrentFloor()
+    {
+        foreach (KeyValuePair<DiningTable, TableStatusUiEntry> entry in _activeTableStatusUis)
+            RefreshTableStatusUi(entry.Key);
+
+        UpdateTableStatusPositions();
+        ApplyWorldAnchoredUiSiblingOrder();
+    }
+
+    private static bool IsTableOnCurrentFloor(DiningTable table)
+    {
+        if (table == null)
+            return false;
+
+        int currentFloor = CharacterPanelController.Instance != null
+            ? CharacterPanelController.Instance.CurrentFloor
+            : (int)RestaurantFloor.Ground;
+
+        return (int)table.Floor == currentFloor;
     }
 
     private void UpdateTableStatusPosition(DiningTable table)
@@ -3301,9 +3439,46 @@ public class UIManager : MonoBehaviour
                 ApplyWorkerEnergyFillColor(entry);
             }
 
+            bool showEnergy = ShouldShowWorkerEnergyUi(worker);
+            if (entry.UiRoot.gameObject.activeSelf != showEnergy)
+                SetWorkerEnergyUiVisible(entry.UiRoot, showEnergy);
+
+            if (!showEnergy)
+                continue;
+
             entry.UiRoot.position = entry.Worker.EnergyUiWorldPosition;
             entry.UiRoot.rotation = cameraRotation;
         }
+    }
+
+    private void SyncWorkerEnergyUiForCurrentFloor()
+    {
+        foreach (KeyValuePair<Worker, WorkerEnergyUiEntry> entry in _activeWorkerEnergyUis)
+        {
+            if (entry.Value.UiRoot == null)
+                continue;
+
+            SetWorkerEnergyUiVisible(entry.Value.UiRoot, ShouldShowWorkerEnergyUi(entry.Key));
+        }
+    }
+
+    private static bool ShouldShowWorkerEnergyUi(Worker worker)
+    {
+        if (worker == null || !worker.isActiveAndEnabled)
+            return false;
+
+        // Hide upstairs energy bars while the player is viewing floor 1.
+        if (RestaurantFloorUtil.IsAtSecondFloorElevation(worker.transform))
+        {
+            int currentFloor = CharacterPanelController.Instance != null
+                ? CharacterPanelController.Instance.CurrentFloor
+                : (int)RestaurantFloor.Ground;
+
+            if (currentFloor != (int)RestaurantFloor.Second)
+                return false;
+        }
+
+        return true;
     }
 
     private void ApplyWorkerEnergyFillColor(WorkerEnergyUiEntry entry)
@@ -3314,16 +3489,6 @@ public class UIManager : MonoBehaviour
         entry.FillImage.color = entry.Worker.IsResting
             ? _workerEnergyRestingFillColor
             : entry.NormalFillColor;
-    }
-
-    private float GetCollectionPulseScale()
-    {
-        return GetPulseScale(_seatPaymentPulseMinScale, _seatPaymentPulseMaxScale, _seatPaymentPulseSpeed);
-    }
-
-    private float GetVipPaymentGlowPulseScale()
-    {
-        return GetPulseScale(_vipPaymentGlowPulseMinScale, _vipPaymentGlowPulseMaxScale, _vipPaymentGlowPulseSpeed);
     }
 
     private static float GetPulseScale(float minScale, float maxScale, float speed)
@@ -3647,17 +3812,50 @@ public class UIManager : MonoBehaviour
 
     private void UpdateSeatPaymentUiPositions()
     {
-        float pulseScale = GetCollectionPulseScale();
-
         foreach (KeyValuePair<Transform, SeatPaymentUiEntry> entry in _activeSeatPaymentUis)
         {
-            if (entry.Value.UiRoot == null || !entry.Value.UiRoot.gameObject.activeInHierarchy || entry.Value.PaymentAnchor == null)
+            if (entry.Value.UiRoot == null || entry.Value.PaymentAnchor == null)
+                continue;
+
+            bool show = IsPaymentAnchorOnCurrentFloor(entry.Value.PaymentAnchor);
+            if (entry.Value.UiRoot.gameObject.activeSelf != show)
+                entry.Value.UiRoot.gameObject.SetActive(show);
+
+            if (!show)
                 continue;
 
             UpdateScreenUiPosition(entry.Value.UiRoot, entry.Value.PaymentAnchor.position);
-            entry.Value.UiRoot.localScale = Vector3.one * pulseScale;
+            entry.Value.UiRoot.localScale = Vector3.one;
             UpdateSeatPaymentExtraGlow(entry.Value);
         }
+    }
+
+    private void SyncSeatPaymentUiForCurrentFloor()
+    {
+        foreach (KeyValuePair<Transform, SeatPaymentUiEntry> entry in _activeSeatPaymentUis)
+        {
+            if (entry.Value.UiRoot == null)
+                continue;
+
+            entry.Value.UiRoot.gameObject.SetActive(IsPaymentAnchorOnCurrentFloor(entry.Value.PaymentAnchor));
+        }
+    }
+
+    private static bool IsPaymentAnchorOnCurrentFloor(Transform paymentAnchor)
+    {
+        if (paymentAnchor == null)
+            return false;
+
+        DiningTable table = paymentAnchor.GetComponentInParent<DiningTable>();
+
+        if (table != null)
+            return IsTableOnCurrentFloor(table);
+
+        int currentFloor = CharacterPanelController.Instance != null
+            ? CharacterPanelController.Instance.CurrentFloor
+            : (int)RestaurantFloor.Ground;
+
+        return (int)RestaurantFloorUtil.ResolveFloor(paymentAnchor) == currentFloor;
     }
 
     private void UpdateSeatPaymentExtraGlow(SeatPaymentUiEntry entry)
@@ -3680,7 +3878,7 @@ public class UIManager : MonoBehaviour
         if (!entry.ExtraGlowRoot.gameObject.activeSelf)
             entry.ExtraGlowRoot.gameObject.SetActive(true);
 
-        entry.ExtraGlowRoot.localScale = Vector3.one * GetVipPaymentGlowPulseScale();
+        entry.ExtraGlowRoot.localScale = Vector3.one;
     }
 
     private void EnsureScreenUiCaches()
@@ -4093,7 +4291,7 @@ public class UIManager : MonoBehaviour
 
     private void InitializeCreationSceneUi()
     {
-        if (_nameInputField == null && _entryButton == null && _randomiserButton == null && _resetDataButton == null)
+        if (_nameInputField == null && _entryButton == null && _randomiserButton == null)
             return;
 
         if (_nameInputField == null)
@@ -4108,17 +4306,11 @@ public class UIManager : MonoBehaviour
         if (_randomiserButton == null)
             _randomiserButton = FindRandomiserButton();
 
-        if (_resetDataButton == null)
-            _resetDataButton = FindResetDataButton();
-
         if (_entryButton != null)
             _entryButton.onClick.AddListener(HandleEntryClicked);
 
         if (_randomiserButton != null)
             _randomiserButton.onClick.AddListener(HandleRandomiserClicked);
-
-        if (_resetDataButton != null)
-            _resetDataButton.onClick.AddListener(HandleResetDataClicked);
 
         if (_nameInputField != null)
             _nameInputField.onSubmit.AddListener(HandleNameSubmitted);
@@ -4141,25 +4333,8 @@ public class UIManager : MonoBehaviour
         if (_randomiserButton != null)
             _randomiserButton.onClick.RemoveListener(HandleRandomiserClicked);
 
-        if (_resetDataButton != null)
-            _resetDataButton.onClick.RemoveListener(HandleResetDataClicked);
-
         if (_nameInputField != null)
             _nameInputField.onSubmit.RemoveListener(HandleNameSubmitted);
-    }
-
-    private void HandleResetDataClicked()
-    {
-        PlayerProfileStorage.ResetAllPlayerData();
-        GoldManager.ClearSessionCache();
-
-        if (GoldManager.Instance != null)
-            GoldManager.Instance.ReloadGoldForCurrentPlayer();
-
-        CharacterPanelController.Instance?.RefreshPlayerName();
-
-        if (_nameInputField != null)
-            _nameInputField.text = string.Empty;
     }
 
     private void HandleRandomiserClicked()
@@ -5741,12 +5916,6 @@ public class UIManager : MonoBehaviour
     {
         GameObject randomiserObject = GameObject.Find("Randomiser");
         return randomiserObject != null ? randomiserObject.GetComponent<Button>() : null;
-    }
-
-    private static Button FindResetDataButton()
-    {
-        GameObject resetButtonObject = GameObject.Find("Reset Data Button");
-        return resetButtonObject != null ? resetButtonObject.GetComponent<Button>() : null;
     }
 
     private static Button FindEntryButton()

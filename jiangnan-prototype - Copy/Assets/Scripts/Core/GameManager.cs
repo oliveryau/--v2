@@ -11,9 +11,6 @@ public class GameManager : MonoBehaviour
     [SerializeField] private int _requiredTables;
     [SerializeField] private int _requiredStoves;
 
-    [Header("Business Session")]
-    [SerializeField] private float _businessSessionDurationSeconds = 180f;
-
     [Header("Fire Evacuation")]
     [SerializeField] private float _fireEvacuationDuration;
 
@@ -22,29 +19,21 @@ public class GameManager : MonoBehaviour
     public bool IsHiring => State == GameState.Hiring;
     public bool IsBusiness => State == GameState.Business;
     public bool IsBusinessSessionActive { get; private set; }
-    /// <summary>True while the timed open session is running (serve customers).</summary>
+    /// <summary>True while customers are being served.</summary>
     public bool IsBusinessOpen => IsBusinessSessionActive;
     /// <summary>
-    /// Waiting for remaining customers to leave / overview acknowledge after a session ends.
-    /// Build/hire/Open Business stay hidden during this window.
+    /// Legacy close-summary flag. Close/reopen cycles are removed; kept for compatibility.
     /// </summary>
     public bool IsBusinessCloseSummaryPending { get; private set; }
-    /// <summary>
-    /// Closed between sessions: Building (or Hiring) so players can improve the restaurant.
-    /// </summary>
-    public bool IsBusinessClosed =>
-        !IsBusinessSessionActive
-        && !IsBusinessCloseSummaryPending
-        && PlayerProfileStorage.HasMainSceneBusinessStartedForCurrentPlayer()
-        && IsBuilding;
+    /// <summary>Legacy downtime flag. Always false with the continuous open loop.</summary>
+    public bool IsBusinessClosed => false;
     /// <summary>Alias for <see cref="IsBusinessClosed"/>.</summary>
     public bool IsBusinessDowntime => IsBusinessClosed;
-    public float BusinessSessionRemainingSeconds => Mathf.Max(0f, _businessSessionRemaining);
+    public float BusinessSessionRemainingSeconds => 0f;
 
     private readonly Dictionary<PlaceableType, int> _placedCounts = new();
     private readonly Dictionary<WorkerType, int> _hiredCounts = new();
     private float _fireEvacuationTimer;
-    private float _businessSessionRemaining;
 
     private void Awake()
     {
@@ -68,8 +57,9 @@ public class GameManager : MonoBehaviour
 
         if (PlayerProfileStorage.HasMainSceneBusinessStartedForCurrentPlayer())
         {
-            // Resume in the closed/improve loop so build spots and Open Business return.
-            EnterBusinessImprovementPhase(resetSessionIncome: false);
+            // Resume serving immediately — no close/improve cycle.
+            SetState(GameState.Business);
+            OpenBusinessSession();
             return;
         }
 
@@ -85,22 +75,19 @@ public class GameManager : MonoBehaviour
 
     private void Update()
     {
-        if (State == GameState.FireEvacuation)
+        if (State != GameState.FireEvacuation)
+            return;
+
+        _fireEvacuationTimer -= Time.deltaTime;
+        if (_fireEvacuationTimer <= 0f)
         {
-            _fireEvacuationTimer -= Time.deltaTime;
-            if (_fireEvacuationTimer <= 0f)
-                SetState(GameState.Building);
-
-            return;
+            SetState(GameState.Business);
+            if (!IsBusinessSessionActive
+                && PlayerProfileStorage.HasMainSceneBusinessStartedForCurrentPlayer())
+            {
+                OpenBusinessSession();
+            }
         }
-
-        if (!IsBusinessSessionActive)
-            return;
-
-        _businessSessionRemaining -= Time.deltaTime;
-
-        if (_businessSessionRemaining <= 0f)
-            EndBusinessSession();
     }
 
     public bool TryStartHiring()
@@ -124,7 +111,7 @@ public class GameManager : MonoBehaviour
         if (!RestaurantSceneMode.IsMainScene && !RestaurantSceneMode.IsCompetitorScene)
             return false;
 
-        if (IsBusinessSessionActive || IsBusinessCloseSummaryPending)
+        if (IsBusinessSessionActive)
             return false;
 
         if (State == GameState.Building)
@@ -147,6 +134,8 @@ public class GameManager : MonoBehaviour
             return;
 
         SetState(GameState.Business);
+        if (!IsBusinessSessionActive)
+            OpenBusinessSession();
     }
 
     public void TriggerFire()
@@ -177,7 +166,6 @@ public class GameManager : MonoBehaviour
     {
         IsBusinessCloseSummaryPending = false;
         IsBusinessSessionActive = true;
-        _businessSessionRemaining = Mathf.Max(1f, _businessSessionDurationSeconds);
         GoldManager.Instance?.BeginBusinessSessionIncomeTracking();
         GameEvents.RaiseBusinessSessionStarted();
     }
@@ -188,69 +176,56 @@ public class GameManager : MonoBehaviour
             return;
 
         IsBusinessSessionActive = false;
-        _businessSessionRemaining = 0f;
-        // Keep session income tracking on so late payments still count toward the overview.
-
-        if (showCloseSummary && RestaurantSceneMode.IsMainScene)
-            IsBusinessCloseSummaryPending = true;
-
+        // Close/reopen overview cycle removed — only used for temporary pauses (e.g. fire).
+        IsBusinessCloseSummaryPending = false;
         GameEvents.RaiseBusinessSessionEnded();
-
-        if (IsBusinessCloseSummaryPending)
-            TryRaiseBusinessFloorClearedIfEmpty();
     }
 
     public void AcknowledgeBusinessCloseSummary()
     {
-        if (!IsBusinessCloseSummaryPending)
-            return;
+        IsBusinessCloseSummaryPending = false;
 
-        EnterBusinessImprovementPhase(resetSessionIncome: true);
+        if (PlayerProfileStorage.HasMainSceneBusinessStartedForCurrentPlayer()
+            && !IsBusinessSessionActive
+            && State != GameState.FireEvacuation)
+        {
+            SetState(GameState.Business);
+            OpenBusinessSession();
+        }
     }
 
     /// <summary>
-    /// Return to the building/improvement phase between timed business sessions.
+    /// Legacy entry for the old improve-between-sessions loop. Reopens business instead.
     /// </summary>
     public void EnterBusinessImprovementPhase(bool resetSessionIncome = true)
     {
-        if (IsBusinessSessionActive)
-            return;
-
         IsBusinessCloseSummaryPending = false;
 
         if (resetSessionIncome)
             GoldManager.Instance?.ResetBusinessSessionIncome();
 
-        SetState(GameState.Building);
-        GameEvents.RaiseBusinessDowntimeStarted();
-    }
-
-    /// <summary>
-    /// Enter the closed/improve state (Building). Safe to call if already closed.
-    /// </summary>
-    public void EnterBusinessClosed()
-    {
-        if (IsBusinessSessionActive)
-            return;
-
-        if (IsBusinessCloseSummaryPending)
+        if (PlayerProfileStorage.HasMainSceneBusinessStartedForCurrentPlayer())
         {
-            AcknowledgeBusinessCloseSummary();
+            SetState(GameState.Business);
+            if (!IsBusinessSessionActive)
+                OpenBusinessSession();
             return;
         }
 
+        SetState(GameState.Building);
+    }
+
+    /// <summary>
+    /// Legacy closed-state entry. Reopens business if it was already started.
+    /// </summary>
+    public void EnterBusinessClosed()
+    {
         EnterBusinessImprovementPhase(resetSessionIncome: false);
     }
 
     public void TryRaiseBusinessFloorClearedIfEmpty()
     {
-        if (!IsBusinessCloseSummaryPending)
-            return;
-
-        if (CustomerManager.Instance != null && !CustomerManager.Instance.IsRestaurantClearForCloseSummary())
-            return;
-
-        GameEvents.RaiseBusinessFloorCleared();
+        // Close-summary flow removed.
     }
 
     private void SetState(GameState state)

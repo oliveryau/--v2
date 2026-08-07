@@ -22,7 +22,7 @@ public class HireSpot : MonoBehaviour
     public WorkerType WorkerType => _workerType;
     public HireSpotState State => _state;
     public int Cost => _cost;
-    public RestaurantFloor Floor => _floor;
+    public RestaurantFloor Floor => RestaurantFloorUtil.ResolveFloor(transform, _floor);
     public bool IsHired => _state == HireSpotState.Hired;
     public Transform HireUiAnchor => _hireUiAnchor != null ? _hireUiAnchor : transform;
     public GameObject[] Workers => _workers;
@@ -96,12 +96,16 @@ public class HireSpot : MonoBehaviour
             {
                 endpointOccupied[endpointIndex] = true;
                 Transform endpoint = _walkInEndpoints[endpointIndex];
-                positions[i] = PathMovement.FlattenToFloorY(endpoint.position, floorY);
+                // Keep each endpoint's authored Y so upstairs wait points are not snapped to the ground spawn.
+                float targetFloorY = ResolveWalkInFloorY(endpoint.position.y, floorY);
+                positions[i] = PathMovement.FlattenToFloorY(endpoint.position, targetFloorY);
                 rotations[i] = endpoint.rotation;
                 continue;
             }
 
-            positions[i] = PathMovement.FlattenToFloorY(GetFallbackPosition(i), floorY);
+            Vector3 fallbackPosition = GetFallbackPosition(i);
+            float fallbackFloorY = ResolveWalkInFloorY(fallbackPosition.y, floorY);
+            positions[i] = PathMovement.FlattenToFloorY(fallbackPosition, fallbackFloorY);
             rotations[i] = GetFallbackRotation(i);
         }
     }
@@ -135,6 +139,17 @@ public class HireSpot : MonoBehaviour
         Vector3 spawnPosition = _walkInSpawn != null
             ? _walkInSpawn.position
             : transform.position;
+
+        if (Floor == RestaurantFloor.Second)
+        {
+            Transform endpoint = _walkInEndpoints != null && _walkInEndpoints.Length > 0
+                ? _walkInEndpoints[0]
+                : null;
+
+            if (endpoint != null)
+                spawnPosition.y = endpoint.position.y;
+        }
+
         Vector3[] targetPositions = new Vector3[_workers.Length];
         Quaternion[] targetRotations = new Quaternion[_workers.Length];
         AssignWalkInTargets(spawnPosition.y, targetPositions, targetRotations);
@@ -189,6 +204,15 @@ public class HireSpot : MonoBehaviour
         }
 
         return -1;
+    }
+
+    private float ResolveWalkInFloorY(float endpointY, float spawnFloorY)
+    {
+        // Second-floor hires use the endpoint height (e.g. FemaleWaiter / Waiter3 Waypoint at y≈4).
+        if (Floor == RestaurantFloor.Second)
+            return endpointY;
+
+        return spawnFloorY;
     }
 
     private Vector3 GetFallbackPosition(int workerIndex)

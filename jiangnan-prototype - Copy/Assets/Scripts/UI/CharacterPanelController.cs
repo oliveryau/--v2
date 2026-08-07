@@ -123,6 +123,7 @@ public class CharacterPanelController : MonoBehaviour
             return;
 
         CacheFloorSceneReferences();
+        SyncSecondFloorActorsToCullLayer();
         ApplySecondFloorViewVisible(_currentFloor == 2);
     }
 
@@ -224,6 +225,7 @@ public class CharacterPanelController : MonoBehaviour
 
         _secondFloorRoots.Clear();
         TryAddSecondFloorRoot(FindSceneObjectByExactName(SecondFloorEnvironmentName));
+        TryAddSecondFloorRoot(FindSceneObjectByExactName("Second Floor (1)"));
         TryAddSecondFloorRoot(FindSceneObjectByExactName(SecondFloorBuildSpotsName));
         CollectSecondFloorBuiltObjects();
 
@@ -239,7 +241,7 @@ public class CharacterPanelController : MonoBehaviour
                 root.SetActive(true);
 
             if (_secondFloorLayer >= 0)
-                SetLayerRecursively(root, _secondFloorLayer);
+                RestaurantFloorUtil.SetLayerRecursively(root, _secondFloorLayer);
         }
     }
 
@@ -395,6 +397,8 @@ public class CharacterPanelController : MonoBehaviour
     {
         _secondFloorViewVisible = visible;
 
+        SyncSecondFloorActorsToCullLayer();
+
         if (_secondFloorLayer >= 0)
         {
             int mask = 1 << _secondFloorLayer;
@@ -431,6 +435,44 @@ public class CharacterPanelController : MonoBehaviour
                     colliders[c].enabled = visible;
             }
         }
+    }
+
+    private void SyncSecondFloorActorsToCullLayer()
+    {
+        Worker[] workers = FindObjectsByType<Worker>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        for (int i = 0; i < workers.Length; i++)
+        {
+            Worker worker = workers[i];
+
+            // VIP-floor waiters move between floors (stove pickup downstairs) — cull by elevation.
+            if (worker == null || !worker.ServesVipFloorOnly)
+                continue;
+
+            RestaurantFloorUtil.SyncActorFloorViewLayerByElevation(worker.gameObject);
+        }
+
+        Customer[] customers = FindObjectsByType<Customer>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+
+        for (int i = 0; i < customers.Length; i++)
+        {
+            Customer customer = customers[i];
+
+            // VIPs enter on the ground floor first — only hide them once they are upstairs.
+            if (customer == null || !customer.IsVip)
+                continue;
+
+            RestaurantFloorUtil.SyncActorFloorViewLayerByElevation(customer.gameObject);
+        }
+    }
+
+    private void LateUpdate()
+    {
+        if (!RestaurantSceneMode.IsMainScene || _floorCamera == null)
+            return;
+
+        // Keep VIP/waiter cull layers in sync as they walk between floors.
+        SyncSecondFloorActorsToCullLayer();
     }
 
     private void SyncFloorButtonInteractable(bool onSecondFloor)
@@ -531,16 +573,7 @@ public class CharacterPanelController : MonoBehaviour
 
     private static void SetLayerRecursively(GameObject root, int layer)
     {
-        if (root == null || layer < 0)
-            return;
-
-        Transform[] transforms = root.GetComponentsInChildren<Transform>(true);
-
-        for (int i = 0; i < transforms.Length; i++)
-        {
-            if (transforms[i] != null)
-                transforms[i].gameObject.layer = layer;
-        }
+        RestaurantFloorUtil.SetLayerRecursively(root, layer);
     }
 
     private static Light FindMainDirectionalLight()

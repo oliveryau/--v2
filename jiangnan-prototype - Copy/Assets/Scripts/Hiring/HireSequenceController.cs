@@ -23,6 +23,7 @@ public class HireSequenceController : MonoBehaviour
         GameEvents.MissionPartCompleted += HandleMissionPartCompleted;
         GameEvents.BusinessSessionStarted += HandleBusinessSessionStarted;
         GameEvents.BusinessDowntimeStarted += HandleBusinessDowntimeStarted;
+        GameEvents.SecondFloorUnlocked += HandleSecondFloorUnlocked;
 
         foreach (HireSpot spot in _hireOrder)
         {
@@ -45,6 +46,7 @@ public class HireSequenceController : MonoBehaviour
         GameEvents.MissionPartCompleted -= HandleMissionPartCompleted;
         GameEvents.BusinessSessionStarted -= HandleBusinessSessionStarted;
         GameEvents.BusinessDowntimeStarted -= HandleBusinessDowntimeStarted;
+        GameEvents.SecondFloorUnlocked -= HandleSecondFloorUnlocked;
 
         if (_showHireSpotsRoutine != null)
         {
@@ -85,13 +87,18 @@ public class HireSequenceController : MonoBehaviour
 
     private void HandleBusinessSessionStarted()
     {
-        LockUnhiredSpots();
+        // Hire spots stay available while the restaurant is open.
+        RefreshHireSequence();
     }
 
     private void HandleBusinessDowntimeStarted()
     {
-        if (!ShouldKeepHireSpotsAvailable())
-            LockUnhiredSpots();
+        RefreshHireSequence();
+    }
+
+    private void HandleSecondFloorUnlocked()
+    {
+        RefreshHireSequence();
     }
 
     private void ShowHireSpotsAfterStarterBuild()
@@ -139,8 +146,17 @@ public class HireSequenceController : MonoBehaviour
             if (spot == null || spot.IsHired || spot.State == HireSpotState.Hiring)
                 continue;
 
+            if (!CanActivateHireSpot(spot))
+            {
+                spot.SetState(HireSpotState.Locked);
+                continue;
+            }
+
             if (!activatedFirstPending)
             {
+                if (!spot.gameObject.activeSelf)
+                    spot.gameObject.SetActive(true);
+
                 spot.ActivateForHiring();
                 activatedFirstPending = true;
             }
@@ -156,16 +172,24 @@ public class HireSequenceController : MonoBehaviour
             CompleteHiring();
     }
 
-    private static bool ShouldKeepHireSpotsAvailable()
+    private static bool CanActivateHireSpot(HireSpot spot)
     {
-        if (PlayerProfileStorage.HasMainSceneBusinessStartedForCurrentPlayer())
+        if (spot == null)
             return false;
 
-        if (GameManager.Instance != null
-            && (GameManager.Instance.IsBusinessSessionActive
-                || GameManager.Instance.IsBusinessCloseSummaryPending))
+        if (spot.Floor != RestaurantFloor.Second)
+            return true;
+
+        return RestaurantFloorUtil.IsUnlockedForCurrentPlayer();
+    }
+
+    private static bool ShouldKeepHireSpotsAvailable()
+    {
+        // Once business has opened (or is actively serving), hire spots stay available.
+        if (PlayerProfileStorage.HasMainSceneBusinessStartedForCurrentPlayer()
+            || (GameManager.Instance != null && GameManager.Instance.IsBusinessSessionActive))
         {
-            return false;
+            return true;
         }
 
         int missionPart = GetCurrentMissionPartIndex();
@@ -188,6 +212,9 @@ public class HireSequenceController : MonoBehaviour
     private void HandleSpotClicked(HireSpot spot)
     {
         if (!ShouldKeepHireSpotsAvailable() || spot == null || spot.State != HireSpotState.Active)
+            return;
+
+        if (!CanActivateHireSpot(spot))
             return;
 
         if (WorkerMovement.Instance == null)
@@ -224,8 +251,17 @@ public class HireSequenceController : MonoBehaviour
             if (spot == null || spot.IsHired || spot.State == HireSpotState.Hiring)
                 continue;
 
+            if (!CanActivateHireSpot(spot))
+            {
+                spot.SetState(HireSpotState.Locked);
+                continue;
+            }
+
             if (spot.State == HireSpotState.Active)
                 return;
+
+            if (!spot.gameObject.activeSelf)
+                spot.gameObject.SetActive(true);
 
             spot.ActivateForHiring();
             return;

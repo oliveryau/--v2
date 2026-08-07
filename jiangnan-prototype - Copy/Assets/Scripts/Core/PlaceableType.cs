@@ -2,5 +2,7 @@ public enum PlaceableType
 {
     Reception,
     Stove,
-    Table
+    Table,
+    Stairs,
+    VipTable
 }
