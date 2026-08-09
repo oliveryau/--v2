@@ -328,6 +328,21 @@ public class CharacterPanelController : MonoBehaviour
         SetFloor(2);
     }
 
+    /// <summary>Switch the restaurant view to floor 1 (camera + floor UI visibility).</summary>
+    public void GoToFirstFloor(bool force = false)
+    {
+        SetFloor(1, force);
+    }
+
+    /// <summary>Switch the restaurant view to floor 2 when unlocked.</summary>
+    public void GoToSecondFloor(bool force = false)
+    {
+        if (!RestaurantFloorUtil.IsUnlockedForCurrentPlayer())
+            return;
+
+        SetFloor(2, force);
+    }
+
     private void SetFloor(int floor, bool force = false)
     {
         if (floor == 2 && !RestaurantFloorUtil.IsUnlockedForCurrentPlayer())

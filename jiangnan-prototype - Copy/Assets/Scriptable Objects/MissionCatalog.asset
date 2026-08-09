@@ -59,12 +59,17 @@ MonoBehaviour:
       requiredCount: 1
     revealSecondFloorWhenComplete: 0
     startHiringWhenComplete: 0
-  - title: "\u6B64\u540E\u8D35\u5BBE"
+  - title: "\u51C6\u5907\u9080\u8BF7VIP"
     tasks:
     - taskKind: 0
       description: "\u5EFA\u9020VIP\u684C\u5B50"
       requiredType: 4
       requiredWorkerType: 0
+      requiredCount: 1
+    - taskKind: 1
+      description: "\u62DB\u4E8C\u697C\u5C0F\u513F"
+      requiredType: 4
+      requiredWorkerType: 1
       requiredCount: 1
     revealSecondFloorWhenComplete: 0
     startHiringWhenComplete: 0

@@ -42,6 +42,10 @@ public static class RestaurantFloorUtil
         if (transform == null)
             return authoredFloor;
 
+        // Overlay UI uses screen pixels as world position; never treat that Y as restaurant elevation.
+        if (IsUnderScreenSpaceOverlayCanvas(transform))
+            return authoredFloor;
+
         if (IsUnderSecondFloorHierarchy(transform))
             return RestaurantFloor.Second;
 
@@ -54,6 +58,22 @@ public static class RestaurantFloorUtil
             return RestaurantFloor.Second;
 
         return RestaurantFloor.Ground;
+    }
+
+    public static bool IsUnderScreenSpaceOverlayCanvas(Transform transform)
+    {
+        Transform current = transform;
+
+        while (current != null)
+        {
+            Canvas canvas = current.GetComponent<Canvas>();
+            if (canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+                return true;
+
+            current = current.parent;
+        }
+
+        return false;
     }
 
     public static bool IsUnlockedForCurrentPlayer()

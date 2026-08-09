@@ -18,13 +18,6 @@ public class UIManager : MonoBehaviour
     [Header("Build UI")]
     [SerializeField] private Canvas _screenCanvas;
     [SerializeField] private Camera _worldCamera;
-    [SerializeField] private RectTransform _buildSpotCostUiRoot;
-    [SerializeField] private TextMeshProUGUI _buildCostText;
-    [SerializeField] private Button _buildCostButton;
-    // Visual-only per-spot cost UI instances (one clone per BuildSpot).
-    // This fixes the old "single active build spot" limitation.
-    private readonly Dictionary<BuildSpot, RectTransform> _perSpotBuildCostUiInstances = new();
-    private bool _perSpotBuildCostUiInitialized;
 
     [Header("Gold UI")]
     [SerializeField] private TextMeshProUGUI _goldAmountText;
@@ -69,12 +62,72 @@ public class UIManager : MonoBehaviour
     [SerializeField] private float _vipDoneEatingFadeInDuration;
     [SerializeField] private float _vipDoneEatingHoldDuration;
     [SerializeField] private float _vipDoneEatingFadeOutDuration;
-    [SerializeField] private string[] _vipDoneEatingMessages =
+    [SerializeField] private RectTransform _vipIntroButtonRoot;
+    [SerializeField] private Button _vipIntroButton;
+    [SerializeField] private RectTransform _vipWaitTimerRoot;
+    [SerializeField] private Image _vipWaitTimerFillImage;
+    [SerializeField] private TextMeshProUGUI _vipWaitTimerCountdownText;
+    [SerializeField] private RectTransform _vipServeDishButtonRoot;
+    [SerializeField] private Button _vipServeDishButton;
+    [SerializeField] private RectTransform _vipFeetMassageButtonRoot;
+    [SerializeField] private Button _vipFeetMassageButton;
+    [SerializeField] private RectTransform _vipServeTeaButtonRoot;
+    [SerializeField] private Button _vipServeTeaButton;
+    [SerializeField] private RectTransform _vipCallLadyButtonRoot;
+    [SerializeField] private Button _vipCallLadyButton;
+    [SerializeField] private RectTransform _vipGeTaiButtonRoot;
+    [SerializeField] private Button _vipGeTaiButton;
+    [SerializeField] private float _vipGeTaiPulseMinScale = 0.9f;
+    [SerializeField] private float _vipGeTaiPulseMaxScale = 1.1f;
+    [SerializeField] private float _vipGeTaiPulseSpeed = 8f;
+    [SerializeField] private TextMeshProUGUI _vipDialogueText;
+    [Header("VIP Dialogue Lines")]
+    [Tooltip("VIP arrives at the entry waypoint.")]
+    [SerializeField] private string[] _vipDialogueArrived =
     {
-        "好菜! 好酒! 下次再来!",
-        "店家当真用心了, 重重有赏!",
-        "赏! 本尊过几日再来!"
+        "哼，给本尊开门!"
     };
+    [Tooltip("VIP leaves unhappy (invite ignored or 上菜 timed out). Hides after a few seconds.")]
+    [SerializeField] private string[] _vipDialogueUnhappyLeave =
+    {
+        "岂有此理! 本尊走了!"
+    };
+    [Tooltip("VIP leaves happily after coin collection.")]
+    [SerializeField] private string[] _vipDialogueSuccessLeave =
+    {
+        "太好吃了，下次再来!"
+    };
+    [Tooltip("VIP wants 上菜 (button appears).")]
+    [SerializeField] private string[] _vipDialogueRequestServeDish =
+    {
+        "上菜! 本尊饿了!"
+    };
+    [Tooltip("VIP wants 泡脚 (button appears).")]
+    [SerializeField] private string[] _vipDialogueRequestFeetMassage =
+    {
+        "给本尊好好泡脚!"
+    };
+    [Tooltip("VIP wants 上茶 (button appears).")]
+    [SerializeField] private string[] _vipDialogueRequestServeTea =
+    {
+        "上茶! 要上等的!"
+    };
+    [Tooltip("VIP wants 叫美女 (button appears).")]
+    [SerializeField] private string[] _vipDialogueRequestCallLady =
+    {
+        "叫几个美女来陪本尊!"
+    };
+    [Tooltip("VIP wants 歌台 / 表演 (button appears).")]
+    [SerializeField] private string[] _vipDialogueRequestWatchStage =
+    {
+        "来段表演，助助兴!"
+    };
+    [Tooltip("Optional request timed out (except 上菜). Hides after a few seconds.")]
+    [SerializeField] private string[] _vipDialogueDiscontent =
+    {
+        "哼，怠慢本尊?!"
+    };
+    [SerializeField] private float _vipNegativeDialogueHideDelay = 3f;
 
     [Header("Table Status UI")]
     [SerializeField] private RectTransform _tableStatusUiRoot;
@@ -221,7 +274,6 @@ public class UIManager : MonoBehaviour
     private Coroutine _waitForBusinessFloorClearRoutine;
     private bool _businessOverviewVisible;
     private bool _buildSpotCostUiSuppressed;
-    private BuildSpot _activeBuildSpot;
     private HireSpot _activeHireSpot;
     private DiningTable _selectedUpgradeTable;
     private readonly Dictionary<Transform, SeatPaymentUiEntry> _activeSeatPaymentUis = new();
@@ -249,10 +301,19 @@ public class UIManager : MonoBehaviour
     private Graphic[] _vipDoneEatingGraphics;
     private Color[] _vipDoneEatingTargetColors;
     private Coroutine _vipDoneEatingRoutine;
+    private Coroutine _vipDialogueHideRoutine;
     private Graphic[] _vipFireworksGraphics;
     private Color[] _vipFireworksTargetColors;
     private Animator _vipFireworksAnimator;
     private Coroutine _vipFireworksRoutine;
+    private Customer _vipIntroCustomer;
+    private Customer _vipWaitTimerCustomer;
+    private Customer _vipEventCustomer;
+    private VipEventType? _activeVipEventButton;
+    private float _vipWaitTimerRemaining;
+    private float _vipWaitTimerDuration;
+    private bool _vipIntroButtonWired;
+    private bool _vipEventButtonsWired;
     private RectTransform _pranksterDialogueRootRuntime;
     private TextMeshProUGUI _pranksterDialogueText;
     private Image _pranksterDialogueIconImage;
@@ -337,6 +398,16 @@ public class UIManager : MonoBehaviour
     private const string VipDoneEatingRootName = "VIP Done Eating";
     private const string VipDoneIconName = "VIP Icon";
     private const string VipDoneTextName = "VIP Done Text";
+    private const string VipIntroButtonName = "VIP Intro Button";
+    private const string VipWaitTimerName = "VIP Wait Timer";
+    private const string VipWaitTimerFillName = "Energy Bar";
+    private const string VipWaitTimerCountdownName = "Countdown";
+    private const string VipServeDishButtonName = "VIP ServeDish Button";
+    private const string VipFeetMassageButtonName = "VIP Feetmassage Button";
+    private const string VipServeTeaButtonName = "VIP ServeTea Button";
+    private const string VipCallLadyButtonName = "VIP CallLady Button";
+    private const string VipGeTaiButtonName = "VIP GeTai Button";
+    private const string VipDialogueTextName = "VIP Text";
     private const string ChasePranksterUiName = "Chase Prankster";
     private const string PranksterNameUiName = "Prankster Name";
     private const string PranksterDialogueRootName = "Prankster Dialogue";
@@ -410,14 +481,6 @@ public class UIManager : MonoBehaviour
 
         InitializeWorkerEnergyUiBindings();
 
-        if (_buildCostButton == null && _buildSpotCostUiRoot != null)
-            _buildCostButton = _buildSpotCostUiRoot.GetComponentInChildren<Button>(true);
-
-        if (_buildCostButton != null)
-            _buildCostButton.onClick.AddListener(HandleBuildCostUiClicked);
-
-        InitializePerSpotBuildCostUi();
-
         if (_addGoldButton == null)
             _addGoldButton = FindGoldUiButton("Plus Bg");
         else
@@ -430,6 +493,9 @@ public class UIManager : MonoBehaviour
         CacheCoinTrailUi();
         CacheVipUi();
         CacheVipDoneEatingUi();
+        CacheVipIntroButtonUi();
+        CacheVipWaitTimerUi();
+        CacheVipEventButtonsUi();
 
         if (_seatPaymentButton == null && _seatPaymentUiRoot != null)
             _seatPaymentButton = _seatPaymentUiRoot.GetComponentInChildren<Button>(true);
@@ -472,7 +538,9 @@ public class UIManager : MonoBehaviour
 
         HideVipUi();
         HideVipDoneEating();
-        HideBuildSpotCostUi();
+        HideVipIntroButton();
+        HideVipWaitTimer();
+        HideAllVipEventButtons();
         HideBusinessTimer();
         HideBusinessOverview();
         HideOpenBusiness();
@@ -505,14 +573,9 @@ public class UIManager : MonoBehaviour
 
         // Town restaurant uses its own New Building UI flow — never show BuildSpotCostUI there.
         if (IsActiveTownScene())
-        {
             SetBuildSpotCostUiSuppressed(true);
-            HideAllBuildSpotCostUis();
-        }
         else
-        {
             SetBuildSpotCostUiSuppressed(false);
-        }
 
         SyncActiveUi();
         SyncOpenBusinessUiVisibility();
@@ -557,7 +620,7 @@ public class UIManager : MonoBehaviour
         if (IsActiveTownScene())
             SyncTownRatingTexts();
         SyncActiveUi();
-        SyncAllPerSpotBuildCostUi();
+        SyncAllNestedBuildSpotCostUi();
         SyncPendingTableBuildInfoUi();
 
         if (RestaurantSceneMode.IsMainScene)
@@ -591,9 +654,6 @@ public class UIManager : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (_buildCostButton != null)
-            _buildCostButton.onClick.RemoveListener(HandleBuildCostUiClicked);
-
         if (_chefHireButton != null)
             _chefHireButton.onClick.RemoveListener(HandleHireButtonClicked);
 
@@ -617,6 +677,9 @@ public class UIManager : MonoBehaviour
 
         if (_chasePranksterButton != null)
             _chasePranksterButton.onClick.RemoveListener(HandleChasePranksterClicked);
+
+        if (_vipIntroButton != null && _vipIntroButtonWired)
+            _vipIntroButton.onClick.RemoveListener(HandleVipIntroButtonClicked);
 
         if (_addGoldButton != null)
             _addGoldButton.onClick.RemoveListener(HandleAddGoldClicked);
@@ -660,7 +723,6 @@ public class UIManager : MonoBehaviour
 
     private void LateUpdate()
     {
-        UpdateBuildSpotCostUiPosition();
         SyncAllHireSpotUi();
         UpdateSeatPaymentUiPositions();
         UpdateTableStatusPositions();
@@ -688,6 +750,7 @@ public class UIManager : MonoBehaviour
     public void HideVipUi()
     {
         StopVipFireworksRoutine();
+        StopVipDialogueHideRoutine();
 
         if (_vipFireworksRoot != null)
             _vipFireworksRoot.gameObject.SetActive(false);
@@ -696,10 +759,232 @@ public class UIManager : MonoBehaviour
             _vipUiRoot.gameObject.SetActive(false);
     }
 
+    public void SetVipDialogue(VipDialogueState state)
+    {
+        CacheVipDialogueText();
+
+        string[] lines = ResolveVipDialogueLines(state);
+        if (_vipDialogueText == null || lines == null || lines.Length == 0)
+            return;
+
+        string chosen = lines[UnityEngine.Random.Range(0, lines.Length)];
+        if (string.IsNullOrWhiteSpace(chosen))
+            return;
+
+        StopVipDialogueHideRoutine();
+
+        // Ensure nested Text Bg / VIP Text is visible under VIP Main UI.
+        if (_vipDialogueText.transform.parent != null)
+            _vipDialogueText.transform.parent.gameObject.SetActive(true);
+
+        _vipDialogueText.gameObject.SetActive(true);
+        _vipDialogueText.text = chosen;
+
+        if (_vipUiRoot != null && !_vipUiRoot.gameObject.activeSelf)
+            _vipUiRoot.gameObject.SetActive(true);
+
+        if (state == VipDialogueState.UnhappyLeave || state == VipDialogueState.Discontent)
+            _vipDialogueHideRoutine = StartCoroutine(HideVipDialogueAfterDelay(_vipNegativeDialogueHideDelay));
+    }
+
+    public void SetVipDialogueForEvent(VipEventType eventType)
+    {
+        SetVipDialogue(eventType switch
+        {
+            VipEventType.ServeDish => VipDialogueState.RequestServeDish,
+            VipEventType.FeetMassage => VipDialogueState.RequestFeetMassage,
+            VipEventType.ServeTea => VipDialogueState.RequestServeTea,
+            VipEventType.CallLady => VipDialogueState.RequestCallLady,
+            VipEventType.WatchStage => VipDialogueState.RequestWatchStage,
+            _ => VipDialogueState.Discontent
+        });
+    }
+
+    public void HideVipDialogue()
+    {
+        StopVipDialogueHideRoutine();
+        CacheVipDialogueText();
+
+        if (_vipDialogueText == null)
+            return;
+
+        if (_vipDialogueText.transform.parent != null)
+            _vipDialogueText.transform.parent.gameObject.SetActive(false);
+
+        _vipDialogueText.gameObject.SetActive(false);
+    }
+
+    private IEnumerator HideVipDialogueAfterDelay(float delay)
+    {
+        float wait = Mathf.Max(0f, delay);
+        if (wait > 0f)
+            yield return new WaitForSeconds(wait);
+
+        _vipDialogueHideRoutine = null;
+        HideVipDialogue();
+    }
+
+    private void StopVipDialogueHideRoutine()
+    {
+        if (_vipDialogueHideRoutine == null)
+            return;
+
+        StopCoroutine(_vipDialogueHideRoutine);
+        _vipDialogueHideRoutine = null;
+    }
+
+    private string[] ResolveVipDialogueLines(VipDialogueState state)
+    {
+        return state switch
+        {
+            VipDialogueState.Arrived => _vipDialogueArrived,
+            VipDialogueState.UnhappyLeave => _vipDialogueUnhappyLeave,
+            VipDialogueState.SuccessLeave => _vipDialogueSuccessLeave,
+            VipDialogueState.RequestServeDish => _vipDialogueRequestServeDish,
+            VipDialogueState.RequestFeetMassage => _vipDialogueRequestFeetMassage,
+            VipDialogueState.RequestServeTea => _vipDialogueRequestServeTea,
+            VipDialogueState.RequestCallLady => _vipDialogueRequestCallLady,
+            VipDialogueState.RequestWatchStage => _vipDialogueRequestWatchStage,
+            VipDialogueState.Discontent => _vipDialogueDiscontent,
+            _ => null
+        };
+    }
+
+    private void CacheVipDialogueText()
+    {
+        if (_vipDialogueText != null)
+            return;
+
+        EnsureScreenUiCaches();
+        CacheVipUi();
+
+        if (_vipUiRoot == null)
+            return;
+
+        Transform textRoot = FindChildTransform(_vipUiRoot, VipDialogueTextName);
+        if (textRoot != null)
+            _vipDialogueText = textRoot.GetComponent<TextMeshProUGUI>();
+    }
+
     /// <summary>Legacy entry point used when the VIP reaches the entry waypoint.</summary>
     public void PlayVipAnnouncement()
     {
         ShowVipUi();
+        SetVipDialogue(VipDialogueState.Arrived);
+    }
+
+    public void ShowVipIntroButton(Customer vip)
+    {
+        CacheVipIntroButtonUi();
+
+        if (_vipIntroButtonRoot == null || vip == null)
+            return;
+
+        _vipIntroCustomer = vip;
+        _vipIntroButtonRoot.gameObject.SetActive(true);
+        UpdateVipIntroButtonPosition();
+    }
+
+    public void HideVipIntroButton()
+    {
+        _vipIntroCustomer = null;
+
+        if (_vipIntroButtonRoot != null)
+            _vipIntroButtonRoot.gameObject.SetActive(false);
+    }
+
+    public void ShowVipWaitTimer(Customer vip, float duration)
+    {
+        CacheVipWaitTimerUi();
+
+        if (_vipWaitTimerRoot == null || vip == null)
+            return;
+
+        // Timer lives under VIP Main UI / VIP Icon — keep the banner visible.
+        if (_vipUiRoot != null && !_vipUiRoot.gameObject.activeSelf)
+            _vipUiRoot.gameObject.SetActive(true);
+
+        _vipWaitTimerCustomer = vip;
+        _vipWaitTimerDuration = Mathf.Max(0.01f, duration);
+        _vipWaitTimerRemaining = _vipWaitTimerDuration;
+        _vipWaitTimerRoot.gameObject.SetActive(true);
+        ApplyVipWaitTimerVisuals();
+    }
+
+    public void UpdateVipWaitTimer(Customer vip, float remaining, float duration)
+    {
+        if (vip == null || _vipWaitTimerCustomer != vip)
+            return;
+
+        _vipWaitTimerDuration = Mathf.Max(0.01f, duration);
+        _vipWaitTimerRemaining = Mathf.Clamp(remaining, 0f, _vipWaitTimerDuration);
+        ApplyVipWaitTimerVisuals();
+    }
+
+    public void HideVipWaitTimer(Customer vip = null)
+    {
+        if (vip != null && _vipWaitTimerCustomer != null && _vipWaitTimerCustomer != vip)
+            return;
+
+        _vipWaitTimerCustomer = null;
+        _vipWaitTimerRemaining = 0f;
+        _vipWaitTimerDuration = 0f;
+
+        if (_vipWaitTimerRoot != null)
+            _vipWaitTimerRoot.gameObject.SetActive(false);
+    }
+
+    public void ShowVipEventButton(VipEventType eventType, Customer vip)
+    {
+        CacheVipEventButtonsUi();
+
+        if (vip == null)
+            return;
+
+        RectTransform root = GetVipEventButtonRoot(eventType);
+        if (root == null)
+            return;
+
+        SetVipEventButtonActive(_vipServeDishButtonRoot, eventType == VipEventType.ServeDish);
+        SetVipEventButtonActive(_vipFeetMassageButtonRoot, eventType == VipEventType.FeetMassage);
+        SetVipEventButtonActive(_vipServeTeaButtonRoot, eventType == VipEventType.ServeTea);
+        SetVipEventButtonActive(_vipCallLadyButtonRoot, eventType == VipEventType.CallLady);
+        SetVipEventButtonActive(_vipGeTaiButtonRoot, eventType == VipEventType.WatchStage);
+
+        _vipEventCustomer = vip;
+        _activeVipEventButton = eventType;
+        root.SetAsLastSibling();
+        SetVipDialogueForEvent(eventType);
+        UpdateVipEventButtonPosition();
+    }
+
+    public void HideVipEventButton(VipEventType eventType)
+    {
+        RectTransform root = GetVipEventButtonRoot(eventType);
+        if (root != null)
+            root.gameObject.SetActive(false);
+
+        if (eventType == VipEventType.WatchStage)
+            ResetVipGeTaiButtonScale();
+
+        if (_activeVipEventButton.HasValue && _activeVipEventButton.Value == eventType)
+        {
+            _activeVipEventButton = null;
+            _vipEventCustomer = null;
+        }
+    }
+
+    public void HideAllVipEventButtons()
+    {
+        SetVipEventButtonActive(_vipServeDishButtonRoot, false);
+        SetVipEventButtonActive(_vipFeetMassageButtonRoot, false);
+        SetVipEventButtonActive(_vipServeTeaButtonRoot, false);
+        SetVipEventButtonActive(_vipCallLadyButtonRoot, false);
+        SetVipEventButtonActive(_vipGeTaiButtonRoot, false);
+        ResetVipGeTaiButtonScale();
+
+        _activeVipEventButton = null;
+        _vipEventCustomer = null;
     }
 
     public void PlayVipDoneEating()
@@ -777,9 +1062,6 @@ public class UIManager : MonoBehaviour
             if (selectedIcon != null)
                 _vipDoneIconImage.sprite = selectedIcon;
         }
-
-        if (_vipDoneText != null && _vipDoneEatingMessages != null && _vipDoneEatingMessages.Length > 0)
-            _vipDoneText.text = _vipDoneEatingMessages[UnityEngine.Random.Range(0, _vipDoneEatingMessages.Length)];
     }
 
     private Sprite PickRandomVipDoneIcon()
@@ -1030,7 +1312,417 @@ public class UIManager : MonoBehaviour
         }
 
         DisableChildRaycastTargets(_vipUiRoot);
+        CacheVipDialogueText();
         _vipUiRoot.gameObject.SetActive(false);
+    }
+
+    private void CacheVipIntroButtonUi()
+    {
+        EnsureScreenUiCaches();
+
+        if (_vipIntroButtonRoot == null && _screenCanvas != null)
+            _vipIntroButtonRoot = FindRectTransformByName(_screenCanvas.transform, VipIntroButtonName);
+
+        if (_vipIntroButtonRoot == null)
+            return;
+
+        if (_vipIntroButton == null)
+            _vipIntroButton = _vipIntroButtonRoot.GetComponent<Button>()
+                ?? _vipIntroButtonRoot.GetComponentInChildren<Button>(true);
+
+        if (_vipIntroButton != null && !_vipIntroButtonWired)
+        {
+            _vipIntroButton.onClick.AddListener(HandleVipIntroButtonClicked);
+            _vipIntroButtonWired = true;
+        }
+
+        _vipIntroButtonRoot.gameObject.SetActive(false);
+    }
+
+    private void CacheVipWaitTimerUi()
+    {
+        EnsureScreenUiCaches();
+
+        if (_vipWaitTimerRoot == null)
+        {
+            // Prefer the timer nested under VIP Main UI → VIP Icon.
+            if (_vipUiRoot != null)
+                _vipWaitTimerRoot = FindRectTransformByName(_vipUiRoot, VipWaitTimerName);
+
+            if (_vipWaitTimerRoot == null && _screenCanvas != null)
+                _vipWaitTimerRoot = FindRectTransformByName(_screenCanvas.transform, VipWaitTimerName);
+        }
+
+        if (_vipWaitTimerRoot == null)
+            return;
+
+        if (_vipWaitTimerFillImage == null)
+        {
+            Transform fillTransform = FindChildTransform(_vipWaitTimerRoot, VipWaitTimerFillName);
+            if (fillTransform != null)
+                _vipWaitTimerFillImage = fillTransform.GetComponent<Image>();
+            else
+                _vipWaitTimerFillImage = _vipWaitTimerRoot.GetComponent<Image>();
+        }
+
+        if (_vipWaitTimerCountdownText == null)
+        {
+            Transform countdownTransform = FindChildTransform(_vipWaitTimerRoot, VipWaitTimerCountdownName);
+            if (countdownTransform != null)
+                _vipWaitTimerCountdownText = countdownTransform.GetComponent<TextMeshProUGUI>();
+        }
+
+        // Timer is display-only — never block taps on the VIP request buttons.
+        Graphic[] timerGraphics = _vipWaitTimerRoot.GetComponentsInChildren<Graphic>(true);
+        for (int i = 0; i < timerGraphics.Length; i++)
+        {
+            if (timerGraphics[i] != null)
+                timerGraphics[i].raycastTarget = false;
+        }
+
+        _vipWaitTimerRoot.gameObject.SetActive(false);
+    }
+
+    private void CacheVipEventButtonsUi()
+    {
+        EnsureScreenUiCaches();
+
+        CacheVipEventButton(
+            ref _vipServeDishButtonRoot,
+            ref _vipServeDishButton,
+            VipServeDishButtonName,
+            VipEventType.ServeDish);
+
+        CacheVipEventButton(
+            ref _vipFeetMassageButtonRoot,
+            ref _vipFeetMassageButton,
+            VipFeetMassageButtonName,
+            VipEventType.FeetMassage);
+
+        CacheVipEventButton(
+            ref _vipServeTeaButtonRoot,
+            ref _vipServeTeaButton,
+            VipServeTeaButtonName,
+            VipEventType.ServeTea);
+
+        CacheVipEventButton(
+            ref _vipCallLadyButtonRoot,
+            ref _vipCallLadyButton,
+            VipCallLadyButtonName,
+            VipEventType.CallLady);
+
+        CacheVipEventButton(
+            ref _vipGeTaiButtonRoot,
+            ref _vipGeTaiButton,
+            VipGeTaiButtonName,
+            VipEventType.WatchStage);
+
+        if (_vipGeTaiButton == null && _vipGeTaiButtonRoot != null)
+            _vipGeTaiButton = EnsureButtonOnObject(_vipGeTaiButtonRoot.gameObject);
+
+        if (!_vipEventButtonsWired)
+        {
+            WireVipEventButton(_vipServeDishButton, VipEventType.ServeDish);
+            WireVipEventButton(_vipFeetMassageButton, VipEventType.FeetMassage);
+            WireVipEventButton(_vipServeTeaButton, VipEventType.ServeTea);
+            WireVipEventButton(_vipCallLadyButton, VipEventType.CallLady);
+            WireVipEventButton(_vipGeTaiButton, VipEventType.WatchStage);
+            _vipEventButtonsWired = true;
+
+            SetVipEventButtonActive(_vipServeDishButtonRoot, false);
+            SetVipEventButtonActive(_vipFeetMassageButtonRoot, false);
+            SetVipEventButtonActive(_vipServeTeaButtonRoot, false);
+            SetVipEventButtonActive(_vipCallLadyButtonRoot, false);
+            SetVipEventButtonActive(_vipGeTaiButtonRoot, false);
+            _activeVipEventButton = null;
+            _vipEventCustomer = null;
+        }
+    }
+
+    private void CacheVipEventButton(
+        ref RectTransform root,
+        ref Button button,
+        string objectName,
+        VipEventType eventType)
+    {
+        if (root == null && _screenCanvas != null)
+            root = FindRectTransformByName(_screenCanvas.transform, objectName);
+
+        if (root == null)
+            return;
+
+        if (button == null)
+            button = root.GetComponent<Button>() ?? root.GetComponentInChildren<Button>(true);
+    }
+
+    private void WireVipEventButton(Button button, VipEventType eventType)
+    {
+        if (button == null)
+            return;
+
+        button.onClick.RemoveAllListeners();
+        VipEventType captured = eventType;
+        button.onClick.AddListener(() => HandleVipEventButtonClicked(captured));
+    }
+
+    private void HandleVipEventButtonClicked(VipEventType eventType)
+    {
+        CustomerManager.Instance?.AcknowledgeVipEvent(eventType);
+        HideVipDialogue();
+        HideVipEventButton(eventType);
+    }
+
+    private RectTransform GetVipEventButtonRoot(VipEventType eventType)
+    {
+        return eventType switch
+        {
+            VipEventType.ServeDish => _vipServeDishButtonRoot,
+            VipEventType.FeetMassage => _vipFeetMassageButtonRoot,
+            VipEventType.ServeTea => _vipServeTeaButtonRoot,
+            VipEventType.CallLady => _vipCallLadyButtonRoot,
+            VipEventType.WatchStage => _vipGeTaiButtonRoot,
+            _ => null
+        };
+    }
+
+    private Button GetVipEventButton(VipEventType eventType)
+    {
+        return eventType switch
+        {
+            VipEventType.ServeDish => _vipServeDishButton,
+            VipEventType.FeetMassage => _vipFeetMassageButton,
+            VipEventType.ServeTea => _vipServeTeaButton,
+            VipEventType.CallLady => _vipCallLadyButton,
+            VipEventType.WatchStage => _vipGeTaiButton,
+            _ => null
+        };
+    }
+
+    private static void SetVipEventButtonActive(RectTransform root, bool active)
+    {
+        if (root != null)
+            root.gameObject.SetActive(active);
+    }
+
+    private void HandleVipIntroButtonClicked()
+    {
+        CustomerManager.Instance?.AcknowledgeVipIntro();
+        HideVipIntroButton();
+    }
+
+    private void UpdateVipIntroButtonPosition()
+    {
+        if (_vipIntroButtonRoot == null || _vipIntroCustomer == null)
+            return;
+
+        if (!_vipIntroButtonRoot.gameObject.activeSelf)
+            return;
+
+        Transform anchor = _vipIntroCustomer.ReactPoint;
+        if (anchor == null)
+            return;
+
+        // Keep the button active while intro is pending — only refresh position when projection works.
+        TryUpdateScreenUiPosition(_vipIntroButtonRoot, anchor.position);
+    }
+
+    private void UpdateVipEventButtonPosition()
+    {
+        if (!_activeVipEventButton.HasValue || _vipEventCustomer == null)
+            return;
+
+        if (_activeVipEventButton.Value == VipEventType.WatchStage)
+        {
+            UpdateVipGeTaiButtonPosition();
+            return;
+        }
+
+        RectTransform root = GetVipEventButtonRoot(_activeVipEventButton.Value);
+        if (root == null)
+            return;
+
+        EnsureScreenUiCaches();
+
+        Transform anchor = _vipEventCustomer.ReactPoint != null
+            ? _vipEventCustomer.ReactPoint
+            : _vipEventCustomer.LakePoint;
+
+        if (anchor == null)
+            return;
+
+        // Stay locked to the VIP world position. Hide when the camera is dragged away —
+        // do not clamp/fallback onto the screen edge.
+        if (!TryGetVipEventButtonLocalPoint(anchor.position, root, out Vector2 localPoint))
+        {
+            if (root.gameObject.activeSelf)
+                root.gameObject.SetActive(false);
+            return;
+        }
+
+        if (!root.gameObject.activeSelf)
+            root.gameObject.SetActive(true);
+
+        root.anchoredPosition = localPoint;
+    }
+
+    private void UpdateVipGeTaiButtonPosition()
+    {
+        RectTransform root = _vipGeTaiButtonRoot;
+        if (root == null)
+            return;
+
+        // GeTai / stage UI is second-floor only.
+        bool onSecondFloor = CharacterPanelController.Instance == null
+            || CharacterPanelController.Instance.CurrentFloor == 2;
+
+        if (!onSecondFloor)
+        {
+            if (root.gameObject.activeSelf)
+                root.gameObject.SetActive(false);
+            ResetVipGeTaiButtonScale();
+            return;
+        }
+
+        EnsureScreenUiCaches();
+
+        Transform stage = CustomerManager.Instance != null
+            ? CustomerManager.Instance.VipStagePoint
+            : null;
+
+        if (stage == null)
+            stage = FindSceneTransformByName("Placeholder Stage")
+                ?? FindSceneTransformByName("GeTai");
+
+        if (stage == null || _worldCamera == null || _canvasRect == null || _screenCanvas == null)
+            return;
+
+        Vector3 screenPoint = _worldCamera.WorldToScreenPoint(stage.position);
+        if (screenPoint.z <= 0f)
+        {
+            // Behind camera — pin to nearest horizontal edge using viewport direction.
+            Vector3 viewport = _worldCamera.WorldToViewportPoint(stage.position);
+            screenPoint.x = viewport.x < 0.5f ? 0f : Screen.width;
+            screenPoint.y = Mathf.Clamp(Screen.height * 0.5f, 0f, Screen.height);
+            screenPoint.z = 1f;
+        }
+
+        float halfW = Mathf.Max(40f, root.rect.width * 0.5f);
+        float halfH = Mathf.Max(40f, root.rect.height * 0.5f);
+        float pad = 24f;
+
+        // Persistent on floor 2: clamp to screen edges when the stage is off-screen.
+        screenPoint.x = Mathf.Clamp(screenPoint.x, pad + halfW, Screen.width - pad - halfW);
+        screenPoint.y = Mathf.Clamp(screenPoint.y, pad + halfH, Screen.height - pad - halfH);
+
+        Camera canvasCamera = _screenCanvas.renderMode == RenderMode.ScreenSpaceOverlay
+            ? null
+            : _screenCanvas.worldCamera;
+
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                _canvasRect,
+                screenPoint,
+                canvasCamera,
+                out Vector2 localPoint))
+        {
+            return;
+        }
+
+        if (!root.gameObject.activeSelf)
+            root.gameObject.SetActive(true);
+
+        root.anchoredPosition = localPoint;
+        root.localScale = Vector3.one * GetVipGeTaiPulseScale();
+    }
+
+    private float GetVipGeTaiPulseScale()
+    {
+        return GetPulseScale(_vipGeTaiPulseMinScale, _vipGeTaiPulseMaxScale, _vipGeTaiPulseSpeed);
+    }
+
+    private void ResetVipGeTaiButtonScale()
+    {
+        if (_vipGeTaiButtonRoot != null)
+            _vipGeTaiButtonRoot.localScale = Vector3.one;
+    }
+
+    private static Transform FindSceneTransformByName(string objectName)
+    {
+        if (string.IsNullOrEmpty(objectName))
+            return null;
+
+        Transform[] transforms = FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < transforms.Length; i++)
+        {
+            Transform t = transforms[i];
+            if (t != null && t.name == objectName)
+                return t;
+        }
+
+        return null;
+    }
+
+    private bool TryGetVipEventButtonLocalPoint(
+        Vector3 worldAnchorPosition,
+        RectTransform root,
+        out Vector2 localPoint)
+    {
+        localPoint = default;
+
+        if (_worldCamera == null || _canvasRect == null || _screenCanvas == null)
+            return false;
+
+        Vector3 screenPoint = _worldCamera.WorldToScreenPoint(worldAnchorPosition);
+        if (screenPoint.z <= 0f)
+            return false;
+
+        // Sit slightly above the wait timer / VIP.
+        screenPoint.y += 100f;
+
+        float halfW = root != null ? Mathf.Max(1f, root.rect.width * 0.5f) : 40f;
+        float halfH = root != null ? Mathf.Max(1f, root.rect.height * 0.5f) : 40f;
+
+        // Fully off-screen → hide (no edge clamping).
+        if (screenPoint.x < -halfW
+            || screenPoint.x > Screen.width + halfW
+            || screenPoint.y < -halfH
+            || screenPoint.y > Screen.height + halfH)
+        {
+            return false;
+        }
+
+        Camera canvasCamera = _screenCanvas.renderMode == RenderMode.ScreenSpaceOverlay
+            ? null
+            : _screenCanvas.worldCamera;
+
+        return RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            _canvasRect,
+            screenPoint,
+            canvasCamera,
+            out localPoint);
+    }
+
+    private void UpdateVipReceptionUi()
+    {
+        UpdateVipIntroButtonPosition();
+        UpdateVipEventButtonPosition();
+    }
+
+    private void ApplyVipWaitTimerVisuals()
+    {
+        float normalized = _vipWaitTimerDuration > 0f
+            ? Mathf.Clamp01(_vipWaitTimerRemaining / _vipWaitTimerDuration)
+            : 0f;
+
+        if (_vipWaitTimerFillImage != null)
+            _vipWaitTimerFillImage.fillAmount = normalized;
+
+        if (_vipWaitTimerCountdownText != null)
+        {
+            int totalSeconds = Mathf.CeilToInt(Mathf.Max(0f, _vipWaitTimerRemaining));
+            int minutes = totalSeconds / 60;
+            int seconds = totalSeconds % 60;
+            _vipWaitTimerCountdownText.text = $"{minutes:00}:{seconds:00}";
+        }
     }
 
     private void PlayVipFireworksIntro()
@@ -1368,176 +2060,31 @@ public class UIManager : MonoBehaviour
     public void SetBuildSpotCostUiSuppressed(bool suppressed)
     {
         _buildSpotCostUiSuppressed = suppressed;
-
-        if (suppressed)
-        {
-            HideBuildSpotCostUi();
-            HideAllBuildSpotCostUis();
-        }
-    }
-
-    private void HideAllBuildSpotCostUis()
-    {
-        if (_buildSpotCostUiRoot != null)
-            _buildSpotCostUiRoot.gameObject.SetActive(false);
-
-        foreach (KeyValuePair<BuildSpot, RectTransform> entry in _perSpotBuildCostUiInstances)
-        {
-            if (entry.Value != null)
-                entry.Value.gameObject.SetActive(false);
-        }
+        SyncAllNestedBuildSpotCostUi();
     }
 
     private void HandleBuildSpotStateChanged(BuildSpot spot, BuildSpotState state)
     {
-        if (IsActiveTownScene() || _buildSpotCostUiSuppressed)
-        {
-            if (spot != null
-                && _perSpotBuildCostUiInstances.TryGetValue(spot, out RectTransform suppressedUi)
-                && suppressedUi != null)
-            {
-                suppressedUi.gameObject.SetActive(false);
-            }
-
-            return;
-        }
-
-        if (GameManager.Instance != null
-            && !GameManager.Instance.IsBuilding
-            && !GameManager.Instance.IsBusiness
-            && !GameManager.Instance.IsBusinessDowntime)
-        {
-            if (spot != null
-                && _perSpotBuildCostUiInstances.TryGetValue(spot, out RectTransform ui)
-                && ui != null)
-            {
-                ui.gameObject.SetActive(false);
-            }
-
-            return;
-        }
-
-        if (spot == null || !_perSpotBuildCostUiInstances.TryGetValue(spot, out RectTransform costUiRoot) || costUiRoot == null)
+        if (spot == null)
             return;
 
-        // Cost UI is shown only while the spot is waiting for a build click on the viewed floor.
-        bool show = state == BuildSpotState.Active && IsSpotOnCurrentFloor(spot);
-        costUiRoot.gameObject.SetActive(show);
-
-        if (show)
-        {
-            costUiRoot.SetAsFirstSibling();
-            UpdateScreenUiPosition(costUiRoot, spot.CostUiAnchor.position);
-        }
+        spot.SetCostUiSuppressed(_buildSpotCostUiSuppressed || IsActiveTownScene());
+        spot.RefreshCostUi();
     }
 
-    private void InitializePerSpotBuildCostUi()
+    private void SyncAllNestedBuildSpotCostUi()
     {
-        if (_perSpotBuildCostUiInitialized)
-            return;
+        bool suppressed = _buildSpotCostUiSuppressed || IsActiveTownScene();
+        BuildSpot[] spots = FindObjectsByType<BuildSpot>(FindObjectsInactive.Include, FindObjectsSortMode.None);
 
-        _perSpotBuildCostUiInitialized = true;
-
-        // Town scene builds through New Building UI, not BuildSpotCostUI.
-        if (IsActiveTownScene() || _buildSpotCostUiRoot == null)
+        for (int i = 0; i < spots.Length; i++)
         {
-            if (_buildSpotCostUiRoot != null)
-                _buildSpotCostUiRoot.gameObject.SetActive(false);
-
-            return;
-        }
-
-        // Hide the serialized template. We'll render clones instead.
-        _buildSpotCostUiRoot.gameObject.SetActive(false);
-
-        BuildSpot[] allBuildSpots = FindObjectsByType<BuildSpot>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-
-        for (int i = 0; i < allBuildSpots.Length; i++)
-        {
-            BuildSpot spot = allBuildSpots[i];
+            BuildSpot spot = spots[i];
             if (spot == null)
                 continue;
 
-            if (_perSpotBuildCostUiInstances.ContainsKey(spot))
-                continue;
-
-            RectTransform clone = Instantiate(_buildSpotCostUiRoot, _buildSpotCostUiRoot.parent, false);
-            clone.name = $"{_buildSpotCostUiRoot.name} ({spot.gameObject.name})";
-            clone.gameObject.SetActive(false);
-
-            // Visual-only: disable any buttons/graphics raycasts.
-            Button[] buttons = clone.GetComponentsInChildren<Button>(true);
-            for (int b = 0; b < buttons.Length; b++)
-            {
-                if (buttons[b] == null)
-                    continue;
-                buttons[b].gameObject.SetActive(false);
-            }
-
-            Graphic[] graphics = clone.GetComponentsInChildren<Graphic>(true);
-            for (int g = 0; g < graphics.Length; g++)
-            {
-                if (graphics[g] == null)
-                    continue;
-                graphics[g].raycastTarget = false;
-            }
-
-            // Set the displayed cost text.
-            TextMeshProUGUI label = clone.GetComponentInChildren<TextMeshProUGUI>(true);
-            if (label != null)
-                label.text = spot.Cost.ToString();
-
-            clone.SetAsFirstSibling();
-            _perSpotBuildCostUiInstances[spot] = clone;
-        }
-
-        SendBuildSpotCostUisToBack();
-    }
-
-    private void SendBuildSpotCostUisToBack()
-    {
-        if (_buildSpotCostUiRoot != null)
-            _buildSpotCostUiRoot.SetAsFirstSibling();
-
-        foreach (KeyValuePair<BuildSpot, RectTransform> entry in _perSpotBuildCostUiInstances)
-        {
-            if (entry.Value != null)
-                entry.Value.SetAsFirstSibling();
-        }
-    }
-
-    private void SyncAllPerSpotBuildCostUi()
-    {
-        if (!_perSpotBuildCostUiInitialized)
-            return;
-
-        if (IsActiveTownScene() || _buildSpotCostUiSuppressed)
-        {
-            HideAllBuildSpotCostUis();
-            return;
-        }
-
-        foreach (KeyValuePair<BuildSpot, RectTransform> entry in _perSpotBuildCostUiInstances)
-        {
-            BuildSpot spot = entry.Key;
-            RectTransform ui = entry.Value;
-
-            if (spot == null || ui == null)
-                continue;
-
-            bool show = GameManager.Instance == null
-                || GameManager.Instance.IsBuilding
-                || GameManager.Instance.IsBusiness
-                || GameManager.Instance.IsBusinessDowntime
-                ? spot.State == BuildSpotState.Active && IsSpotOnCurrentFloor(spot)
-                : false;
-
-            ui.gameObject.SetActive(show);
-            if (show)
-            {
-                ui.SetAsFirstSibling();
-                UpdateScreenUiPosition(ui, spot.CostUiAnchor.position);
-            }
+            spot.SetCostUiSuppressed(suppressed);
+            spot.RefreshCostUi();
         }
     }
 
@@ -1548,16 +2095,17 @@ public class UIManager : MonoBehaviour
 
     private void HandleRestaurantFloorChanged(int floor)
     {
-        SyncAllPerSpotBuildCostUi();
+        SyncAllNestedBuildSpotCostUi();
         SyncActiveHireButtonForCurrentFloor();
         SyncAllTableStatusUiForCurrentFloor();
         SyncWorkerEnergyUiForCurrentFloor();
         SyncSeatPaymentUiForCurrentFloor();
+        UpdateVipEventButtonPosition();
     }
 
     private void HandleSecondFloorUnlockedForUi()
     {
-        SyncAllPerSpotBuildCostUi();
+        SyncAllNestedBuildSpotCostUi();
         SyncActiveHireButtonForCurrentFloor();
         SyncAllTableStatusUiForCurrentFloor();
         SyncWorkerEnergyUiForCurrentFloor();
@@ -1593,7 +2141,7 @@ public class UIManager : MonoBehaviour
         HideBusinessOverview();
         HideBusinessTimer();
         SyncActiveUi();
-        SyncAllPerSpotBuildCostUi();
+        SyncAllNestedBuildSpotCostUi();
         SyncAllHireSpotUi();
     }
 
@@ -1615,7 +2163,7 @@ public class UIManager : MonoBehaviour
         HideBusinessOverview();
         SyncOpenBusinessUiVisibility();
         SyncActiveUi();
-        SyncAllPerSpotBuildCostUi();
+        SyncAllNestedBuildSpotCostUi();
     }
 
     private void HandleBusinessAcknowledgeClicked()
@@ -1626,7 +2174,7 @@ public class UIManager : MonoBehaviour
         GameManager.Instance.AcknowledgeBusinessCloseSummary();
         SyncOpenBusinessUiVisibility();
         SyncActiveUi();
-        SyncAllPerSpotBuildCostUi();
+        SyncAllNestedBuildSpotCostUi();
     }
 
     private void StartWaitForBusinessFloorClear()
@@ -1869,7 +2417,7 @@ public class UIManager : MonoBehaviour
         MissionUiController missionUi = FindFirstObjectByType<MissionUiController>();
         missionUi?.NotifyOpenBusinessOpened();
         SyncActiveUi();
-        SyncAllPerSpotBuildCostUi();
+        SyncAllNestedBuildSpotCostUi();
         SyncAllHireSpotUi();
     }
 
@@ -2198,16 +2746,6 @@ public class UIManager : MonoBehaviour
         SyncMainButtonsVisibility();
     }
 
-    private void SyncActiveBuildSpotCostUi()
-    {
-        BuildSpot spot = FindActiveSpot(_activeBuildSpot, BuildSpotState.Active, candidate => candidate.State);
-
-        if (spot != null)
-            ShowBuildSpotCostUi(spot);
-        else
-            HideBuildSpotCostUi();
-    }
-
     public void SyncActiveHireButton()
     {
         SyncAllHireSpotUi();
@@ -2400,7 +2938,7 @@ public class UIManager : MonoBehaviour
         TryUpdateScreenUiPosition(hireUiRoot, ResolveHireAnchorWorldPosition(spot));
     }
 
-    private static void EnsureHireUiAnchoredToWorldPoint(RectTransform hireUiRoot, Transform anchor)
+    private void EnsureHireUiAnchoredToWorldPoint(RectTransform hireUiRoot, Transform anchor)
     {
         if (hireUiRoot == null || anchor == null)
             return;
@@ -2412,7 +2950,16 @@ public class UIManager : MonoBehaviour
         hireUiRoot.anchorMax = new Vector2(0.5f, 0.5f);
         hireUiRoot.pivot = new Vector2(0.5f, 0.5f);
         hireUiRoot.anchoredPosition3D = Vector3.zero;
-        hireUiRoot.localRotation = Quaternion.identity;
+
+        // Face the camera so the tilted isometric view doesn't skew world-space hire buttons.
+        EnsureScreenUiCaches();
+        if (_worldCamera == null)
+            _worldCamera = Camera.main;
+
+        if (_worldCamera != null)
+            hireUiRoot.rotation = _worldCamera.transform.rotation;
+        else
+            hireUiRoot.localRotation = Quaternion.identity;
     }
 
     private bool IsWorldSpaceHireUi(RectTransform hireUiRoot)
@@ -2534,35 +3081,6 @@ public class UIManager : MonoBehaviour
         return null;
     }
 
-    private void ShowBuildSpotCostUi(BuildSpot spot)
-    {
-        if (_buildSpotCostUiSuppressed || _buildSpotCostUiRoot == null)
-            return;
-
-        HideHireButtons();
-        _activeBuildSpot = spot;
-
-        if (_buildCostText != null)
-            _buildCostText.text = spot.Cost.ToString();
-
-        _buildSpotCostUiRoot.gameObject.SetActive(true);
-        SetWorldButtonRaycast(spot, false);
-        RefreshBuildSpotAffordability(spot);
-        UpdateBuildSpotCostUiPosition();
-    }
-
-    private void HideBuildSpotCostUi()
-    {
-        if (_activeBuildSpot != null)
-        {
-            SetWorldButtonRaycast(_activeBuildSpot, true);
-            _activeBuildSpot = null;
-        }
-
-        if (_buildSpotCostUiRoot != null)
-            _buildSpotCostUiRoot.gameObject.SetActive(false);
-    }
-
     private void HandleGoldChanged(int currentGold)
     {
         if (_lastGoldAmount >= 0)
@@ -2573,9 +3091,6 @@ public class UIManager : MonoBehaviour
 
         _lastGoldAmount = currentGold;
         SyncGoldUi(currentGold);
-
-        if (_activeBuildSpot != null)
-            RefreshBuildSpotAffordability(_activeBuildSpot);
 
         if (_activeHireSpot != null)
             RefreshHireAffordability(_activeHireSpot);
@@ -2751,14 +3266,6 @@ public class UIManager : MonoBehaviour
     {
         if (_goldAmountText != null)
             _goldAmountText.text = currentGold.ToString();
-    }
-
-    private void RefreshBuildSpotAffordability(BuildSpot spot)
-    {
-        if (spot == null || _buildCostButton == null)
-            return;
-
-        _buildCostButton.interactable = true;
     }
 
     private void RefreshHireAffordability(HireSpot spot)
@@ -3131,9 +3638,6 @@ public class UIManager : MonoBehaviour
             entry.Value.UiRoot.SetSiblingIndex(siblingIndex);
             siblingIndex++;
         }
-
-        // Build-spot cost labels stay behind other screen UI.
-        SendBuildSpotCostUisToBack();
     }
 
     private void RegisterActiveWorkerEnergyUis()
@@ -3204,18 +3708,40 @@ public class UIManager : MonoBehaviour
 
     private void InitializeWorkerEnergyUiBindings()
     {
-        if (!RestaurantSceneMode.UsesWorkerEnergyUi || _workerEnergyUiBindings == null)
+        if (!RestaurantSceneMode.UsesWorkerEnergyUi)
             return;
 
-        for (int i = 0; i < _workerEnergyUiBindings.Length; i++)
+        if (_workerEnergyUiBindings != null)
         {
-            WorkerEnergyUiBinding binding = _workerEnergyUiBindings[i];
+            for (int i = 0; i < _workerEnergyUiBindings.Length; i++)
+            {
+                WorkerEnergyUiBinding binding = _workerEnergyUiBindings[i];
 
-            if (binding == null)
+                if (binding == null)
+                    continue;
+
+                EnsureWorkerEnergyUiBinding(binding);
+                SetWorkerEnergyUiVisible(binding.Root, false);
+            }
+        }
+
+        // Bindings only cover ground workers; hide every worker EnergyUiRoot (e.g. Waiter3 / FemaleWaiter)
+        // so authored-active bars don't show before that worker is hired.
+        HideAllWorkerEnergyUiRoots();
+    }
+
+    private static void HideAllWorkerEnergyUiRoots()
+    {
+        Worker[] workers = FindObjectsByType<Worker>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        for (int i = 0; i < workers.Length; i++)
+        {
+            Worker worker = workers[i];
+
+            if (worker == null || worker.EnergyUiRoot == null)
                 continue;
 
-            EnsureWorkerEnergyUiBinding(binding);
-            SetWorkerEnergyUiVisible(binding.Root, false);
+            SetWorkerEnergyUiVisible(worker.EnergyUiRoot, false);
         }
     }
 
@@ -3383,25 +3909,8 @@ public class UIManager : MonoBehaviour
     private void HandleCanvasWillRenderCanvases()
     {
         UpdateWorkerEnergyUis();
-        UpdatePerSpotBuildCostUiPositions();
         SyncAllHireSpotUi();
-    }
-
-    private void UpdatePerSpotBuildCostUiPositions()
-    {
-        if (!_perSpotBuildCostUiInitialized)
-            return;
-
-        foreach (KeyValuePair<BuildSpot, RectTransform> entry in _perSpotBuildCostUiInstances)
-        {
-            BuildSpot spot = entry.Key;
-            RectTransform ui = entry.Value;
-
-            if (spot == null || ui == null || !ui.gameObject.activeInHierarchy)
-                continue;
-
-            UpdateScreenUiPosition(ui, spot.CostUiAnchor.position);
-        }
+        UpdateVipReceptionUi();
     }
 
     private void UpdateWorkerEnergyUis()
@@ -3507,11 +4016,6 @@ public class UIManager : MonoBehaviour
             : GetPulseScale(_waiterHirePulseMinScale, _waiterHirePulseMaxScale, _waiterHirePulseSpeed);
     }
 
-    private void HandleBuildCostUiClicked()
-    {
-        _activeBuildSpot?.NotifyClicked();
-    }
-
     private void HandleHireButtonClicked()
     {
         if (_activeHireSpot != null)
@@ -3535,7 +4039,11 @@ public class UIManager : MonoBehaviour
         TryHideSeatPaymentUi(paymentAnchor);
 
         if (isVipCollection)
-            PlayVipDoneEating();
+        {
+            SetVipDialogue(VipDialogueState.SuccessLeave);
+            CharacterPanelController.Instance?.GoToFirstFloor();
+            VipTreasureDelivery.Instance?.PlayDelivery();
+        }
     }
 
     public void ShowNotEnoughMoneyFeedback()
@@ -3792,22 +4300,6 @@ public class UIManager : MonoBehaviour
         goldUi.GetWorldCorners(corners);
         worldAnchor = (corners[0] + corners[3]) * 0.5f;
         return true;
-    }
-
-    private static void SetWorldButtonRaycast(BuildSpot spot, bool enabled)
-    {
-        Graphic[] graphics = spot.GetComponentsInChildren<Graphic>(true);
-
-        for (int i = 0; i < graphics.Length; i++)
-            graphics[i].raycastTarget = enabled;
-    }
-
-    private void UpdateBuildSpotCostUiPosition()
-    {
-        if (_activeBuildSpot == null || _buildSpotCostUiRoot == null || !_buildSpotCostUiRoot.gameObject.activeInHierarchy)
-            return;
-
-        UpdateScreenUiPosition(_buildSpotCostUiRoot, _activeBuildSpot.CostUiAnchor.position);
     }
 
     private void UpdateSeatPaymentUiPositions()

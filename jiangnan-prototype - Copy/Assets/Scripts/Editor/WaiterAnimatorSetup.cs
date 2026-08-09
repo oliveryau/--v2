@@ -11,6 +11,8 @@ public static class WaiterAnimatorSetup
     private const string ResourcesControllerPath = "Assets/Resources/Waiter.controller";
 
     private const string IdleClipPath = "Assets/Animations/Characters/ChefControllerDependencies/Idle.anim";
+    private const string CleanTableClipPath =
+        "Assets/Animations/Characters/WaiterControllerDependencies/CleanTable.anim";
     private const string WalkModelPath =
         "Assets/2D 3D assets/TownExterior01/Animations/AnimationBaseLocomotion/Animations/Polygon/Masculine/Locomotion/Walk/A_Walk_F_Masc.fbx";
 
@@ -29,14 +31,15 @@ public static class WaiterAnimatorSetup
 
         AnimationClip idleClip = AssetDatabase.LoadAssetAtPath<AnimationClip>(IdleClipPath);
         AnimationClip walkClip = LoadAnimationClip(WalkModelPath, "A_Walk_F_Masc");
+        AnimationClip cleanTableClip = AssetDatabase.LoadAssetAtPath<AnimationClip>(CleanTableClipPath);
 
-        if (idleClip == null || walkClip == null)
+        if (idleClip == null || walkClip == null || cleanTableClip == null)
         {
-            Debug.LogError("Waiter animator setup failed: could not load idle or walk clips.");
+            Debug.LogError("Waiter animator setup failed: could not load idle, walk, or CleanTable clips.");
             return;
         }
 
-        AnimatorController controller = BuildWaiterController(idleClip, walkClip);
+        AnimatorController controller = BuildWaiterController(idleClip, walkClip, cleanTableClip);
 
         if (controller == null)
             return;
@@ -58,7 +61,10 @@ public static class WaiterAnimatorSetup
         Debug.Log($"Waiter animator setup complete. Wired {wiredCount} model(s).");
     }
 
-    private static AnimatorController BuildWaiterController(AnimationClip idleClip, AnimationClip walkClip)
+    private static AnimatorController BuildWaiterController(
+        AnimationClip idleClip,
+        AnimationClip walkClip,
+        AnimationClip cleanTableClip)
     {
         AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
 
@@ -74,17 +80,28 @@ public static class WaiterAnimatorSetup
             type = AnimatorControllerParameterType.Bool,
             defaultBool = false,
         });
+        controller.AddParameter(new AnimatorControllerParameter
+        {
+            name = "IsCleaning",
+            type = AnimatorControllerParameterType.Bool,
+            defaultBool = false,
+        });
 
         AnimatorStateMachine rootStateMachine = controller.layers[0].stateMachine;
         AnimatorState idleState = rootStateMachine.AddState("Idle", new Vector3(300f, 0f, 0f));
         AnimatorState walkState = rootStateMachine.AddState("Walk", new Vector3(300f, 100f, 0f));
+        AnimatorState cleanState = rootStateMachine.AddState("CleanTable", new Vector3(300f, 200f, 0f));
 
         idleState.motion = idleClip;
         walkState.motion = walkClip;
+        cleanState.motion = cleanTableClip;
         rootStateMachine.defaultState = idleState;
 
-        AddBoolTransition(idleState, walkState, true);
-        AddBoolTransition(walkState, idleState, false);
+        AddWalkingTransition(idleState, walkState, true);
+        AddWalkingTransition(walkState, idleState, false);
+        AddCleaningTransition(idleState, cleanState, true);
+        AddCleaningTransition(walkState, cleanState, true);
+        AddCleaningTransition(cleanState, idleState, false);
 
         EditorUtility.SetDirty(controller);
         return controller;
@@ -217,7 +234,7 @@ public static class WaiterAnimatorSetup
             stateMachine.RemoveState(stateMachine.states[0].state);
     }
 
-    private static void AddBoolTransition(AnimatorState source, AnimatorState destination, bool isWalking)
+    private static void AddWalkingTransition(AnimatorState source, AnimatorState destination, bool isWalking)
     {
         AnimatorStateTransition transition = source.AddTransition(destination);
         transition.hasExitTime = false;
@@ -226,6 +243,18 @@ public static class WaiterAnimatorSetup
             isWalking ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot,
             0f,
             "IsWalking");
+        transition.AddCondition(AnimatorConditionMode.IfNot, 0f, "IsCleaning");
+    }
+
+    private static void AddCleaningTransition(AnimatorState source, AnimatorState destination, bool isCleaning)
+    {
+        AnimatorStateTransition transition = source.AddTransition(destination);
+        transition.hasExitTime = false;
+        transition.duration = 0.15f;
+        transition.AddCondition(
+            isCleaning ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot,
+            0f,
+            "IsCleaning");
     }
 }
 #endif

@@ -6,8 +6,12 @@ using UnityEngine.AI;
 [RequireComponent(typeof(NavMeshLocomotion))]
 public class Customer : MonoBehaviour
 {
+    private const string LakePointName = "LaKePoint";
+
     [SerializeField] private NavMeshAgent _agent;
     [SerializeField] private NavMeshLocomotion _locomotion;
+    [SerializeField] private Transform _reactPoint;
+    [SerializeField] private Transform _lakePoint;
 
     private CustomerState _state = CustomerState.Queue;
 
@@ -22,6 +26,24 @@ public class Customer : MonoBehaviour
     public TableSeat Seat { get; set; }
     public Transform PendingPaymentAnchor { get; set; }
     public int PendingPaymentTableLevel { get; set; } = 1;
+    public int VipEventBonus { get; set; }
+
+    public Transform ReactPoint => _reactPoint != null ? _reactPoint : transform;
+
+    public Transform LakePoint
+    {
+        get
+        {
+            if (_lakePoint != null)
+                return _lakePoint;
+
+            Transform found = FindChildTransform(transform, LakePointName);
+            if (found != null)
+                _lakePoint = found;
+
+            return _lakePoint != null ? _lakePoint : transform;
+        }
+    }
 
     private void Awake()
     {
@@ -31,7 +53,26 @@ public class Customer : MonoBehaviour
         if (_locomotion == null)
             _locomotion = GetComponent<NavMeshLocomotion>();
 
+        if (_lakePoint == null)
+            _lakePoint = FindChildTransform(transform, LakePointName);
+
         _locomotion.Configure();
+    }
+
+    private static Transform FindChildTransform(Transform root, string name)
+    {
+        if (root == null || string.IsNullOrEmpty(name))
+            return null;
+
+        Transform[] children = root.GetComponentsInChildren<Transform>(true);
+
+        for (int i = 0; i < children.Length; i++)
+        {
+            if (children[i] != null && children[i].name == name)
+                return children[i];
+        }
+
+        return null;
     }
 
     public void SetState(CustomerState state)
@@ -76,6 +117,7 @@ public class Customer : MonoBehaviour
         WasStolenByCompetitor = false;
         QueueSlotIndex = -1;
         Seat = null;
+        VipEventBonus = 0;
         ClearPendingPayment();
         _state = CustomerState.Queue;
         _locomotion.Release();
@@ -108,6 +150,7 @@ public class Customer : MonoBehaviour
         WasStolenByCompetitor = false;
         QueueSlotIndex = -1;
         Seat = null;
+        VipEventBonus = 0;
         ClearPendingPayment();
         _locomotion.Release();
         RestaurantFloorUtil.SetBelongsToSecondFloorView(gameObject, false);

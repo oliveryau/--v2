@@ -110,35 +110,8 @@ public class WorkerMovement : MonoBehaviour
         if (spot == null)
             return Vector3.zero;
 
-        Vector3 spawnPosition = spot.WalkInSpawn != null
+        return spot.WalkInSpawn != null
             ? spot.WalkInSpawn.position
             : spot.transform.position;
-
-        if (spot.Floor != RestaurantFloor.Second)
-            return spawnPosition;
-
-        // Outer spawn is on the ground floor; lift second-floor hires onto the upstairs plane.
-        Transform endpoint = GetFirstWalkInEndpoint(spot);
-
-        if (endpoint != null)
-            spawnPosition.y = endpoint.position.y;
-
-        return spawnPosition;
-    }
-
-    private static Transform GetFirstWalkInEndpoint(HireSpot spot)
-    {
-        Transform[] endpoints = spot != null ? spot.WalkInEndpoints : null;
-
-        if (endpoints == null)
-            return null;
-
-        for (int i = 0; i < endpoints.Length; i++)
-        {
-            if (endpoints[i] != null)
-                return endpoints[i];
-        }
-
-        return null;
     }
 }

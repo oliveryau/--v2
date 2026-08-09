@@ -41,7 +41,10 @@ public class GoldManager : MonoBehaviour
         int levelMultiplier = Mathf.Clamp(tableLevel, 1, 3);
 
         if (customer != null && customer.IsVip)
+        {
             payment += Mathf.Max(0, _vipPayment) * levelMultiplier;
+            payment += Mathf.Max(0, customer.VipEventBonus);
+        }
         else
             payment += Mathf.Max(0, _normalCustomerPayment);
 

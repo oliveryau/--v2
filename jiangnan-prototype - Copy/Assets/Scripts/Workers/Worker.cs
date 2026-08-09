@@ -17,6 +17,8 @@ public class Worker : MonoBehaviour
     [SerializeField] private WorkerEnergy _energy;
     [Tooltip("When true, this waiter only serves VIP / second-floor customers.")]
     [SerializeField] private bool _servesVipFloorOnly;
+    [Tooltip("When true, never register with WorkerManager (VIP call-lady extras).")]
+    [SerializeField] private bool _excludeFromServicePool;
 
     private WorkerState _state = WorkerState.Wait;
 
@@ -28,6 +30,7 @@ public class Worker : MonoBehaviour
     public RectTransform EnergyUiRoot => _energyUiRoot;
     public Transform WaitPoint => _waitPoint;
     public bool ServesVipFloorOnly => _servesVipFloorOnly;
+    public bool ExcludeFromServicePool => _excludeFromServicePool;
     public bool IsAvailable => _state == WorkerState.Wait;
     public bool IsResting => _state == WorkerState.Rest;
 
@@ -172,8 +175,14 @@ public class Worker : MonoBehaviour
         TryRegister();
         ApplyFloorViewLayer();
 
-        if (RestaurantSceneMode.UsesWorkerEnergyUi)
+        // Skip energy UI while this worker is still waiting on an unhired hire spot.
+        // (Hiring/Hired OnEnable still registers so the bar appears for the walk-in.)
+        if (RestaurantSceneMode.UsesWorkerEnergyUi
+            && !_excludeFromServicePool
+            && !IsAwaitingHireActivation())
+        {
             UIManager.Instance?.RegisterWorkerEnergyUi(this);
+        }
     }
 
     private void ApplyFloorViewLayer()
@@ -198,6 +207,9 @@ public class Worker : MonoBehaviour
 
     private void TryRegister()
     {
+        if (_excludeFromServicePool)
+            return;
+
         if (WorkerManager.Instance != null)
             WorkerManager.Instance.RegisterWorker(this);
     }
@@ -211,6 +223,30 @@ public class Worker : MonoBehaviour
             HireSpot spot = spots[i];
 
             if (spot == null || spot.IsHired || spot.Workers == null)
+                continue;
+
+            for (int j = 0; j < spot.Workers.Length; j++)
+            {
+                if (spot.Workers[j] == gameObject)
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsAwaitingHireActivation()
+    {
+        HireSpot[] spots = FindObjectsOfType<HireSpot>(true);
+
+        for (int i = 0; i < spots.Length; i++)
+        {
+            HireSpot spot = spots[i];
+
+            if (spot == null || spot.Workers == null)
+                continue;
+
+            if (spot.State != HireSpotState.Locked && spot.State != HireSpotState.Active)
                 continue;
 
             for (int j = 0; j < spot.Workers.Length; j++)

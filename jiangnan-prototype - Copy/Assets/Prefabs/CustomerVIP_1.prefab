@@ -327,6 +327,7 @@ MonoBehaviour:
   _agent: {fileID: 0}
   _locomotion: {fileID: 0}
   _reactPoint: {fileID: 5156933203183290732}
+  _lakePoint: {fileID: 5190829252340224114}
 --- !u!195 &94117843313907160
 NavMeshAgent:
   m_ObjectHideFlags: 0

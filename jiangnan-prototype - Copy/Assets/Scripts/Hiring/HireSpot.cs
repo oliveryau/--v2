@@ -22,7 +22,13 @@ public class HireSpot : MonoBehaviour
     public WorkerType WorkerType => _workerType;
     public HireSpotState State => _state;
     public int Cost => _cost;
-    public RestaurantFloor Floor => RestaurantFloorUtil.ResolveFloor(transform, _floor);
+    /// <summary>
+    /// Floor for gating/visibility. Prefer the world hire anchor — ground hire buttons may live on
+    /// the Overlay canvas until activated, and Overlay screen-space Y must not count as upstairs.
+    /// </summary>
+    public RestaurantFloor Floor => _hireUiAnchor != null
+        ? RestaurantFloorUtil.ResolveFloor(_hireUiAnchor, _floor)
+        : _floor;
     public bool IsHired => _state == HireSpotState.Hired;
     public Transform HireUiAnchor => _hireUiAnchor != null ? _hireUiAnchor : transform;
     public GameObject[] Workers => _workers;
@@ -139,16 +145,6 @@ public class HireSpot : MonoBehaviour
         Vector3 spawnPosition = _walkInSpawn != null
             ? _walkInSpawn.position
             : transform.position;
-
-        if (Floor == RestaurantFloor.Second)
-        {
-            Transform endpoint = _walkInEndpoints != null && _walkInEndpoints.Length > 0
-                ? _walkInEndpoints[0]
-                : null;
-
-            if (endpoint != null)
-                spawnPosition.y = endpoint.position.y;
-        }
 
         Vector3[] targetPositions = new Vector3[_workers.Length];
         Quaternion[] targetRotations = new Quaternion[_workers.Length];

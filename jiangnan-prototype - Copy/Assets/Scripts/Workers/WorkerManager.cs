@@ -78,7 +78,7 @@ public class WorkerManager : MonoBehaviour
 
     public void RegisterWorker(Worker worker)
     {
-        if (worker == null)
+        if (worker == null || worker.ExcludeFromServicePool)
             return;
 
         List<Worker> roster = GetRoster(worker.WorkerType);
@@ -108,6 +108,31 @@ public class WorkerManager : MonoBehaviour
         _pendingCookOrders.Enqueue(order);
         ProcessOrders();
         return order;
+    }
+
+    /// <summary>
+    /// Submits a VIP order that chefs cook immediately, but waiters only deliver after
+    /// <see cref="ReleaseOrderForServe"/>.
+    /// </summary>
+    public DishOrder SubmitVipHeldOrder(Customer customer)
+    {
+        if (customer == null)
+            return null;
+
+        DishOrder order = new DishOrder(customer);
+        order.MarkAwaitingManualServe();
+        _pendingCookOrders.Enqueue(order);
+        ProcessOrders();
+        return order;
+    }
+
+    public void ReleaseOrderForServe(DishOrder order)
+    {
+        if (order == null || order.IsCancelled || order.IsDelivered)
+            return;
+
+        order.ReleaseForServe();
+        ProcessOrders();
     }
 
     public void CancelOrder(DishOrder order)
@@ -290,9 +315,11 @@ public class WorkerManager : MonoBehaviour
         if (_readyOrders.Count == 0)
             return false;
 
-        // Prefer VIP orders when a VIP waiter is free.
+        // Prefer VIP orders when a VIP waiter is free. Skip VIP dishes still held for 上菜.
         DishOrder vipOrder = DequeueFirstMatchingOrder(_readyOrders, candidate =>
-            IsVipOrder(candidate) && FindAvailableWaiterForOrder(candidate) != null);
+            IsVipOrder(candidate)
+            && IsReadyForWaiterServe(candidate)
+            && FindAvailableWaiterForOrder(candidate) != null);
 
         if (vipOrder != null)
         {
@@ -303,6 +330,7 @@ public class WorkerManager : MonoBehaviour
 
         DishOrder normalOrder = DequeueFirstMatchingOrder(_readyOrders, candidate =>
             IsAssignableOrder(candidate)
+            && IsReadyForWaiterServe(candidate)
             && !IsVipOrder(candidate)
             && FindAvailableWaiterForOrder(candidate) != null);
 
@@ -507,6 +535,37 @@ public class WorkerManager : MonoBehaviour
         // Kick-to-work removed: workers rest automatically until recovered.
     }
 
+    /// <summary>
+    /// Marks a waiter busy so ProcessOrders won't assign dish work mid VIP side-service.
+    /// </summary>
+    public bool TryBeginExternalTask(Worker worker)
+    {
+        if (worker == null || _activeTasks.ContainsKey(worker))
+            return false;
+
+        _activeTasks[worker] = null;
+        return true;
+    }
+
+    public void EndExternalTask(Worker worker)
+    {
+        if (worker == null)
+            return;
+
+        _activeTasks.Remove(worker);
+        _activeOrders.Remove(worker);
+        ProcessOrders();
+    }
+
+    public IEnumerator RunRestRoutine(Worker worker)
+    {
+        if (worker == null)
+            yield break;
+
+        yield return RestRoutine(worker);
+        worker.SetState(WorkerState.Wait);
+    }
+
     private IEnumerator ReturnFromRestAndBecomeAvailable(Worker worker)
     {
         if (worker == null)
@@ -571,6 +630,9 @@ public class WorkerManager : MonoBehaviour
             if (waiter == null || !waiter.isActiveAndEnabled || !waiter.IsAvailable || waiter.IsResting)
                 continue;
 
+            if (waiter.ExcludeFromServicePool)
+                continue;
+
             if (waiter.Energy != null && waiter.Energy.ShouldRest)
                 continue;
 
@@ -601,7 +663,10 @@ public class WorkerManager : MonoBehaviour
         {
             Worker waiter = _waiters[i];
 
-            if (waiter != null && waiter.isActiveAndEnabled && waiter.ServesVipFloorOnly)
+            if (waiter != null
+                && waiter.isActiveAndEnabled
+                && waiter.ServesVipFloorOnly
+                && !waiter.ExcludeFromServicePool)
                 return true;
         }
 
@@ -744,6 +809,11 @@ public class WorkerManager : MonoBehaviour
     private static bool IsAssignableOrder(DishOrder order)
     {
         return order != null && !order.IsCancelled;
+    }
+
+    private static bool IsReadyForWaiterServe(DishOrder order)
+    {
+        return IsAssignableOrder(order) && !order.AwaitsManualServeRelease;
     }
 
     private static bool IsVipOrder(DishOrder order)

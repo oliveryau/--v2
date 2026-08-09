@@ -27,17 +27,52 @@ public class CustomerManager : MonoBehaviour
     [SerializeField] private float _foodWaitTimeout;
     [SerializeField] private float _eatDuration;
 
+    [Header("VIP Events")]
+    [SerializeField] private float _vipSettleDelay = 3f;
+    [SerializeField] private float _vipEventGapDelay = 1.5f;
+    [SerializeField] private int _vipEventBonusPerRequest = 1000;
+    [SerializeField] private float _vipCallLadyLeaveDelay = 2.5f;
+    [SerializeField] private float _vipSideServiceHoldDuration = 3f;
+    [SerializeField] private Worker _vipFloorWaiter;
+    [SerializeField] private Transform _vipWaiterServePoint;
+    [SerializeField] private Worker[] _vipCallLadyWorkers;
+    [SerializeField] private Transform[] _vipLackeyPoints;
+    [SerializeField] private Transform[] _vipCallLadyWaypoints;
+    [SerializeField] private Worker _vipPerformer;
+    [SerializeField] private Transform _vipStagePoint;
+    [SerializeField] private Transform _vipPerformerWaypoint;
+
     private readonly Dictionary<Customer, Coroutine> _activeFlows = new();
     private readonly HashSet<Customer> _completedPayments = new();
     private readonly Dictionary<Transform, int> _awaitingPaymentCounts = new();
     private readonly Dictionary<Transform, int> _vipAwaitingPaymentCounts = new();
     private readonly List<TableSeat> _registeredSeats = new();
     private Coroutine _spawnRoutine;
+    private Coroutine _callLadyDismissRoutine;
+    private Coroutine _performerReturnRoutine;
     private int _spawnCount;
     private bool _awaitingVipAfterPrankster;
     private int _customersSincePranksterLeft;
+    private bool _callLadiesActive;
+    private bool _callLadiesStationed;
+    private bool _performerOnStage;
+    private Customer _vipAwaitingIntro;
+    private bool _vipIntroAcknowledged;
+    private VipEventType? _pendingVipEvent;
+    private Customer _pendingVipEventCustomer;
+    private bool _vipEventAcknowledged;
 
     private PranksterManager _pranksterManager;
+
+    /// <summary>World anchor for the VIP GeTai / stage UI button.</summary>
+    public Transform VipStagePoint
+    {
+        get
+        {
+            CacheVipPerformerReferences();
+            return _vipStagePoint;
+        }
+    }
 
     public IReadOnlyList<Customer> ActiveCustomers => _customerPool != null
         ? _customerPool.ActiveCustomers
@@ -45,6 +80,14 @@ public class CustomerManager : MonoBehaviour
 
     public bool HasActiveCustomers =>
         _customerPool != null && _customerPool.ActiveCustomers.Count > 0;
+
+    /// <summary>True while a VIP request button should stay on screen waiting for a tap.</summary>
+    public bool VipEventAwaitingTap =>
+        _pendingVipEvent.HasValue && !_vipEventAcknowledged && _pendingVipEventCustomer != null;
+
+    public VipEventType? PendingVipEvent => _pendingVipEvent;
+
+    public Customer PendingVipEventCustomer => _pendingVipEventCustomer;
 
     /// <summary>
     /// Restaurant is clear enough to show the close-of-business overview:
@@ -67,6 +110,165 @@ public class CustomerManager : MonoBehaviour
 
         if (_vipEntryWaypoint == null)
             _vipEntryWaypoint = FindTransformByName("Customer Waypoint_4");
+
+        CacheVipCallLadyReferences();
+        CacheVipFloorWaiterReferences();
+        CacheVipPerformerReferences();
+        HideVipCallLadyWorkers();
+        HideVipPerformerIfUnhired();
+    }
+
+    private void Start()
+    {
+        // HireSequence restores after our Awake; sync stationed call ladies / performer once that finishes.
+        CacheVipCallLadyReferences();
+        CacheVipPerformerReferences();
+        if (AreCallLadiesAlreadyStationed())
+            _callLadiesStationed = true;
+    }
+
+    private void CacheVipFloorWaiterReferences()
+    {
+        if (_vipWaiterServePoint == null)
+            _vipWaiterServePoint = FindTransformByName("Waiter3 Servepoint");
+
+        if (_vipFloorWaiter != null)
+            return;
+
+        Worker[] workers = FindObjectsByType<Worker>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < workers.Length; i++)
+        {
+            Worker worker = workers[i];
+            if (worker == null || worker.ExcludeFromServicePool || !worker.ServesVipFloorOnly)
+                continue;
+
+            if (worker.WorkerType != WorkerType.Waiter)
+                continue;
+
+            _vipFloorWaiter = worker;
+            return;
+        }
+    }
+
+    private void CacheVipCallLadyReferences()
+    {
+        if (_vipLackeyPoints == null || _vipLackeyPoints.Length == 0)
+        {
+            Transform lackey1 = FindTransformByName("Lackey Point (1)");
+            Transform lackey2 = FindTransformByName("Lackey Point (2)");
+            _vipLackeyPoints = new[] { lackey1, lackey2 };
+        }
+
+        if (_vipCallLadyWaypoints == null || _vipCallLadyWaypoints.Length == 0)
+        {
+            Transform waypoint1 = FindTransformByName("CallLady Waypoint (1)");
+            Transform waypoint2 = FindTransformByName("CallLady Waypoint (2)");
+            _vipCallLadyWaypoints = new[] { waypoint1, waypoint2 };
+        }
+
+        if (_vipCallLadyWorkers != null && _vipCallLadyWorkers.Length > 0)
+            return;
+
+        Worker[] workers = FindObjectsByType<Worker>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        List<Worker> callLadies = new();
+
+        for (int i = 0; i < workers.Length; i++)
+        {
+            Worker worker = workers[i];
+            if (worker == null || !worker.ExcludeFromServicePool)
+                continue;
+
+            // Skip the stage performer — only CallLady extras belong here.
+            if (_vipPerformer != null && worker == _vipPerformer)
+                continue;
+
+            if (worker.name.IndexOf("Performer", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                continue;
+
+            callLadies.Add(worker);
+        }
+
+        if (callLadies.Count > 0)
+            _vipCallLadyWorkers = callLadies.ToArray();
+    }
+
+    private void HideVipCallLadyWorkers()
+    {
+        if (_vipCallLadyWorkers == null)
+            return;
+
+        // Hire restore (later Awake) may already have stationed them — leave those active.
+        if (AreCallLadiesAlreadyStationed())
+        {
+            _callLadiesStationed = true;
+            return;
+        }
+
+        for (int i = 0; i < _vipCallLadyWorkers.Length; i++)
+        {
+            Worker worker = _vipCallLadyWorkers[i];
+            if (worker != null)
+                worker.gameObject.SetActive(false);
+        }
+
+        _callLadiesActive = false;
+        _callLadiesStationed = false;
+    }
+
+    private bool AreCallLadiesAlreadyStationed()
+    {
+        if (_vipCallLadyWorkers == null)
+            return false;
+
+        for (int i = 0; i < _vipCallLadyWorkers.Length; i++)
+        {
+            Worker worker = _vipCallLadyWorkers[i];
+            if (worker != null && worker.gameObject.activeInHierarchy)
+                return true;
+        }
+
+        return false;
+    }
+
+    private void CacheVipPerformerReferences()
+    {
+        if (_vipStagePoint == null)
+        {
+            _vipStagePoint = FindTransformByName("Placeholder Stage");
+            if (_vipStagePoint == null)
+                _vipStagePoint = FindTransformByName("GeTai");
+        }
+
+        if (_vipPerformerWaypoint == null)
+            _vipPerformerWaypoint = FindTransformByName("Performer Waypoint");
+
+        if (_vipPerformer != null)
+            return;
+
+        Worker[] workers = FindObjectsByType<Worker>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < workers.Length; i++)
+        {
+            Worker worker = workers[i];
+            if (worker == null || !worker.ExcludeFromServicePool || !worker.ServesVipFloorOnly)
+                continue;
+
+            if (worker.name.IndexOf("Performer", System.StringComparison.OrdinalIgnoreCase) < 0)
+                continue;
+
+            _vipPerformer = worker;
+            return;
+        }
+    }
+
+    private void HideVipPerformerIfUnhired()
+    {
+        CacheVipPerformerReferences();
+        if (_vipPerformer == null)
+            return;
+
+        // Always hide in Awake; HireSequence restore / walk-in reactivates after hire.
+        _vipPerformer.gameObject.SetActive(false);
+        _performerOnStage = false;
     }
 
     private void OnDestroy()
@@ -128,6 +330,15 @@ public class CustomerManager : MonoBehaviour
             _activeFlows.Remove(customer);
         }
 
+        ClearVipIntroState(customer);
+        ClearVipEventUiIfOwnedBy(customer);
+
+        if (customer.IsVip)
+        {
+            BeginDismissVipCallLadies();
+            BeginReturnVipPerformer();
+        }
+
         UnregisterAwaitingPayment(customer);
         _completedPayments.Remove(customer);
         WorkerManager.Instance?.CancelOrdersForCustomer(customer);
@@ -143,6 +354,54 @@ public class CustomerManager : MonoBehaviour
 
         if (_customerPool != null)
             ReleaseCustomerToPool(customer);
+    }
+
+    public void AcknowledgeVipIntro()
+    {
+        if (_vipAwaitingIntro == null)
+            return;
+
+        _vipIntroAcknowledged = true;
+    }
+
+    public void AcknowledgeVipEvent(VipEventType eventType)
+    {
+        if (!VipEventAwaitingTap || !_pendingVipEvent.HasValue || _pendingVipEvent.Value != eventType)
+            return;
+
+        _vipEventAcknowledged = true;
+    }
+
+    private void BeginPendingVipEvent(Customer customer, VipEventType eventType)
+    {
+        _pendingVipEvent = eventType;
+        _pendingVipEventCustomer = customer;
+        _vipEventAcknowledged = false;
+    }
+
+    private void ClearPendingVipEvent()
+    {
+        _pendingVipEvent = null;
+        _pendingVipEventCustomer = null;
+        _vipEventAcknowledged = false;
+    }
+
+    /// <summary>
+    /// Only the VIP who owns the pending request may clear/hide event UI.
+    /// Normal customers leaving must not wipe the VIP button/timer mid-wait.
+    /// </summary>
+    private void ClearVipEventUiIfOwnedBy(Customer customer)
+    {
+        if (customer == null)
+            return;
+
+        UIManager.Instance?.HideVipWaitTimer(customer);
+
+        if (_pendingVipEventCustomer == null || _pendingVipEventCustomer != customer)
+            return;
+
+        ClearPendingVipEvent();
+        UIManager.Instance?.HideAllVipEventButtons();
     }
 
     private void ReleaseCustomerToPool(Customer customer)
@@ -696,6 +955,12 @@ public class CustomerManager : MonoBehaviour
 
     private IEnumerator RunCustomerFlow(Customer customer)
     {
+        if (customer != null && customer.IsVip)
+        {
+            yield return RunVipCustomerFlow(customer);
+            yield break;
+        }
+
         if (_customerQueue == null || !_customerQueue.TryAssign(customer, out int queueSlot))
         {
             yield return Leave(customer);
@@ -703,16 +968,592 @@ public class CustomerManager : MonoBehaviour
         }
 
         customer.SetState(CustomerState.Queue);
-
-        if (customer.IsVip && _vipEntryWaypoint != null)
-        {
-            yield return CustomerMovement.Instance.MoveTo(customer, _vipEntryWaypoint.position);
-            UIManager.Instance?.PlayVipAnnouncement();
-        }
-
         yield return CustomerMovement.Instance.MoveTo(customer, _customerQueue.GetSlotPosition(queueSlot));
         customer.EnterStationary();
         yield return RunCustomerFlowAfterQueued(customer);
+    }
+
+    private IEnumerator RunVipCustomerFlow(Customer customer)
+    {
+        customer.SetState(CustomerState.Queue);
+
+        if (_vipEntryWaypoint != null && CustomerMovement.Instance != null)
+            yield return CustomerMovement.Instance.MoveTo(customer, _vipEntryWaypoint.position);
+
+        customer.EnterStationary();
+        UIManager.Instance?.PlayVipAnnouncement();
+
+        _vipAwaitingIntro = customer;
+        _vipIntroAcknowledged = false;
+        UIManager.Instance?.ShowVipIntroButton(customer);
+        UIManager.Instance?.ShowVipWaitTimer(customer, _queueWaitTimeout);
+
+        float introWait = 0f;
+        while (!_vipIntroAcknowledged && introWait < _queueWaitTimeout)
+        {
+            introWait += Time.deltaTime;
+            UIManager.Instance?.UpdateVipWaitTimer(customer, Mathf.Max(0f, _queueWaitTimeout - introWait), _queueWaitTimeout);
+            yield return null;
+        }
+
+        bool introAccepted = _vipIntroAcknowledged;
+        UIManager.Instance?.HideVipIntroButton();
+        ClearVipIntroState(customer);
+
+        if (!introAccepted)
+        {
+            UIManager.Instance?.HideVipWaitTimer(customer);
+            UIManager.Instance?.SetVipDialogue(VipDialogueState.UnhappyLeave);
+            yield return Leave(customer);
+            yield break;
+        }
+
+        TableSeat seat = null;
+        float seatWait = 0f;
+        UIManager.Instance?.ShowVipWaitTimer(customer, _queueWaitTimeout);
+
+        while (seat == null && seatWait < _queueWaitTimeout)
+        {
+            seat = FindFreeSeat(customer);
+
+            if (seat == null)
+            {
+                seatWait += Time.deltaTime;
+                UIManager.Instance?.UpdateVipWaitTimer(customer, Mathf.Max(0f, _queueWaitTimeout - seatWait), _queueWaitTimeout);
+                yield return null;
+            }
+        }
+
+        if (seat == null)
+        {
+            UIManager.Instance?.HideVipWaitTimer(customer);
+            UIManager.Instance?.SetVipDialogue(VipDialogueState.UnhappyLeave);
+            yield return Leave(customer);
+            yield break;
+        }
+
+        UIManager.Instance?.HideVipWaitTimer(customer);
+
+        TableSeat assignedSeat = null;
+        yield return TryWalkCustomerToSeat(customer, seat, result => assignedSeat = result);
+
+        if (assignedSeat == null)
+        {
+            yield return Leave(customer);
+            yield break;
+        }
+
+        seat = assignedSeat;
+        customer.SetState(CustomerState.Ordering);
+        yield return RunVipSeatedEvents(customer, seat);
+    }
+
+    private IEnumerator RunVipSeatedEvents(Customer customer, TableSeat seat)
+    {
+        customer.VipEventBonus = 0;
+
+        // Chef starts prepping VIP food immediately; waiter only collects after 上菜.
+        DishOrder vipOrder = WorkerManager.Instance != null
+            ? WorkerManager.Instance.SubmitVipHeldOrder(customer)
+            : null;
+
+        if (_vipSettleDelay > 0f)
+            yield return new WaitForSeconds(_vipSettleDelay);
+
+        VipEventType[] events = BuildVipEventSequence();
+
+        for (int i = 0; i < events.Length; i++)
+        {
+            // One event at a time: short pause before each request after the first.
+            if (i > 0 && _vipEventGapDelay > 0f)
+                yield return new WaitForSeconds(_vipEventGapDelay);
+
+            bool fulfilled = false;
+
+            if (events[i] == VipEventType.ServeDish)
+                yield return RunVipServeDishEvent(customer, vipOrder, result => fulfilled = result);
+            else
+                yield return RunSingleVipEvent(customer, events[i], result => fulfilled = result);
+
+            if (events[i] == VipEventType.ServeDish && !fulfilled)
+            {
+                UIManager.Instance?.HideAllVipEventButtons();
+                UIManager.Instance?.HideVipWaitTimer(customer);
+                UIManager.Instance?.SetVipDialogue(VipDialogueState.UnhappyLeave);
+                WorkerManager.Instance?.CancelOrder(vipOrder);
+                ReleaseCustomerSeatAndNotify(customer, seat);
+                yield return Leave(customer);
+                yield break;
+            }
+
+            if (fulfilled)
+                customer.VipEventBonus += Mathf.Max(0, _vipEventBonusPerRequest);
+            else if (events[i] != VipEventType.ServeDish)
+                UIManager.Instance?.SetVipDialogue(VipDialogueState.Discontent);
+        }
+
+        UIManager.Instance?.HideAllVipEventButtons();
+        UIManager.Instance?.HideVipWaitTimer(customer);
+
+        customer.SetState(CustomerState.Eating);
+        yield return new WaitForSeconds(_eatDuration);
+
+        if (RestaurantSceneMode.IsCompetitorScene)
+        {
+            ReleaseCustomerSeatAndNotify(customer, seat);
+            yield return Leave(customer);
+            yield break;
+        }
+
+        _completedPayments.Remove(customer);
+        BindPendingPayment(customer, ResolveActiveSeat(customer, seat));
+        customer.SetState(CustomerState.Paying);
+
+        while (!_completedPayments.Contains(customer))
+            yield return null;
+
+        _completedPayments.Remove(customer);
+        ReleaseCustomerSeatAndNotify(customer, seat);
+        yield return Leave(customer);
+    }
+
+    private static VipEventType[] BuildVipEventSequence()
+    {
+        // Always include ServeDish; pick 1–2 more from the available pool.
+        VipEventType[] optionalPool =
+        {
+            VipEventType.FeetMassage,
+            VipEventType.ServeTea,
+            VipEventType.CallLady,
+            VipEventType.WatchStage
+        };
+
+        int optionalCount = Random.Range(0, 2) == 0 ? 1 : 2;
+        optionalCount = Mathf.Min(optionalCount, optionalPool.Length);
+
+        for (int i = optionalPool.Length - 1; i > 0; i--)
+        {
+            int swapIndex = Random.Range(0, i + 1);
+            VipEventType temp = optionalPool[i];
+            optionalPool[i] = optionalPool[swapIndex];
+            optionalPool[swapIndex] = temp;
+        }
+
+        VipEventType[] sequence = new VipEventType[optionalCount + 1];
+        for (int i = 0; i < optionalCount; i++)
+            sequence[i] = optionalPool[i];
+
+        sequence[optionalCount] = VipEventType.ServeDish;
+
+        for (int i = sequence.Length - 1; i > 0; i--)
+        {
+            int swapIndex = Random.Range(0, i + 1);
+            VipEventType temp = sequence[i];
+            sequence[i] = sequence[swapIndex];
+            sequence[swapIndex] = temp;
+        }
+
+        return sequence;
+    }
+
+    private IEnumerator RunVipServeDishEvent(Customer customer, DishOrder order, System.Action<bool> onComplete)
+    {
+        BeginPendingVipEvent(customer, VipEventType.ServeDish);
+
+        UIManager.Instance?.ShowVipEventButton(VipEventType.ServeDish, customer);
+        UIManager.Instance?.ShowVipWaitTimer(customer, _foodWaitTimeout);
+
+        float wait = 0f;
+        while (!_vipEventAcknowledged && wait < _foodWaitTimeout)
+        {
+            wait += Time.deltaTime;
+            UIManager.Instance?.UpdateVipWaitTimer(customer, Mathf.Max(0f, _foodWaitTimeout - wait), _foodWaitTimeout);
+            yield return null;
+        }
+
+        bool acknowledged = _vipEventAcknowledged;
+        ClearPendingVipEvent();
+        UIManager.Instance?.HideVipEventButton(VipEventType.ServeDish);
+
+        if (!acknowledged)
+        {
+            UIManager.Instance?.HideVipWaitTimer(customer);
+            onComplete?.Invoke(false);
+            yield break;
+        }
+
+        // Player requested 上菜 — release the held ready dish so the VIP waiter collects it.
+        if (order != null && WorkerManager.Instance != null)
+            WorkerManager.Instance.ReleaseOrderForServe(order);
+
+        float deliveryWait = 0f;
+        UIManager.Instance?.ShowVipWaitTimer(customer, _foodWaitTimeout);
+
+        while (order != null
+            && !order.IsDelivered
+            && !order.IsCancelled
+            && deliveryWait < _foodWaitTimeout)
+        {
+            deliveryWait += Time.deltaTime;
+            UIManager.Instance?.UpdateVipWaitTimer(
+                customer,
+                Mathf.Max(0f, _foodWaitTimeout - deliveryWait),
+                _foodWaitTimeout);
+            yield return null;
+        }
+
+        UIManager.Instance?.HideVipWaitTimer(customer);
+
+        bool delivered = order != null && order.IsDelivered && !order.IsCancelled;
+        onComplete?.Invoke(delivered);
+    }
+
+    private IEnumerator RunSingleVipEvent(Customer customer, VipEventType eventType, System.Action<bool> onComplete)
+    {
+        BeginPendingVipEvent(customer, eventType);
+
+        UIManager.Instance?.ShowVipEventButton(eventType, customer);
+        UIManager.Instance?.ShowVipWaitTimer(customer, _foodWaitTimeout);
+
+        float wait = 0f;
+        while (!_vipEventAcknowledged && wait < _foodWaitTimeout)
+        {
+            wait += Time.deltaTime;
+            UIManager.Instance?.UpdateVipWaitTimer(customer, Mathf.Max(0f, _foodWaitTimeout - wait), _foodWaitTimeout);
+            yield return null;
+        }
+
+        bool acknowledged = _vipEventAcknowledged;
+        ClearPendingVipEvent();
+        UIManager.Instance?.HideVipEventButton(eventType);
+        UIManager.Instance?.HideVipWaitTimer(customer);
+
+        if (!acknowledged)
+        {
+            onComplete?.Invoke(false);
+            yield break;
+        }
+
+        if (eventType == VipEventType.CallLady)
+            yield return SpawnVipCallLadies(customer);
+        else if (eventType == VipEventType.ServeTea || eventType == VipEventType.FeetMassage)
+            yield return RunVipFloorWaiterSideService(customer);
+        else if (eventType == VipEventType.WatchStage)
+            yield return RunVipWatchStage(customer);
+
+        onComplete?.Invoke(true);
+    }
+
+    private IEnumerator RunVipWatchStage(Customer vip)
+    {
+        CacheVipPerformerReferences();
+
+        Worker performer = _vipPerformer;
+        if (performer == null || !performer.gameObject.activeInHierarchy)
+            yield break;
+
+        if (_performerReturnRoutine != null)
+        {
+            StopCoroutine(_performerReturnRoutine);
+            _performerReturnRoutine = null;
+        }
+
+        Transform stage = _vipStagePoint;
+        performer.Locomotion?.ExitStationary();
+        performer.SetState(WorkerState.Wait);
+
+        if (stage != null)
+            yield return MoveWorkerTo(performer, stage.position);
+
+        FaceWorkerToward(performer, vip != null ? vip.transform : null);
+        performer.Locomotion?.EnterStationary();
+        _performerOnStage = true;
+    }
+
+    private IEnumerator RunVipFloorWaiterSideService(Customer vip)
+    {
+        CacheVipFloorWaiterReferences();
+
+        Worker waiter = _vipFloorWaiter;
+        if (waiter == null || !waiter.gameObject.activeInHierarchy)
+            yield break;
+
+        // Wait until she's free, then lock so dish runs don't interrupt 上茶 / 泡脚.
+        if (WorkerManager.Instance != null)
+        {
+            float waitForFree = 0f;
+            const float maxWaitForFree = 30f;
+            while (!WorkerManager.Instance.TryBeginExternalTask(waiter) && waitForFree < maxWaitForFree)
+            {
+                waitForFree += Time.deltaTime;
+                yield return null;
+            }
+
+            if (waitForFree >= maxWaitForFree && !WorkerManager.Instance.TryBeginExternalTask(waiter))
+                yield break;
+        }
+
+        Transform servePoint = _vipWaiterServePoint;
+        Transform returnPoint = waiter.WaitPoint;
+
+        waiter.Locomotion?.ExitStationary();
+
+        if (servePoint != null)
+        {
+            yield return MoveWorkerTo(waiter, servePoint.position);
+            waiter.FaceDirection(servePoint.rotation);
+        }
+        else
+        {
+            FaceWorkerToward(waiter, vip != null ? vip.transform : null);
+        }
+
+        waiter.Locomotion?.EnterStationary();
+
+        WorkerCharacterAnimator waiterAnimator = waiter.GetComponent<WorkerCharacterAnimator>();
+        waiterAnimator?.SetCleaning(true);
+
+        float hold = Mathf.Max(0f, _vipSideServiceHoldDuration);
+        if (hold > 0f)
+            yield return new WaitForSeconds(hold);
+
+        waiterAnimator?.SetCleaning(false);
+        waiter.Locomotion?.ExitStationary();
+
+        bool needsRest = waiter.Energy != null && waiter.Energy.ApplyServeCost();
+
+        if (needsRest && WorkerManager.Instance != null)
+        {
+            yield return WorkerManager.Instance.RunRestRoutine(waiter);
+            WorkerManager.Instance.EndExternalTask(waiter);
+            yield break;
+        }
+
+        if (returnPoint != null)
+        {
+            yield return MoveWorkerTo(waiter, returnPoint.position);
+            waiter.FaceDirection(returnPoint.rotation);
+        }
+
+        waiter.Locomotion?.EnterStationary();
+        waiter.SetState(WorkerState.Wait);
+        WorkerManager.Instance?.EndExternalTask(waiter);
+    }
+
+    private IEnumerator SpawnVipCallLadies(Customer vip)
+    {
+        CacheVipCallLadyReferences();
+
+        if (_vipCallLadyWorkers == null || _vipCallLadyWorkers.Length == 0)
+            yield break;
+
+        if (_callLadyDismissRoutine != null)
+        {
+            StopCoroutine(_callLadyDismissRoutine);
+            _callLadyDismissRoutine = null;
+        }
+
+        // Already at the VIP — stay put for this request.
+        if (_callLadiesActive)
+            yield break;
+
+        int walksPending = 0;
+
+        for (int i = 0; i < _vipCallLadyWorkers.Length; i++)
+        {
+            Worker worker = _vipCallLadyWorkers[i];
+            if (worker == null)
+                continue;
+
+            // They enter with the second-floor hire; if somehow inactive, skip.
+            if (!worker.gameObject.activeInHierarchy)
+                continue;
+
+            Transform lackeyPoint = _vipLackeyPoints != null && i < _vipLackeyPoints.Length
+                ? _vipLackeyPoints[i]
+                : null;
+
+            worker.Locomotion?.ExitStationary();
+            worker.SetState(WorkerState.Wait);
+
+            walksPending++;
+            StartCoroutine(WalkCallLadyToPost(worker, lackeyPoint, vip, () => walksPending--));
+        }
+
+        while (walksPending > 0)
+            yield return null;
+
+        _callLadiesActive = walksPending == 0 && HasAnyActiveCallLady();
+        _callLadiesStationed = true;
+    }
+
+    private bool HasAnyActiveCallLady()
+    {
+        if (_vipCallLadyWorkers == null)
+            return false;
+
+        for (int i = 0; i < _vipCallLadyWorkers.Length; i++)
+        {
+            Worker worker = _vipCallLadyWorkers[i];
+            if (worker != null && worker.gameObject.activeInHierarchy)
+                return true;
+        }
+
+        return false;
+    }
+
+    private IEnumerator WalkCallLadyToPost(
+        Worker worker,
+        Transform lackeyPoint,
+        Customer vip,
+        System.Action onArrived)
+    {
+        Vector3 destination = lackeyPoint != null
+            ? lackeyPoint.position
+            : (worker != null ? worker.transform.position : Vector3.zero);
+
+        if (CustomerMovement.Instance != null)
+            yield return MoveWorkerTo(worker, destination);
+
+        if (worker != null)
+        {
+            worker.Locomotion?.EnterStationary();
+            FaceWorkerToward(worker, vip != null ? vip.transform : null);
+        }
+
+        onArrived?.Invoke();
+    }
+
+    private static void FaceWorkerToward(Worker worker, Transform target)
+    {
+        if (worker == null || target == null)
+            return;
+
+        Vector3 direction = target.position - worker.transform.position;
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude < 0.0001f)
+            return;
+
+        worker.FaceDirection(Quaternion.LookRotation(direction.normalized));
+    }
+
+    private static IEnumerator MoveWorkerTo(Worker worker, Vector3 destination)
+    {
+        if (worker == null || worker.Locomotion == null)
+            yield break;
+
+        yield return NavMeshMovement.MoveTo(worker.Locomotion, destination);
+    }
+
+    private void BeginDismissVipCallLadies()
+    {
+        if (!_callLadiesActive)
+            return;
+
+        if (_callLadyDismissRoutine != null)
+            StopCoroutine(_callLadyDismissRoutine);
+
+        _callLadyDismissRoutine = StartCoroutine(DismissVipCallLadiesRoutine());
+    }
+
+    private IEnumerator DismissVipCallLadiesRoutine()
+    {
+        float delay = Mathf.Max(0f, _vipCallLadyLeaveDelay);
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
+
+        CacheVipCallLadyReferences();
+
+        if (_vipCallLadyWorkers != null)
+        {
+            for (int i = 0; i < _vipCallLadyWorkers.Length; i++)
+            {
+                Worker worker = _vipCallLadyWorkers[i];
+                if (worker == null || !worker.gameObject.activeInHierarchy)
+                    continue;
+
+                Transform waypoint = ResolveCallLadyWaypoint(worker, i);
+
+                worker.Locomotion?.ExitStationary();
+
+                if (waypoint != null)
+                {
+                    yield return MoveWorkerTo(worker, waypoint.position);
+                    worker.FaceDirection(waypoint.rotation);
+                }
+
+                worker.Locomotion?.EnterStationary();
+                worker.SetState(WorkerState.Wait);
+            }
+        }
+
+        _callLadiesActive = false;
+        _callLadiesStationed = true;
+        _callLadyDismissRoutine = null;
+    }
+
+    private void BeginReturnVipPerformer()
+    {
+        if (!_performerOnStage)
+            return;
+
+        if (_performerReturnRoutine != null)
+            StopCoroutine(_performerReturnRoutine);
+
+        _performerReturnRoutine = StartCoroutine(ReturnVipPerformerRoutine());
+    }
+
+    private IEnumerator ReturnVipPerformerRoutine()
+    {
+        float delay = Mathf.Max(0f, _vipCallLadyLeaveDelay);
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
+
+        CacheVipPerformerReferences();
+
+        Worker performer = _vipPerformer;
+        if (performer != null && performer.gameObject.activeInHierarchy)
+        {
+            Transform waypoint = performer.WaitPoint != null
+                ? performer.WaitPoint
+                : _vipPerformerWaypoint;
+
+            performer.Locomotion?.ExitStationary();
+
+            if (waypoint != null)
+            {
+                yield return MoveWorkerTo(performer, waypoint.position);
+                performer.FaceDirection(waypoint.rotation);
+            }
+
+            performer.Locomotion?.EnterStationary();
+            performer.SetState(WorkerState.Wait);
+        }
+
+        _performerOnStage = false;
+        _performerReturnRoutine = null;
+    }
+
+    private Transform ResolveCallLadyWaypoint(Worker worker, int index)
+    {
+        if (worker != null && worker.WaitPoint != null)
+            return worker.WaitPoint;
+
+        if (_vipCallLadyWaypoints != null && index >= 0 && index < _vipCallLadyWaypoints.Length)
+            return _vipCallLadyWaypoints[index];
+
+        return null;
+    }
+
+    private void ClearVipIntroState(Customer customer)
+    {
+        if (_vipAwaitingIntro == customer)
+        {
+            _vipAwaitingIntro = null;
+            _vipIntroAcknowledged = false;
+            UIManager.Instance?.HideVipIntroButton();
+        }
     }
 
     private IEnumerator RunCustomerFlowAfterQueued(Customer customer)
@@ -815,6 +1656,17 @@ public class CustomerManager : MonoBehaviour
     private IEnumerator Leave(Customer customer)
     {
         bool wasVip = customer != null && customer.IsVip;
+
+        ClearVipIntroState(customer);
+        ClearVipEventUiIfOwnedBy(customer);
+
+        if (wasVip)
+        {
+            BeginDismissVipCallLadies();
+            BeginReturnVipPerformer();
+        }
+
+        WorkerManager.Instance?.CancelOrdersForCustomer(customer);
 
         customer.ClearPendingPayment();
         customer.SetState(CustomerState.Leaving);
@@ -1067,5 +1919,9 @@ public class CustomerManager : MonoBehaviour
         }
 
         _activeFlows.Clear();
+        _vipAwaitingIntro = null;
+        _vipIntroAcknowledged = false;
+        UIManager.Instance?.HideVipIntroButton();
+        UIManager.Instance?.HideVipWaitTimer();
     }
 }

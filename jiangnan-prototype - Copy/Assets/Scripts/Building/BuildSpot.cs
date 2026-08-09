@@ -1,14 +1,20 @@
 using System;
 using System.Collections;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 [DisallowMultipleComponent]
 public class BuildSpot : MonoBehaviour
 {
+    private const string CostUiName = "BuildSpotCostUI";
+    private const string CostLabelName = "Cost";
+
     [SerializeField] private PlaceableType _placeableType;
     [SerializeField] private GameObject _builtObject;
     [SerializeField] private Transform _costUiAnchor;
+    [SerializeField] private GameObject _costUiRoot;
+    [SerializeField] private TextMeshProUGUI _costText;
     [SerializeField] private int _cost;
     [SerializeField] private RestaurantFloor _floor = RestaurantFloor.Ground;
     private Button _worldBuildButton;
@@ -24,6 +30,7 @@ public class BuildSpot : MonoBehaviour
 
     private BuildSpotState _state = BuildSpotState.Locked;
     private Coroutine _deliveryRoutine;
+    private bool _costUiSuppressed;
 
     public PlaceableType PlaceableType => _placeableType;
     public BuildSpotState State => _state;
@@ -48,6 +55,8 @@ public class BuildSpot : MonoBehaviour
         if (_carrierGroup != null)
             _carrierGroup.SetActive(false);
 
+        CacheCostUi();
+        ApplyCostText();
         ApplyState(_state);
     }
 
@@ -106,6 +115,19 @@ public class BuildSpot : MonoBehaviour
             return;
 
         CompleteBuild(playCompletionVfx);
+    }
+
+    public void SetCostUiSuppressed(bool suppressed)
+    {
+        _costUiSuppressed = suppressed;
+        SyncCostUiVisibility();
+    }
+
+    public void RefreshCostUi()
+    {
+        CacheCostUi();
+        ApplyCostText();
+        SyncCostUiVisibility();
     }
 
     private IEnumerator DeliveryRoutine()
@@ -177,12 +199,78 @@ public class BuildSpot : MonoBehaviour
             case BuildSpotState.Delivering:
                 gameObject.SetActive(ShouldShowOnCurrentViewFloor(state));
                 SetBuildButtonVisible(state == BuildSpotState.Active && IsOnCurrentViewFloor());
+                SyncCostUiVisibility();
                 break;
 
             default:
                 gameObject.SetActive(false);
+                SyncCostUiVisibility();
                 break;
         }
+    }
+
+    private void CacheCostUi()
+    {
+        if (_costUiRoot == null)
+        {
+            Transform found = FindChildTransform(transform, CostUiName);
+            if (found != null)
+                _costUiRoot = found.gameObject;
+        }
+
+        if (_costText == null && _costUiRoot != null)
+        {
+            Transform label = FindChildTransform(_costUiRoot.transform, CostLabelName);
+            if (label != null)
+                _costText = label.GetComponent<TextMeshProUGUI>();
+
+            if (_costText == null)
+                _costText = _costUiRoot.GetComponentInChildren<TextMeshProUGUI>(true);
+        }
+
+        if (_costUiRoot == null)
+            return;
+
+        Graphic[] graphics = _costUiRoot.GetComponentsInChildren<Graphic>(true);
+        for (int i = 0; i < graphics.Length; i++)
+        {
+            if (graphics[i] != null)
+                graphics[i].raycastTarget = false;
+        }
+    }
+
+    private void ApplyCostText()
+    {
+        if (_costText != null)
+            _costText.text = _cost.ToString();
+    }
+
+    private void SyncCostUiVisibility()
+    {
+        if (_costUiRoot == null)
+            return;
+
+        bool show = !_costUiSuppressed
+            && _state == BuildSpotState.Active
+            && IsOnCurrentViewFloor();
+
+        if (_costUiRoot.activeSelf != show)
+            _costUiRoot.SetActive(show);
+    }
+
+    private static Transform FindChildTransform(Transform root, string objectName)
+    {
+        if (root == null || string.IsNullOrEmpty(objectName))
+            return null;
+
+        Transform[] children = root.GetComponentsInChildren<Transform>(true);
+        for (int i = 0; i < children.Length; i++)
+        {
+            if (children[i] != null && children[i].name == objectName)
+                return children[i];
+        }
+
+        return null;
     }
 
     private void SyncBuiltObjectVisibility(bool shouldShow)
@@ -237,6 +325,8 @@ public class BuildSpot : MonoBehaviour
             gameObject.SetActive(ShouldShowOnCurrentViewFloor(_state));
             SetBuildButtonVisible(_state == BuildSpotState.Active && IsOnCurrentViewFloor());
         }
+
+        SyncCostUiVisibility();
     }
 
     private bool ShouldShowOnCurrentViewFloor(BuildSpotState state)
