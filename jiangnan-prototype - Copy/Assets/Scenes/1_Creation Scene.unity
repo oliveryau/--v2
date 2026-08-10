@@ -248,7 +248,6 @@ MonoBehaviour:
   _waiterHirePulseMaxScale: 1
   _waiterHirePulseSpeed: 8
   _seatPaymentUiRoot: {fileID: 0}
-  _seatPaymentButton: {fileID: 0}
   _coinVfxRoot: {fileID: 0}
   _coinTrailTargetUi: {fileID: 0}
   _coinTrailCount: 3
@@ -261,15 +260,6 @@ MonoBehaviour:
   _vipFireworksHoldDuration: 3
   _vipFireworksFadeOutDuration: 0.4
   _vipDoneEatingRoot: {fileID: 0}
-  _vipDoneIconChad1: {fileID: 0}
-  _vipDoneIconChad2: {fileID: 0}
-  _vipDoneEatingFadeInDuration: 0
-  _vipDoneEatingHoldDuration: 0
-  _vipDoneEatingFadeOutDuration: 0
-  _vipDoneEatingMessages:
-  - "\u597D\u83DC! \u597D\u9152! \u4E0B\u6B21\u518D\u6765!"
-  - "\u5E97\u5BB6\u5F53\u771F\u7528\u5FC3\u4E86, \u91CD\u91CD\u6709\u8D4F!"
-  - "\u8D4F! \u672C\u5C0A\u8FC7\u51E0\u65E5\u518D\u6765!"
   _vipIntroButtonRoot: {fileID: 0}
   _vipIntroButton: {fileID: 0}
   _vipWaitTimerRoot: {fileID: 0}
@@ -284,7 +274,6 @@ MonoBehaviour:
   _vipCallLadyButtonRoot: {fileID: 0}
   _vipCallLadyButton: {fileID: 0}
   _tableStatusUiRoot: {fileID: 0}
-  _tableStatusText: {fileID: 0}
   _tableStatusEmptySeatColor: {r: 1, g: 1, b: 1, a: 1}
   _tableStatusFullColor: {r: 1, g: 0, b: 0, a: 1}
   _tableStatusPaymentColor: {r: 0, g: 1, b: 0, a: 1}
@@ -320,7 +309,6 @@ MonoBehaviour:
   _openBusinessHoldDuration: 1.2
   _openBusinessFadeOutDuration: 0.5
   _businessOverviewRoot: {fileID: 0}
-  _businessIncomeText: {fileID: 0}
   _businessAcknowledgeButton: {fileID: 0}
   _tableBuildInfoRoot: {fileID: 0}
   _tableBuildInfoCloseButton: {fileID: 0}

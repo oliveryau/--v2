@@ -66,6 +66,7 @@ public class TableUpgradeDelivery : MonoBehaviour
             return null;
 
         Transform carrierTransform = carrierGroup.transform;
+        GameObject fallback = null;
 
         for (int i = 0; i < carrierTransform.childCount; i++)
         {
@@ -74,10 +75,24 @@ public class TableUpgradeDelivery : MonoBehaviour
             if (child == null || !child.name.StartsWith("P_Equipment_Table", System.StringComparison.Ordinal))
                 continue;
 
-            return child.gameObject;
+            // Prefer the matching level prop when several equipment tables are nested under the carrier.
+            if (carrierGroup.name.IndexOf("Table_2", System.StringComparison.OrdinalIgnoreCase) >= 0
+                && child.name.IndexOf("Lv2", System.StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return child.gameObject;
+            }
+
+            if (carrierGroup.name.IndexOf("Table_3", System.StringComparison.OrdinalIgnoreCase) >= 0
+                && child.name.IndexOf("Lv3", System.StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return child.gameObject;
+            }
+
+            if (fallback == null)
+                fallback = child.gameObject;
         }
 
-        return null;
+        return fallback;
     }
 
     private void OnDestroy()

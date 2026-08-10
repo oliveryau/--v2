@@ -41,6 +41,7 @@ public class DiningTable : MonoBehaviour
     private bool _isBroken;
     private GameObject _activeBrokenTable;
     private GameObject _level2EquipmentTable;
+    private GameObject _level3EquipmentTable;
 
     private bool _saveIndexResolved;
     private int _cachedSaveIndex = -1;
@@ -329,7 +330,7 @@ public class DiningTable : MonoBehaviour
         if (currentVisuals == null)
             return;
 
-        GameObject sourceTable = ResolveTableVisual(currentVisuals, _level, allowEquipmentClone: _level == 2);
+        GameObject sourceTable = ResolveTableVisual(currentVisuals, _level, allowEquipmentClone: IsEquipmentCloneLevel(_level));
         Transform snapAnchor = sourceTable != null ? sourceTable.transform : GetTableTransform(currentVisuals, _level);
 
         HideAllLevelVisuals();
@@ -592,7 +593,11 @@ public class DiningTable : MonoBehaviour
 
         Transform tableAnchor = GetTableTransform(previousVisuals, previousLevel);
         Transform seatsAnchor = GetSeatsTransform(previousVisuals);
-        GameObject nextTable = ResolveTableVisual(nextVisuals, level, allowEquipmentClone: false);
+        // Level 2/3 install the carrier equipment clone — snap that instance, not the hidden authored ref.
+        GameObject nextTable = ResolveTableVisual(
+            nextVisuals,
+            level,
+            allowEquipmentClone: IsEquipmentCloneLevel(level));
         GameObject nextSeats = nextVisuals.Seats;
 
         if (nextTable != null && tableAnchor != null)
@@ -608,11 +613,17 @@ public class DiningTable : MonoBehaviour
             return;
 
         int visualLevel = visuals == _level1Visuals ? 1 : visuals == _level2Visuals ? 2 : visuals == _level3Visuals ? 3 : _level;
-        bool allowEquipmentClone = active && visualLevel == 2;
+        bool allowEquipmentClone = active && IsEquipmentCloneLevel(visualLevel);
         GameObject table = ResolveTableVisual(visuals, visualLevel, allowEquipmentClone);
 
-        if (!active && visualLevel == 2 && _level2EquipmentTable != null)
-            _level2EquipmentTable.SetActive(false);
+        if (!active)
+        {
+            if (visualLevel == 2 && _level2EquipmentTable != null)
+                _level2EquipmentTable.SetActive(false);
+
+            if (visualLevel == 3 && _level3EquipmentTable != null)
+                _level3EquipmentTable.SetActive(false);
+        }
 
         if (table != null)
         {
@@ -692,7 +703,10 @@ public class DiningTable : MonoBehaviour
         if (currentVisuals == null)
             return;
 
-        GameObject tableObject = ResolveTableVisual(currentVisuals, _level, allowEquipmentClone: _level == 2);
+        GameObject tableObject = ResolveTableVisual(
+            currentVisuals,
+            _level,
+            allowEquipmentClone: IsEquipmentCloneLevel(_level));
 
         if (tableObject != null)
         {
@@ -801,28 +815,45 @@ public class DiningTable : MonoBehaviour
 
     private GameObject ResolveTableVisual(TableLevelVisualSet visuals, int level, bool allowEquipmentClone)
     {
-        GameObject table = GetTableObject(visuals, level);
-
-        if (!allowEquipmentClone || level != 2 || table == null)
-            return table;
-
-        if (_level2EquipmentTable != null)
+        // Prefer an already-installed equipment mesh even when only resolving an anchor.
+        if (level == 2 && _level2EquipmentTable != null)
             return _level2EquipmentTable;
 
+        if (level == 3 && _level3EquipmentTable != null)
+            return _level3EquipmentTable;
+
+        GameObject table = GetTableObject(visuals, level);
+
+        if (!allowEquipmentClone || !IsEquipmentCloneLevel(level) || table == null)
+            return table;
+
         GameObject template = TableUpgradeDelivery.Instance != null
-            ? TableUpgradeDelivery.Instance.GetEquipmentTableTemplate(2)
+            ? TableUpgradeDelivery.Instance.GetEquipmentTableTemplate(level)
             : null;
 
         if (template == null)
             return table;
 
+        // Hide the authored placeholder; the delivered equipment mesh is the real upgraded table.
         table.SetActive(false);
 
-        _level2EquipmentTable = Instantiate(template);
-        _level2EquipmentTable.name = template.name;
-        RuntimeMeshVisibility.Prepare(_level2EquipmentTable.transform);
+        GameObject installed = Instantiate(template);
+        installed.name = $"{template.name}_Installed";
+        // Template lives under an inactive carrier — Instantiate copies inactive state.
+        installed.SetActive(true);
+        RuntimeMeshVisibility.Prepare(installed.transform);
 
-        return _level2EquipmentTable;
+        if (level == 2)
+            _level2EquipmentTable = installed;
+        else
+            _level3EquipmentTable = installed;
+
+        return installed;
+    }
+
+    private static bool IsEquipmentCloneLevel(int level)
+    {
+        return level == 2 || level == 3;
     }
 
     private GameObject GetTableObject(TableLevelVisualSet visuals, int level)
@@ -838,7 +869,10 @@ public class DiningTable : MonoBehaviour
 
     private Transform GetTableTransform(TableLevelVisualSet visuals, int level)
     {
-        GameObject tableObject = ResolveTableVisual(visuals, level, allowEquipmentClone: level == 2 && _level == 2);
+        GameObject tableObject = ResolveTableVisual(
+            visuals,
+            level,
+            allowEquipmentClone: IsEquipmentCloneLevel(level) && _level == level);
         return tableObject != null ? tableObject.transform : null;
     }
 

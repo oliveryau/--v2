@@ -42,12 +42,12 @@ public class UIManager : MonoBehaviour
 
     [Header("Seat Payment UI")]
     [SerializeField] private RectTransform _seatPaymentUiRoot;
-    [SerializeField] private Button _seatPaymentButton;
 
     [Header("Coin Trail UI")]
     [SerializeField] private RectTransform _coinVfxRoot;
     [SerializeField] private RectTransform _coinTrailTargetUi;
     [SerializeField] private int _coinTrailCount;
+    [Tooltip("How many coins to spawn for VIP treasure trails. Uses the shared pool and grows it if needed.")]
     [SerializeField] private int _vipCoinTrailCount;
     [SerializeField] private float _coinTrailDelay;
     [SerializeField] private float _coinTrailDuration;
@@ -61,11 +61,6 @@ public class UIManager : MonoBehaviour
     [SerializeField] private float _vipFireworksHoldDuration = 3f;
     [SerializeField] private float _vipFireworksFadeOutDuration = 0.4f;
     [SerializeField] private RectTransform _vipDoneEatingRoot;
-    [SerializeField] private Sprite _vipDoneIconChad1;
-    [SerializeField] private Sprite _vipDoneIconChad2;
-    [SerializeField] private float _vipDoneEatingFadeInDuration;
-    [SerializeField] private float _vipDoneEatingHoldDuration;
-    [SerializeField] private float _vipDoneEatingFadeOutDuration;
     [SerializeField] private RectTransform _vipIntroButtonRoot;
     [SerializeField] private Button _vipIntroButton;
     [SerializeField] private RectTransform _vipWaitTimerRoot;
@@ -81,9 +76,13 @@ public class UIManager : MonoBehaviour
     [SerializeField] private Button _vipCallLadyButton;
     [SerializeField] private RectTransform _vipGeTaiButtonRoot;
     [SerializeField] private Button _vipGeTaiButton;
-    [SerializeField] private float _vipGeTaiPulseMinScale = 0.9f;
-    [SerializeField] private float _vipGeTaiPulseMaxScale = 1.1f;
-    [SerializeField] private float _vipGeTaiPulseSpeed = 8f;
+    [Header("VIP Main Icon")]
+    [SerializeField] private RectTransform _vipMainIconRoot;
+    [Tooltip("VIP icon pulses while the wait timer has this many seconds (or fewer) remaining.")]
+    [SerializeField] private float _vipIconPulseRemainingThreshold = 15f;
+    [SerializeField] private float _vipIconPulseMinScale = 0.92f;
+    [SerializeField] private float _vipIconPulseMaxScale = 1.08f;
+    [SerializeField] private float _vipIconPulseSpeed = 8f;
     [SerializeField] private TextMeshProUGUI _vipDialogueText;
     [Header("VIP Dialogue Lines")]
     [Tooltip("VIP arrives at the entry waypoint.")]
@@ -135,7 +134,6 @@ public class UIManager : MonoBehaviour
 
     [Header("Table Status UI")]
     [SerializeField] private RectTransform _tableStatusUiRoot;
-    [SerializeField] private TextMeshProUGUI _tableStatusText;
     [SerializeField] private Color _tableStatusEmptySeatColor;
     [SerializeField] private Color _tableStatusFullColor;
     [SerializeField] private Color _tableStatusPaymentColor;
@@ -183,7 +181,6 @@ public class UIManager : MonoBehaviour
 
     [Header("Business Overview UI")]
     [SerializeField] private GameObject _businessOverviewRoot;
-    [SerializeField] private TextMeshProUGUI _businessIncomeText;
     [SerializeField] private Button _businessAcknowledgeButton;
 
     [Header("Table Build Info UI")]
@@ -275,8 +272,6 @@ public class UIManager : MonoBehaviour
     [SerializeField] private MissionCatalog _missionCatalog;
 
     private RectTransform _canvasRect;
-    private Coroutine _waitForBusinessFloorClearRoutine;
-    private bool _businessOverviewVisible;
     private bool _buildSpotCostUiSuppressed;
     private HireSpot _activeHireSpot;
     private DiningTable _selectedUpgradeTable;
@@ -299,12 +294,9 @@ public class UIManager : MonoBehaviour
     private Coroutine _goldMinusAnimation;
     private readonly List<RectTransform> _coinTrailPool = new();
     private readonly Dictionary<RectTransform, Coroutine> _activeCoinTrailAnimations = new();
-    private Coroutine _coinTrailSequenceRoutine;
-    private Image _vipDoneIconImage;
-    private TextMeshProUGUI _vipDoneText;
-    private Graphic[] _vipDoneEatingGraphics;
-    private Color[] _vipDoneEatingTargetColors;
-    private Coroutine _vipDoneEatingRoutine;
+    private readonly Dictionary<int, Coroutine> _coinTrailSequences = new();
+    private int _nextCoinTrailSequenceId;
+    private RectTransform _coinTrailTemplate;
     private Coroutine _vipDialogueHideRoutine;
     private Graphic[] _vipFireworksGraphics;
     private Color[] _vipFireworksTargetColors;
@@ -325,7 +317,6 @@ public class UIManager : MonoBehaviour
     private Color[] _pranksterDialogueTargetColors;
     private Coroutine _pranksterDialogueRoutine;
     private Coroutine _dushRepairEffectRoutine;
-    private bool _mainButtonsUiSuppressed;
     private Coroutine _openBusinessSequenceRoutine;
     private bool _openBusinessSequencePlayed;
     private readonly HashSet<Button> _wiredHireSpotButtons = new();
@@ -398,11 +389,10 @@ public class UIManager : MonoBehaviour
 
     private const string WorkerEnergyFillImageName = "Image";
     private const string CoinCollectionExtraGlowName = "Extra Glow";
-    private const string VipUiRootName = "VIP UI";
+    private const string VipUiRootName = "VIP Main UI";
     private const string VipFireworksName = "Fireworks";
     private const string VipDoneEatingRootName = "VIP Done Eating";
-    private const string VipDoneIconName = "VIP Icon";
-    private const string VipDoneTextName = "VIP Done Text";
+    private const string VipMainIconName = "VIP Icon";
     private const string VipIntroButtonName = "VIP Intro Button";
     private const string VipWaitTimerName = "VIP Wait Timer";
     private const string VipWaitTimerFillName = "Energy Bar";
@@ -501,12 +491,6 @@ public class UIManager : MonoBehaviour
         CacheVipIntroButtonUi();
         CacheVipWaitTimerUi();
         CacheVipEventButtonsUi();
-
-        if (_seatPaymentButton == null && _seatPaymentUiRoot != null)
-            _seatPaymentButton = _seatPaymentUiRoot.GetComponentInChildren<Button>(true);
-
-        if (_tableStatusText == null && _tableStatusUiRoot != null)
-            _tableStatusText = _tableStatusUiRoot.GetComponent<TextMeshProUGUI>();
 
         InitializeOpenBusinessUi();
         InitializeBusinessOverviewUi();
@@ -608,8 +592,6 @@ public class UIManager : MonoBehaviour
         GameEvents.MissionPartChanged += HandleMissionPartChanged;
         GameEvents.MissionPartCompleted += HandleMissionPartCompletedForOpenBusiness;
         GameEvents.BusinessSessionStarted += HandleBusinessSessionStarted;
-        GameEvents.BusinessSessionEnded += HandleBusinessSessionEnded;
-        GameEvents.BusinessFloorCleared += HandleBusinessFloorCleared;
         GameEvents.BusinessDowntimeStarted += HandleBusinessDowntimeStarted;
         GameEvents.RestaurantFloorChanged += HandleRestaurantFloorChanged;
         GameEvents.SecondFloorUnlocked += HandleSecondFloorUnlockedForUi;
@@ -623,7 +605,6 @@ public class UIManager : MonoBehaviour
             SyncTownRatingTexts();
         SyncActiveUi();
         SyncAllNestedBuildSpotCostUi();
-        SyncPendingTableBuildInfoUi();
 
         if (RestaurantSceneMode.IsMainScene)
             SyncRepairTableUis();
@@ -643,8 +624,6 @@ public class UIManager : MonoBehaviour
         GameEvents.MissionPartChanged -= HandleMissionPartChanged;
         GameEvents.MissionPartCompleted -= HandleMissionPartCompletedForOpenBusiness;
         GameEvents.BusinessSessionStarted -= HandleBusinessSessionStarted;
-        GameEvents.BusinessSessionEnded -= HandleBusinessSessionEnded;
-        GameEvents.BusinessFloorCleared -= HandleBusinessFloorCleared;
         GameEvents.BusinessDowntimeStarted -= HandleBusinessDowntimeStarted;
         GameEvents.RestaurantFloorChanged -= HandleRestaurantFloorChanged;
         GameEvents.SecondFloorUnlocked -= HandleSecondFloorUnlockedForUi;
@@ -928,6 +907,8 @@ public class UIManager : MonoBehaviour
 
         if (_vipWaitTimerRoot != null)
             _vipWaitTimerRoot.gameObject.SetActive(false);
+
+        ResetVipMainIconScale();
     }
 
     public void ShowVipEventButton(VipEventType eventType, Customer vip)
@@ -960,9 +941,6 @@ public class UIManager : MonoBehaviour
         if (root != null)
             root.gameObject.SetActive(false);
 
-        if (eventType == VipEventType.WatchStage)
-            ResetVipGeTaiButtonScale();
-
         if (_activeVipEventButton.HasValue && _activeVipEventButton.Value == eventType)
         {
             _activeVipEventButton = null;
@@ -977,38 +955,15 @@ public class UIManager : MonoBehaviour
         SetVipEventButtonActive(_vipServeTeaButtonRoot, false);
         SetVipEventButtonActive(_vipCallLadyButtonRoot, false);
         SetVipEventButtonActive(_vipGeTaiButtonRoot, false);
-        ResetVipGeTaiButtonScale();
 
         _activeVipEventButton = null;
         _vipEventCustomer = null;
     }
 
-    public void PlayVipDoneEating()
-    {
-        if (_vipDoneEatingRoot == null)
-            return;
-
-        if (_vipDoneEatingRoutine != null)
-            StopCoroutine(_vipDoneEatingRoutine);
-
-        _vipDoneEatingRoutine = StartCoroutine(PlayVipDoneEatingCoroutine());
-    }
-
     private void HideVipDoneEating()
     {
-        if (_vipDoneEatingRoutine != null)
-        {
-            StopCoroutine(_vipDoneEatingRoutine);
-            _vipDoneEatingRoutine = null;
-        }
-
-        if (_vipDoneEatingRoot == null)
-            return;
-
-        if (_vipDoneEatingGraphics != null && _vipDoneEatingTargetColors != null)
-            UiGraphicFade.RestoreColors(_vipDoneEatingGraphics, _vipDoneEatingTargetColors);
-
-        _vipDoneEatingRoot.gameObject.SetActive(false);
+        if (_vipDoneEatingRoot != null)
+            _vipDoneEatingRoot.gameObject.SetActive(false);
     }
 
     private void CacheVipDoneEatingUi()
@@ -1019,90 +974,8 @@ public class UIManager : MonoBehaviour
         if (_vipDoneEatingRoot == null)
             _vipDoneEatingRoot = FindRectTransformByName(_screenCanvas.transform, VipDoneEatingRootName);
 
-        if (_vipDoneEatingRoot == null)
-            return;
-
-        if (_vipDoneIconImage == null)
-        {
-            Transform iconRoot = FindChildTransform(_vipDoneEatingRoot, VipDoneIconName);
-            _vipDoneIconImage = iconRoot != null ? iconRoot.GetComponent<Image>() : null;
-        }
-
-        if (_vipDoneText == null)
-        {
-            Transform textRoot = FindChildTransform(_vipDoneEatingRoot, VipDoneTextName);
-            _vipDoneText = textRoot != null ? textRoot.GetComponent<TextMeshProUGUI>() : null;
-        }
-
-        if (_vipDoneIconChad1 == null && _vipDoneIconImage != null)
-            _vipDoneIconChad1 = _vipDoneIconImage.sprite;
-
-        _vipDoneEatingGraphics = _vipDoneEatingRoot.GetComponentsInChildren<Graphic>(true);
-        _vipDoneEatingTargetColors = UiGraphicFade.CaptureColors(_vipDoneEatingGraphics);
-
-        for (int i = 0; i < _vipDoneEatingGraphics.Length; i++)
-        {
-            if (_vipDoneEatingGraphics[i] != null)
-                _vipDoneEatingGraphics[i].raycastTarget = false;
-        }
-
-        _vipDoneEatingRoot.gameObject.SetActive(false);
-    }
-
-    private void PrepareVipDoneEatingContent()
-    {
-        if (_vipDoneIconImage != null)
-        {
-            Sprite selectedIcon = PickRandomVipDoneIcon();
-
-            if (selectedIcon != null)
-                _vipDoneIconImage.sprite = selectedIcon;
-        }
-    }
-
-    private Sprite PickRandomVipDoneIcon()
-    {
-        bool hasChad1 = _vipDoneIconChad1 != null;
-        bool hasChad2 = _vipDoneIconChad2 != null;
-
-        if (hasChad1 && hasChad2)
-            return UnityEngine.Random.value < 0.5f ? _vipDoneIconChad1 : _vipDoneIconChad2;
-
-        if (hasChad1)
-            return _vipDoneIconChad1;
-
-        return hasChad2 ? _vipDoneIconChad2 : null;
-    }
-
-    private IEnumerator PlayVipDoneEatingCoroutine()
-    {
-        PrepareVipDoneEatingContent();
-
-        _vipDoneEatingGraphics = _vipDoneEatingRoot.GetComponentsInChildren<Graphic>(true);
-        _vipDoneEatingTargetColors = UiGraphicFade.CaptureColors(_vipDoneEatingGraphics);
-        Color[] transparentColors = UiGraphicFade.BuildTransparentColors(_vipDoneEatingTargetColors);
-
-        _vipDoneEatingRoot.gameObject.SetActive(true);
-        UiGraphicFade.RestoreColors(_vipDoneEatingGraphics, transparentColors);
-
-        yield return UiGraphicFade.FadeColors(
-            _vipDoneEatingGraphics,
-            transparentColors,
-            _vipDoneEatingTargetColors,
-            _vipDoneEatingFadeInDuration);
-
-        if (_vipDoneEatingHoldDuration > 0f)
-            yield return new WaitForSeconds(_vipDoneEatingHoldDuration);
-
-        yield return UiGraphicFade.FadeColors(
-            _vipDoneEatingGraphics,
-            _vipDoneEatingTargetColors,
-            transparentColors,
-            _vipDoneEatingFadeOutDuration);
-
-        _vipDoneEatingRoot.gameObject.SetActive(false);
-        UiGraphicFade.RestoreColors(_vipDoneEatingGraphics, _vipDoneEatingTargetColors);
-        _vipDoneEatingRoutine = null;
+        if (_vipDoneEatingRoot != null)
+            _vipDoneEatingRoot.gameObject.SetActive(false);
     }
 
     public void PlayPranksterChasedAwayDialogue()
@@ -1309,7 +1182,24 @@ public class UIManager : MonoBehaviour
 
         DisableChildRaycastTargets(_vipUiRoot);
         CacheVipDialogueText();
+        CacheVipMainIconUi();
         _vipUiRoot.gameObject.SetActive(false);
+    }
+
+    private void CacheVipMainIconUi()
+    {
+        if (_vipUiRoot == null)
+            CacheVipUi();
+
+        if (_vipUiRoot == null)
+            return;
+
+        if (_vipMainIconRoot != null)
+            return;
+
+        Transform icon = FindChildTransform(_vipUiRoot, VipMainIconName);
+        if (icon != null)
+            _vipMainIconRoot = icon as RectTransform;
     }
 
     private void CacheVipIntroButtonUi()
@@ -1481,19 +1371,6 @@ public class UIManager : MonoBehaviour
         };
     }
 
-    private Button GetVipEventButton(VipEventType eventType)
-    {
-        return eventType switch
-        {
-            VipEventType.ServeDish => _vipServeDishButton,
-            VipEventType.FeetMassage => _vipFeetMassageButton,
-            VipEventType.ServeTea => _vipServeTeaButton,
-            VipEventType.CallLady => _vipCallLadyButton,
-            VipEventType.WatchStage => _vipGeTaiButton,
-            _ => null
-        };
-    }
-
     private static void SetVipEventButtonActive(RectTransform root, bool active)
     {
         if (root != null)
@@ -1503,6 +1380,7 @@ public class UIManager : MonoBehaviour
     private void HandleVipIntroButtonClicked()
     {
         CustomerManager.Instance?.AcknowledgeVipIntro();
+        HideVipDialogue();
         HideVipIntroButton();
     }
 
@@ -1537,6 +1415,17 @@ public class UIManager : MonoBehaviour
         if (root == null)
             return;
 
+        // VIP event buttons are second-floor only (same as GeTai).
+        bool onSecondFloor = CharacterPanelController.Instance == null
+            || CharacterPanelController.Instance.CurrentFloor == 2;
+
+        if (!onSecondFloor)
+        {
+            if (root.gameObject.activeSelf)
+                root.gameObject.SetActive(false);
+            return;
+        }
+
         EnsureScreenUiCaches();
 
         Transform anchor = _vipEventCustomer.ReactPoint != null
@@ -1546,14 +1435,8 @@ public class UIManager : MonoBehaviour
         if (anchor == null)
             return;
 
-        // Stay locked to the VIP world position. Hide when the camera is dragged away —
-        // do not clamp/fallback onto the screen edge.
-        if (!TryGetVipEventButtonLocalPoint(anchor.position, root, out Vector2 localPoint))
-        {
-            if (root.gameObject.activeSelf)
-                root.gameObject.SetActive(false);
+        if (!TryGetEdgeClampedVipButtonLocalPoint(anchor.position, root, out Vector2 localPoint))
             return;
-        }
 
         if (!root.gameObject.activeSelf)
             root.gameObject.SetActive(true);
@@ -1575,7 +1458,6 @@ public class UIManager : MonoBehaviour
         {
             if (root.gameObject.activeSelf)
                 root.gameObject.SetActive(false);
-            ResetVipGeTaiButtonScale();
             return;
         }
 
@@ -1589,24 +1471,45 @@ public class UIManager : MonoBehaviour
             stage = FindSceneTransformByName("Placeholder Stage")
                 ?? FindSceneTransformByName("GeTai");
 
-        if (stage == null || _worldCamera == null || _canvasRect == null || _screenCanvas == null)
+        if (stage == null)
             return;
 
-        Vector3 screenPoint = _worldCamera.WorldToScreenPoint(stage.position);
+        if (!TryGetEdgeClampedVipButtonLocalPoint(stage.position, root, out Vector2 localPoint))
+            return;
+
+        if (!root.gameObject.activeSelf)
+            root.gameObject.SetActive(true);
+
+        root.anchoredPosition = localPoint;
+    }
+
+    private bool TryGetEdgeClampedVipButtonLocalPoint(
+        Vector3 worldAnchorPosition,
+        RectTransform root,
+        out Vector2 localPoint)
+    {
+        localPoint = default;
+
+        EnsureScreenUiCaches();
+
+        if (_worldCamera == null || _canvasRect == null || _screenCanvas == null)
+            return false;
+
+        Vector3 screenPoint = _worldCamera.WorldToScreenPoint(worldAnchorPosition);
         if (screenPoint.z <= 0f)
         {
             // Behind camera — pin to nearest horizontal edge using viewport direction.
-            Vector3 viewport = _worldCamera.WorldToViewportPoint(stage.position);
+            Vector3 viewport = _worldCamera.WorldToViewportPoint(worldAnchorPosition);
             screenPoint.x = viewport.x < 0.5f ? 0f : Screen.width;
             screenPoint.y = Mathf.Clamp(Screen.height * 0.5f, 0f, Screen.height);
             screenPoint.z = 1f;
         }
 
-        float halfW = Mathf.Max(40f, root.rect.width * 0.5f);
-        float halfH = Mathf.Max(40f, root.rect.height * 0.5f);
+        float halfW = Mathf.Max(40f, root != null ? root.rect.width * 0.5f : 40f);
+        float halfH = Mathf.Max(40f, root != null ? root.rect.height * 0.5f : 40f);
         float pad = 24f;
 
-        // Persistent on floor 2: clamp to screen edges when the stage is off-screen.
+        // Persistent on floor 2: clamp to screen edges when the anchor is off-screen.
         screenPoint.x = Mathf.Clamp(screenPoint.x, pad + halfW, Screen.width - pad - halfW);
         screenPoint.y = Mathf.Clamp(screenPoint.y, pad + halfH, Screen.height - pad - halfH);
 
@@ -1614,31 +1517,11 @@ public class UIManager : MonoBehaviour
             ? null
             : _screenCanvas.worldCamera;
 
-        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                _canvasRect,
-                screenPoint,
-                canvasCamera,
-                out Vector2 localPoint))
-        {
-            return;
-        }
-
-        if (!root.gameObject.activeSelf)
-            root.gameObject.SetActive(true);
-
-        root.anchoredPosition = localPoint;
-        root.localScale = Vector3.one * GetVipGeTaiPulseScale();
-    }
-
-    private float GetVipGeTaiPulseScale()
-    {
-        return GetPulseScale(_vipGeTaiPulseMinScale, _vipGeTaiPulseMaxScale, _vipGeTaiPulseSpeed);
-    }
-
-    private void ResetVipGeTaiButtonScale()
-    {
-        if (_vipGeTaiButtonRoot != null)
-            _vipGeTaiButtonRoot.localScale = Vector3.one;
+        return RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            _canvasRect,
+            screenPoint,
+            canvasCamera,
+            out localPoint);
     }
 
     private static Transform FindSceneTransformByName(string objectName)
@@ -1657,50 +1540,42 @@ public class UIManager : MonoBehaviour
         return null;
     }
 
-    private bool TryGetVipEventButtonLocalPoint(
-        Vector3 worldAnchorPosition,
-        RectTransform root,
-        out Vector2 localPoint)
-    {
-        localPoint = default;
-
-        if (_worldCamera == null || _canvasRect == null || _screenCanvas == null)
-            return false;
-
-        Vector3 screenPoint = _worldCamera.WorldToScreenPoint(worldAnchorPosition);
-        if (screenPoint.z <= 0f)
-            return false;
-
-        // Sit slightly above the wait timer / VIP.
-        screenPoint.y += 100f;
-
-        float halfW = root != null ? Mathf.Max(1f, root.rect.width * 0.5f) : 40f;
-        float halfH = root != null ? Mathf.Max(1f, root.rect.height * 0.5f) : 40f;
-
-        // Fully off-screen → hide (no edge clamping).
-        if (screenPoint.x < -halfW
-            || screenPoint.x > Screen.width + halfW
-            || screenPoint.y < -halfH
-            || screenPoint.y > Screen.height + halfH)
-        {
-            return false;
-        }
-
-        Camera canvasCamera = _screenCanvas.renderMode == RenderMode.ScreenSpaceOverlay
-            ? null
-            : _screenCanvas.worldCamera;
-
-        return RectTransformUtility.ScreenPointToLocalPointInRectangle(
-            _canvasRect,
-            screenPoint,
-            canvasCamera,
-            out localPoint);
-    }
-
     private void UpdateVipReceptionUi()
     {
         UpdateVipIntroButtonPosition();
         UpdateVipEventButtonPosition();
+        UpdateVipMainIconPulse();
+    }
+
+    private void UpdateVipMainIconPulse()
+    {
+        CacheVipMainIconUi();
+
+        if (_vipMainIconRoot == null)
+            return;
+
+        bool shouldPulse = _vipWaitTimerCustomer != null
+            && _vipWaitTimerRoot != null
+            && _vipWaitTimerRoot.gameObject.activeInHierarchy
+            && _vipWaitTimerRemaining > 0f
+            && _vipWaitTimerRemaining <= _vipIconPulseRemainingThreshold;
+
+        if (shouldPulse)
+        {
+            _vipMainIconRoot.localScale = Vector3.one * GetPulseScale(
+                _vipIconPulseMinScale,
+                _vipIconPulseMaxScale,
+                _vipIconPulseSpeed);
+            return;
+        }
+
+        ResetVipMainIconScale();
+    }
+
+    private void ResetVipMainIconScale()
+    {
+        if (_vipMainIconRoot != null)
+            _vipMainIconRoot.localScale = Vector3.one;
     }
 
     private void ApplyVipWaitTimerVisuals()
@@ -2092,7 +1967,7 @@ public class UIManager : MonoBehaviour
     private void HandleRestaurantFloorChanged(int floor)
     {
         SyncAllNestedBuildSpotCostUi();
-        SyncActiveHireButtonForCurrentFloor();
+        SyncAllHireSpotUi();
         SyncAllTableStatusUiForCurrentFloor();
         SyncWorkerEnergyUiForCurrentFloor();
         SyncSeatPaymentUiForCurrentFloor();
@@ -2102,7 +1977,7 @@ public class UIManager : MonoBehaviour
     private void HandleSecondFloorUnlockedForUi()
     {
         SyncAllNestedBuildSpotCostUi();
-        SyncActiveHireButtonForCurrentFloor();
+        SyncAllHireSpotUi();
         SyncAllTableStatusUiForCurrentFloor();
         SyncWorkerEnergyUiForCurrentFloor();
         SyncSeatPaymentUiForCurrentFloor();
@@ -2129,8 +2004,6 @@ public class UIManager : MonoBehaviour
 
     private void HandleBusinessSessionStarted()
     {
-        StopWaitForBusinessFloorClear();
-        _businessOverviewVisible = false;
         _openBusinessSequencePlayed = true;
         StopOpenBusinessSequence();
         HideOpenBusiness();
@@ -2141,21 +2014,8 @@ public class UIManager : MonoBehaviour
         SyncAllHireSpotUi();
     }
 
-    private void HandleBusinessSessionEnded()
-    {
-        HideBusinessTimer();
-        // Close/reopen overview cycle removed — session only pauses temporarily (e.g. fire).
-    }
-
-    private void HandleBusinessFloorCleared()
-    {
-        // Close-summary overview removed.
-    }
-
     private void HandleBusinessDowntimeStarted()
     {
-        StopWaitForBusinessFloorClear();
-        _businessOverviewVisible = false;
         HideBusinessOverview();
         SyncOpenBusinessUiVisibility();
         SyncActiveUi();
@@ -2173,70 +2033,12 @@ public class UIManager : MonoBehaviour
         SyncAllNestedBuildSpotCostUi();
     }
 
-    private void StartWaitForBusinessFloorClear()
-    {
-        if (!RestaurantSceneMode.IsMainScene)
-            return;
-
-        if (GameManager.Instance == null || !GameManager.Instance.IsBusinessCloseSummaryPending)
-            return;
-
-        StopWaitForBusinessFloorClear();
-        _waitForBusinessFloorClearRoutine = StartCoroutine(WaitForBusinessFloorClearRoutine());
-    }
-
-    private void StopWaitForBusinessFloorClear()
-    {
-        if (_waitForBusinessFloorClearRoutine == null)
-            return;
-
-        StopCoroutine(_waitForBusinessFloorClearRoutine);
-        _waitForBusinessFloorClearRoutine = null;
-    }
-
-    private IEnumerator WaitForBusinessFloorClearRoutine()
-    {
-        while (GameManager.Instance != null && GameManager.Instance.IsBusinessCloseSummaryPending)
-        {
-            if (CustomerManager.Instance == null
-                || CustomerManager.Instance.IsRestaurantClearForCloseSummary())
-            {
-                GameManager.Instance.TryRaiseBusinessFloorClearedIfEmpty();
-                break;
-            }
-
-            yield return null;
-        }
-
-        _waitForBusinessFloorClearRoutine = null;
-    }
-
-    private void ShowBusinessOverviewOrEnterClosed()
-    {
-        CacheBusinessOverviewUiReferences();
-
-        if (_businessOverviewRoot == null)
-        {
-            // No overview panel authored — go straight to closed/improve state.
-            GameManager.Instance?.EnterBusinessClosed();
-            return;
-        }
-
-        ShowBusinessOverview();
-    }
-
     private void HandleTableBuildInfoRequested()
     {
         if (GameManager.Instance == null || !GameManager.Instance.IsBuilding)
             return;
 
         ShowTableBuildInfoUi();
-    }
-
-    private void SyncPendingTableBuildInfoUi()
-    {
-        // BuildSequenceController requests table build info when all tracked spots are built,
-        // including after progress is restored on scene load.
     }
 
     private void HandleTableBuildInfoCloseClicked()
@@ -2426,14 +2228,6 @@ public class UIManager : MonoBehaviour
         _openBusinessSequenceRoutine = null;
     }
 
-    private void ShowOpenBusiness()
-    {
-        CacheOpenBusinessUiReferences();
-
-        if (_openBusinessRoot != null)
-            _openBusinessRoot.SetActive(true);
-    }
-
     private void HideOpenBusiness()
     {
         if (_openBusinessRoot != null)
@@ -2447,13 +2241,6 @@ public class UIManager : MonoBehaviour
 
         if (_businessOverviewRoot == null)
             return;
-
-        if (_businessIncomeText == null)
-        {
-            Transform income = _businessOverviewRoot.transform.Find("Total Income/Income");
-            if (income != null)
-                _businessIncomeText = income.GetComponent<TextMeshProUGUI>();
-        }
 
         if (_businessAcknowledgeButton == null)
         {
@@ -2493,36 +2280,8 @@ public class UIManager : MonoBehaviour
         }
     }
 
-    private void ShowBusinessOverview()
-    {
-        if (!RestaurantSceneMode.IsMainScene)
-            return;
-
-        CacheBusinessOverviewUiReferences();
-        HideOpenBusiness();
-
-        if (_businessOverviewRoot == null)
-        {
-            GameManager.Instance?.EnterBusinessClosed();
-            return;
-        }
-
-        // Stop tracking so downtime spend/earn doesn't change the summary.
-        GoldManager.Instance?.StopBusinessSessionIncomeTracking();
-        int income = GoldManager.Instance != null ? GoldManager.Instance.BusinessSessionIncome : 0;
-
-        if (_businessIncomeText != null)
-            _businessIncomeText.text = income.ToString();
-
-        _businessOverviewRoot.SetActive(true);
-        _businessOverviewRoot.transform.SetAsLastSibling();
-        _businessOverviewVisible = true;
-    }
-
     private void HideBusinessOverview()
     {
-        _businessOverviewVisible = false;
-
         if (_businessOverviewRoot != null)
             _businessOverviewRoot.SetActive(false);
     }
@@ -2740,11 +2499,6 @@ public class UIManager : MonoBehaviour
         }
 
         SyncMainButtonsVisibility();
-    }
-
-    public void SyncActiveHireButton()
-    {
-        SyncAllHireSpotUi();
     }
 
     private void SyncAllHireSpotUi()
@@ -3082,11 +2836,6 @@ public class UIManager : MonoBehaviour
             || transform.IsChildOf(_worldCanvas.transform);
     }
 
-    private void SyncActiveHireButtonForCurrentFloor()
-    {
-        SyncAllHireSpotUi();
-    }
-
     private static bool IsHireMissionActiveForUi()
     {
         // After business opens, any remaining active hire spots stay visible.
@@ -3121,18 +2870,6 @@ public class UIManager : MonoBehaviour
         return Mathf.Max(missionUi.CurrentPartIndex, savedPart);
     }
 
-    private static bool IsSpotOnCurrentFloor(BuildSpot spot)
-    {
-        if (spot == null)
-            return false;
-
-        int currentFloor = CharacterPanelController.Instance != null
-            ? CharacterPanelController.Instance.CurrentFloor
-            : (int)RestaurantFloor.Ground;
-
-        return (int)spot.Floor == currentFloor;
-    }
-
     private static bool IsSpotOnCurrentFloor(HireSpot spot)
     {
         if (spot == null)
@@ -3143,25 +2880,6 @@ public class UIManager : MonoBehaviour
             : (int)RestaurantFloor.Ground;
 
         return (int)spot.Floor == currentFloor;
-    }
-
-    private static TSpot FindActiveSpot<TSpot, TState>(
-        TSpot activeSpot,
-        TState activeState,
-        Func<TSpot, TState> getState) where TSpot : Component
-    {
-        if (activeSpot != null && EqualityComparer<TState>.Default.Equals(getState(activeSpot), activeState))
-            return activeSpot;
-
-        TSpot[] spots = FindObjectsOfType<TSpot>(true);
-
-        for (int i = 0; i < spots.Length; i++)
-        {
-            if (EqualityComparer<TState>.Default.Equals(getState(spots[i]), activeState))
-                return spots[i];
-        }
-
-        return null;
     }
 
     private void HandleGoldChanged(int currentGold)
@@ -3360,23 +3078,6 @@ public class UIManager : MonoBehaviour
 
         if (hireButton != null)
             hireButton.interactable = true;
-    }
-
-    private void HideHireButtons()
-    {
-        _activeHireSpot = null;
-
-        if (_chefHireButton != null)
-        {
-            _chefHireButton.gameObject.SetActive(false);
-            _chefHireButton.transform.localScale = Vector3.one;
-        }
-
-        if (_waiterHireButton != null)
-        {
-            _waiterHireButton.gameObject.SetActive(false);
-            _waiterHireButton.transform.localScale = Vector3.one;
-        }
     }
 
     private void ShowSeatPaymentUi(Customer customer)
@@ -4568,28 +4269,6 @@ public class UIManager : MonoBehaviour
             out localPoint);
     }
 
-    private bool TryGetUiCanvasLocalPoint(RectTransform uiTarget, out Vector2 localPoint)
-    {
-        localPoint = default;
-
-        if (_canvasRect == null || uiTarget == null)
-            return false;
-
-        Vector3[] corners = new Vector3[4];
-        uiTarget.GetWorldCorners(corners);
-        Vector3 center = (corners[0] + corners[2]) * 0.5f;
-
-        Camera canvasCamera = _screenCanvas.renderMode == RenderMode.ScreenSpaceOverlay
-            ? null
-            : _screenCanvas.worldCamera;
-
-        return RectTransformUtility.ScreenPointToLocalPointInRectangle(
-            _canvasRect,
-            center,
-            canvasCamera,
-            out localPoint);
-    }
-
     private bool TryGetLocalPointInRect(RectTransform rect, Vector3 worldPosition, out Vector2 localPoint)
     {
         localPoint = default;
@@ -4647,6 +4326,7 @@ public class UIManager : MonoBehaviour
             _coinTrailTargetUi = _goldAmountText.transform.parent as RectTransform;
 
         _coinTrailPool.Clear();
+        _coinTrailTemplate = null;
 
         if (_coinVfxRoot == null)
             return;
@@ -4660,15 +4340,70 @@ public class UIManager : MonoBehaviour
             if (coin == null)
                 continue;
 
-            Image coinImage = coin.GetComponent<Image>();
-
-            if (coinImage != null)
-                coinImage.raycastTarget = false;
-
+            PrepareCoinTrailCoin(coin);
             coin.gameObject.SetActive(false);
-            coin.localScale = Vector3.one;
             _coinTrailPool.Add(coin);
+
+            if (_coinTrailTemplate == null)
+                _coinTrailTemplate = coin;
         }
+
+        // Pre-grow so normal + VIP trails can run without stealing each other's coins.
+        EnsureCoinTrailPoolCapacity(Mathf.Max(_coinTrailCount, _vipCoinTrailCount));
+    }
+
+    private static void PrepareCoinTrailCoin(RectTransform coin)
+    {
+        if (coin == null)
+            return;
+
+        Image coinImage = coin.GetComponent<Image>();
+        if (coinImage != null)
+            coinImage.raycastTarget = false;
+
+        coin.localScale = Vector3.one;
+    }
+
+    private void EnsureCoinTrailPoolCapacity(int requiredCount)
+    {
+        requiredCount = Mathf.Max(0, requiredCount);
+
+        while (_coinTrailPool.Count < requiredCount)
+        {
+            if (CreatePooledCoinTrailCoin() == null)
+                break;
+        }
+    }
+
+    private RectTransform CreatePooledCoinTrailCoin()
+    {
+        if (_coinVfxRoot == null || _coinTrailTemplate == null)
+            return null;
+
+        RectTransform coin = Instantiate(_coinTrailTemplate, _coinVfxRoot);
+        coin.name = $"{_coinTrailTemplate.name}_Pooled_{_coinTrailPool.Count}";
+        PrepareCoinTrailCoin(coin);
+        coin.gameObject.SetActive(false);
+        _coinTrailPool.Add(coin);
+        return coin;
+    }
+
+    private RectTransform AcquireCoinTrailCoin()
+    {
+        for (int i = 0; i < _coinTrailPool.Count; i++)
+        {
+            RectTransform coin = _coinTrailPool[i];
+
+            if (coin == null || _activeCoinTrailAnimations.ContainsKey(coin))
+                continue;
+
+            if (coin.gameObject.activeSelf)
+                continue;
+
+            return coin;
+        }
+
+        return CreatePooledCoinTrailCoin();
     }
 
     private RectTransform ResolveCoinTrailTarget()
@@ -4705,7 +4440,13 @@ public class UIManager : MonoBehaviour
 
     private void PlayCoinTrail(Transform worldStart, bool useVipCount = false, float? durationOverride = null)
     {
-        if (_coinVfxRoot == null || _coinTrailPool.Count == 0 || worldStart == null)
+        if (_coinVfxRoot == null || worldStart == null)
+            return;
+
+        if (_coinTrailPool.Count == 0 && _coinTrailTemplate == null)
+            CacheCoinTrailUi();
+
+        if (_coinTrailPool.Count == 0 && _coinTrailTemplate == null)
             return;
 
         if (!_coinVfxRoot.gameObject.activeSelf)
@@ -4719,16 +4460,22 @@ public class UIManager : MonoBehaviour
         if (target == null || !TryGetUiLocalPointInRect(_coinVfxRoot, target, out Vector2 endLocal))
             return;
 
-        StopAllCoinTrailAnimations();
-
         int coinCount = Mathf.Max(1, useVipCount ? _vipCoinTrailCount : _coinTrailCount);
+        EnsureCoinTrailPoolCapacity(GetBusyCoinTrailCount() + coinCount);
+
         float duration = Mathf.Max(0.01f, durationOverride ?? _coinTrailDuration);
         Vector2 controlPoint = (startLocal + endLocal) * 0.5f + Vector2.up * _coinTrailArcHeight;
-        _coinTrailSequenceRoutine = StartCoroutine(
-            PlayCoinTrailSequence(startLocal, endLocal, controlPoint, coinCount, duration));
+
+        int sequenceId = ++_nextCoinTrailSequenceId;
+        Coroutine sequence = StartCoroutine(
+            PlayCoinTrailSequence(sequenceId, startLocal, endLocal, controlPoint, coinCount, duration));
+        _coinTrailSequences[sequenceId] = sequence;
     }
 
+    private int GetBusyCoinTrailCount() => _activeCoinTrailAnimations.Count;
+
     private IEnumerator PlayCoinTrailSequence(
+        int sequenceId,
         Vector2 startLocal,
         Vector2 endLocal,
         Vector2 controlPoint,
@@ -4737,20 +4484,24 @@ public class UIManager : MonoBehaviour
     {
         coinCount = Mathf.Max(1, coinCount);
 
-        for (int i = 0; i < coinCount; i++)
+        try
         {
-            RectTransform coin = _coinTrailPool[i % _coinTrailPool.Count];
+            for (int i = 0; i < coinCount; i++)
+            {
+                RectTransform coin = AcquireCoinTrailCoin();
+                if (coin == null)
+                    yield break;
 
-            while (_activeCoinTrailAnimations.ContainsKey(coin))
-                yield return null;
+                BeginCoinTrailAnimation(coin, startLocal, endLocal, controlPoint, duration);
 
-            BeginCoinTrailAnimation(coin, startLocal, endLocal, controlPoint, duration);
-
-            if (_coinTrailDelay > 0f && i < coinCount - 1)
-                yield return new WaitForSeconds(_coinTrailDelay);
+                if (_coinTrailDelay > 0f && i < coinCount - 1)
+                    yield return new WaitForSeconds(_coinTrailDelay);
+            }
         }
-
-        _coinTrailSequenceRoutine = null;
+        finally
+        {
+            _coinTrailSequences.Remove(sequenceId);
+        }
     }
 
     private void BeginCoinTrailAnimation(
@@ -4771,10 +4522,16 @@ public class UIManager : MonoBehaviour
 
     private void StopAllCoinTrailAnimations()
     {
-        if (_coinTrailSequenceRoutine != null)
+        if (_coinTrailSequences.Count > 0)
         {
-            StopCoroutine(_coinTrailSequenceRoutine);
-            _coinTrailSequenceRoutine = null;
+            List<Coroutine> sequences = new(_coinTrailSequences.Values);
+            _coinTrailSequences.Clear();
+
+            for (int i = 0; i < sequences.Count; i++)
+            {
+                if (sequences[i] != null)
+                    StopCoroutine(sequences[i]);
+            }
         }
 
         foreach (KeyValuePair<RectTransform, Coroutine> entry in _activeCoinTrailAnimations)
@@ -6439,12 +6196,6 @@ public class UIManager : MonoBehaviour
 
         if (_mainButtonsRoot == null)
             return;
-
-        if (_mainButtonsUiSuppressed)
-        {
-            _mainButtonsRoot.SetActive(false);
-            return;
-        }
 
         bool shouldShow = GameManager.Instance != null && GameManager.Instance.IsBusiness;
         _mainButtonsRoot.SetActive(shouldShow);

@@ -20,7 +20,14 @@ public class CustomerManager : MonoBehaviour
     [SerializeField] private int _maxCustomersPerAdditionalTable = 4;
     [SerializeField] private int _vipSpawnInterval;
     [SerializeField] private int _maxActiveVips;
+    [Tooltip("Stop spawning all customers after this many VIPs have been successfully served (coin collected). 0 = unlimited.")]
+    [SerializeField] private int _servedVipSpawnStopCount = 2;
     [SerializeField] private Transform _vipEntryWaypoint;
+
+    [Header("Business Resume Prewarm")]
+    [Tooltip("When returning to an open business (before VIP serve-stop), seed this many mid-visit customers.")]
+    [SerializeField] private int _resumePrewarmMinCustomers = 2;
+    [SerializeField] private int _resumePrewarmMaxCustomers = 6;
 
     [Header("Timings")]
     [SerializeField] private float _queueWaitTimeout;
@@ -53,6 +60,7 @@ public class CustomerManager : MonoBehaviour
     private int _spawnCount;
     private bool _awaitingVipAfterPrankster;
     private int _customersSincePranksterLeft;
+    private int _servedVipCount;
     private bool _callLadiesActive;
     private bool _callLadiesStationed;
     private bool _performerOnStage;
@@ -497,6 +505,9 @@ public class CustomerManager : MonoBehaviour
         MarkPaymentCompleted(customer);
         AwardPayment(ResolvePaymentForCustomer(customer));
         NotifyPaymentCollected(customer);
+
+        if (customer.IsVip)
+            RegisterVipServed();
     }
 
     private static void BindPendingPayment(Customer customer, TableSeat seat)
@@ -605,7 +616,10 @@ public class CustomerManager : MonoBehaviour
             MarkPaymentCompleted(customer);
 
             if (customer.IsVip)
+            {
                 customer.PlayVipHappyAudio();
+                RegisterVipServed();
+            }
 
             totalPayment += ResolvePaymentForCustomer(customer);
             customersServed++;
@@ -737,6 +751,12 @@ public class CustomerManager : MonoBehaviour
         if (_spawnRoutine != null)
             return;
 
+        RestoreServedVipCountFromSave();
+
+        // After the VIP serve-stop threshold, returning from town/app exit stays empty.
+        if (HasReachedServedVipCustomerLimit())
+            return;
+
         _spawnCount = 0;
 
         if (IsVipPranksterAlternationEnabled())
@@ -745,7 +765,29 @@ public class CustomerManager : MonoBehaviour
             _awaitingVipAfterPrankster = true;
         }
 
-        _spawnRoutine = StartCoroutine(SpawnLoop());
+        bool prewarm = ShouldPrewarmBusinessOnResume();
+        _spawnRoutine = StartCoroutine(SpawnLoopWithOptionalPrewarm(prewarm));
+    }
+
+    private void RestoreServedVipCountFromSave()
+    {
+        if (!RestaurantSceneMode.IsMainScene)
+        {
+            _servedVipCount = 0;
+            return;
+        }
+
+        _servedVipCount = PlayerProfileStorage.GetMainSceneServedVipCountForCurrentPlayer();
+    }
+
+    private static bool ShouldPrewarmBusinessOnResume()
+    {
+        if (!RestaurantSceneMode.IsMainScene || GameManager.Instance == null)
+            return false;
+
+        // KIV: returning from competitor steal should also keep prewarm active
+        // (treat steal-return like a normal business resume).
+        return GameManager.Instance.DidResumeBusinessSessionOnLoad;
     }
 
     private void StopSpawning()
@@ -757,6 +799,187 @@ public class CustomerManager : MonoBehaviour
         _spawnRoutine = null;
     }
 
+    private void RegisterVipServed()
+    {
+        if (!RestaurantSceneMode.IsMainScene)
+            return;
+
+        _servedVipCount++;
+        PlayerProfileStorage.SetMainSceneServedVipCountForCurrentPlayer(_servedVipCount);
+
+        if (HasReachedServedVipCustomerLimit())
+            StopSpawning();
+    }
+
+    private bool HasReachedServedVipCustomerLimit()
+    {
+        if (!RestaurantSceneMode.IsMainScene)
+            return false;
+
+        return _servedVipSpawnStopCount > 0
+            && _servedVipCount >= _servedVipSpawnStopCount;
+    }
+
+    private IEnumerator SpawnLoopWithOptionalPrewarm(bool prewarm)
+    {
+        if (prewarm)
+        {
+            // Let seats/tables finish enabling before seeding mid-session customers.
+            float seatWait = 0f;
+            while (_registeredSeats.Count == 0 && seatWait < 1f)
+            {
+                seatWait += Time.deltaTime;
+                yield return null;
+            }
+
+            SeedMidSessionCustomers();
+        }
+
+        yield return SpawnLoop();
+        _spawnRoutine = null;
+    }
+
+    private void SeedMidSessionCustomers()
+    {
+        if (_customerPool == null || HasReachedServedVipCustomerLimit())
+            return;
+
+        int maxCustomers = GetCurrentMaxCustomers();
+        if (maxCustomers <= 0)
+            return;
+
+        int minCount = Mathf.Max(0, _resumePrewarmMinCustomers);
+        int maxCount = Mathf.Max(minCount, _resumePrewarmMaxCustomers);
+        int target = Random.Range(minCount, maxCount + 1);
+        target = Mathf.Min(target, maxCustomers);
+
+        if (target <= 0)
+            return;
+
+        int seatedBudget = Mathf.Max(1, (target + 1) / 2);
+        int queued = 0;
+        int seated = 0;
+
+        for (int i = 0; i < target; i++)
+        {
+            bool preferSeat = seated < seatedBudget;
+            if (preferSeat && TrySeedSeatedCustomer(eating: seated % 2 == 0))
+            {
+                seated++;
+                _spawnCount++;
+                continue;
+            }
+
+            if (TrySeedQueuedCustomer())
+            {
+                queued++;
+                _spawnCount++;
+                continue;
+            }
+
+            if (TrySeedSeatedCustomer(eating: Random.value < 0.5f))
+            {
+                seated++;
+                _spawnCount++;
+            }
+        }
+    }
+
+    private bool TrySeedSeatedCustomer(bool eating)
+    {
+        if (_customerPool == null || CustomerMovement.Instance == null)
+            return false;
+
+        if (_customerPool.ActiveCustomers.Count >= GetCurrentMaxCustomers())
+            return false;
+
+        Customer customer = _customerPool.Get(_spawnPoint != null ? _spawnPoint.position : Vector3.zero);
+        if (customer == null)
+            return false;
+
+        TableSeat seat = FindFreeSeat(customer);
+        if (seat == null || !seat.TryReserve(customer))
+        {
+            ReleaseCustomerToPool(customer);
+            return false;
+        }
+
+        customer.WarpTo(seat.Position);
+        customer.Locomotion.FaceDirection(seat.Rotation);
+        customer.EnterStationary();
+        NotifyTableSeatChanged(seat);
+
+        Coroutine flow = eating
+            ? StartCoroutine(RunPrewarmedEatingFlow(customer, seat))
+            : StartCoroutine(RunPrewarmedOrderingFlow(customer, seat));
+        _activeFlows[customer] = flow;
+        GameEvents.RaiseCustomerSpawned();
+        return true;
+    }
+
+    private bool TrySeedQueuedCustomer()
+    {
+        if (_customerPool == null || _customerQueue == null || _customerQueue.IsFull)
+            return false;
+
+        if (_customerPool.ActiveCustomers.Count >= GetCurrentMaxCustomers())
+            return false;
+
+        Customer customer = _customerPool.Get(_spawnPoint != null ? _spawnPoint.position : Vector3.zero);
+        if (customer == null)
+            return false;
+
+        if (!_customerQueue.TryAssign(customer, out int queueSlot))
+        {
+            ReleaseCustomerToPool(customer);
+            return false;
+        }
+
+        customer.WarpTo(_customerQueue.GetSlotPosition(queueSlot));
+        customer.EnterStationary();
+        customer.SetState(CustomerState.Queue);
+
+        Coroutine flow = StartCoroutine(RunCustomerFlowAfterQueued(customer));
+        _activeFlows[customer] = flow;
+        GameEvents.RaiseCustomerSpawned();
+        return true;
+    }
+
+    private IEnumerator RunPrewarmedOrderingFlow(Customer customer, TableSeat seat)
+    {
+        customer.SetState(CustomerState.Ordering);
+
+        DishOrder order = WorkerManager.Instance != null
+            ? WorkerManager.Instance.SubmitOrder(customer)
+            : null;
+
+        yield return RunCustomerFlowFromOrdering(customer, seat, order);
+    }
+
+    private IEnumerator RunPrewarmedEatingFlow(Customer customer, TableSeat seat)
+    {
+        customer.SetState(CustomerState.Eating);
+
+        float remaining = _eatDuration * Random.Range(0.2f, 0.85f);
+        if (remaining > 0f)
+            yield return new WaitForSeconds(remaining);
+
+        if (RestaurantSceneMode.IsCompetitorScene)
+        {
+            ReleaseCustomerSeatAndNotify(customer, seat);
+            yield return Leave(customer);
+            yield break;
+        }
+
+        _completedPayments.Remove(customer);
+        BindPendingPayment(customer, ResolveActiveSeat(customer, seat));
+        customer.SetState(CustomerState.Paying);
+
+        CompletePayment(customer);
+        ReleaseCustomerSeatAndNotify(customer, seat);
+        yield return Leave(customer);
+    }
+
     private IEnumerator SpawnLoop()
     {
         WaitForSeconds wait = new(_spawnInterval);
@@ -765,6 +988,9 @@ public class CustomerManager : MonoBehaviour
             && GameManager.Instance.IsBusiness
             && GameManager.Instance.IsBusinessSessionActive)
         {
+            if (HasReachedServedVipCustomerLimit())
+                yield break;
+
             yield return wait;
 
             if (!CanSpawnCustomer())
@@ -776,6 +1002,9 @@ public class CustomerManager : MonoBehaviour
 
     private bool CanSpawnCustomer()
     {
+        if (HasReachedServedVipCustomerLimit())
+            return false;
+
         if (_customerPool == null || _customerPool.ActiveCustomers.Count >= GetCurrentMaxCustomers())
             return false;
 

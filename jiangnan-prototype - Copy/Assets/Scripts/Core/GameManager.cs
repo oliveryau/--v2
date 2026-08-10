@@ -19,6 +19,11 @@ public class GameManager : MonoBehaviour
     public bool IsHiring => State == GameState.Hiring;
     public bool IsBusiness => State == GameState.Business;
     public bool IsBusinessSessionActive { get; private set; }
+    /// <summary>
+    /// True when this main-scene load resumed an already-started business session
+    /// (e.g. returning from town or relaunching the game).
+    /// </summary>
+    public bool DidResumeBusinessSessionOnLoad { get; private set; }
     /// <summary>True while customers are being served.</summary>
     public bool IsBusinessOpen => IsBusinessSessionActive;
     /// <summary>
@@ -58,6 +63,7 @@ public class GameManager : MonoBehaviour
         if (PlayerProfileStorage.HasMainSceneBusinessStartedForCurrentPlayer())
         {
             // Resume serving immediately — no close/improve cycle.
+            DidResumeBusinessSessionOnLoad = true;
             SetState(GameState.Business);
             OpenBusinessSession();
             return;

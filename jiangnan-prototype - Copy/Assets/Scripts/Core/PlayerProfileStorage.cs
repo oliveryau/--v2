@@ -18,6 +18,7 @@ public class PlayerProfileData
     public bool mainSceneSecondFloorRevealed;
     public int mainSceneHiredSpotCount;
     public bool mainSceneBusinessStarted;
+    public int mainSceneServedVipCount;
     public int[] tableLevels;
     public bool[] brokenTables;
     public bool[] unlockedDishes;
@@ -41,7 +42,8 @@ public static class PlayerProfileStorage
     private const string ProfilesFolderName = "PlayerProfiles";
     private const string LastPlayerNameKey = "jiangnan.last_player_name";
     private const string PendingLoanPresentationKey = "jiangnan.pending_loan_presentation";
-    private const int MainSceneTableCount = 3;
+    // Ground-floor upgradeable tables: Table (1) … Table (6). VIP table is excluded from save indices.
+    private const int MainSceneTableCount = 6;
     public const int MainSceneBuildSpotCount = 11;
     public const int MainSceneStarterBuildSpotCount = 2;
     public const int DishCount = 9;
@@ -220,6 +222,27 @@ public static class PlayerProfileStorage
     public static void SetMainSceneBusinessStartedForCurrentPlayer() =>
         ModifyCurrentProfile(profile => profile.mainSceneBusinessStarted = true);
 
+    public static int GetMainSceneServedVipCountForCurrentPlayer() =>
+        TryGetCurrentProfile(out PlayerProfileData profile) ? Mathf.Max(0, profile.mainSceneServedVipCount) : 0;
+
+    public static void SetMainSceneServedVipCountForCurrentPlayer(int servedVipCount) =>
+        ModifyCurrentProfile(profile => profile.mainSceneServedVipCount = Mathf.Max(0, servedVipCount));
+
+    /// <summary>
+    /// True when the main restaurant should keep spawning customers
+    /// (business open and VIP serve-stop threshold not reached).
+    /// </summary>
+    public static bool ShouldMainSceneSpawnCustomersForCurrentPlayer(int servedVipSpawnStopCount)
+    {
+        if (!HasMainSceneBusinessStartedForCurrentPlayer())
+            return false;
+
+        if (servedVipSpawnStopCount <= 0)
+            return true;
+
+        return GetMainSceneServedVipCountForCurrentPlayer() < servedVipSpawnStopCount;
+    }
+
     public static int GetTableLevelForCurrentPlayer(int tableIndex)
     {
         if (!EnsureCurrentPlayerLoaded() || tableIndex < 0 || tableIndex >= MainSceneTableCount)
@@ -292,8 +315,21 @@ public static class PlayerProfileStorage
 
     private static void EnsureTableLevels(PlayerProfileData profile)
     {
-        if (profile.tableLevels == null || profile.tableLevels.Length < MainSceneTableCount)
-            profile.tableLevels = new[] { 1, 1, 1 };
+        if (profile.tableLevels != null && profile.tableLevels.Length >= MainSceneTableCount)
+            return;
+
+        int[] levels = new int[MainSceneTableCount];
+        for (int i = 0; i < MainSceneTableCount; i++)
+            levels[i] = 1;
+
+        if (profile.tableLevels != null)
+        {
+            int count = Mathf.Min(profile.tableLevels.Length, MainSceneTableCount);
+            for (int i = 0; i < count; i++)
+                levels[i] = Mathf.Clamp(profile.tableLevels[i], 1, 3);
+        }
+
+        profile.tableLevels = levels;
     }
 
     public static bool[] GetUnlockedDishesForCurrentPlayer()
