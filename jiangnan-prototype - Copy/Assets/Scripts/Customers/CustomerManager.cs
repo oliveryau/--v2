@@ -207,8 +207,13 @@ public class CustomerManager : MonoBehaviour
         for (int i = 0; i < _vipCallLadyWorkers.Length; i++)
         {
             Worker worker = _vipCallLadyWorkers[i];
-            if (worker != null)
-                worker.gameObject.SetActive(false);
+            if (worker == null)
+                continue;
+
+            if (IsWorkerOwnedByHiredOrHiringSpot(worker))
+                continue;
+
+            worker.gameObject.SetActive(false);
         }
 
         _callLadiesActive = false;
@@ -266,9 +271,37 @@ public class CustomerManager : MonoBehaviour
         if (_vipPerformer == null)
             return;
 
-        // Always hide in Awake; HireSequence restore / walk-in reactivates after hire.
+        // Leave alone if the second-floor hire already walked them in / restored them.
+        if (IsWorkerOwnedByHiredOrHiringSpot(_vipPerformer))
+            return;
+
         _vipPerformer.gameObject.SetActive(false);
         _performerOnStage = false;
+    }
+
+    private static bool IsWorkerOwnedByHiredOrHiringSpot(Worker worker)
+    {
+        if (worker == null)
+            return false;
+
+        HireSpot[] spots = FindObjectsByType<HireSpot>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < spots.Length; i++)
+        {
+            HireSpot spot = spots[i];
+            if (spot == null || spot.Workers == null)
+                continue;
+
+            if (spot.State != HireSpotState.Hired && spot.State != HireSpotState.Hiring)
+                continue;
+
+            for (int j = 0; j < spot.Workers.Length; j++)
+            {
+                if (spot.Workers[j] == worker.gameObject)
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     private void OnDestroy()
@@ -791,6 +824,14 @@ public class CustomerManager : MonoBehaviour
         if (_customerPool == null || _spawnPoint == null || CustomerMovement.Instance == null || !CanSpawnCustomer())
             return;
 
+        // Hold the VIP cadence slot until second-floor staff finish walking to their waypoints.
+        // Otherwise a normal customer would fill that tick and the VIP would arrive too early.
+        if (IsNextSpawnVipCadence()
+            && (!AreSecondFloorVipStaffStationed() || !HasAvailableVipSeat()))
+        {
+            return;
+        }
+
         _spawnCount++;
         if (IsVipPranksterAlternationEnabled() && _awaitingVipAfterPrankster)
         {
@@ -861,18 +902,78 @@ public class CustomerManager : MonoBehaviour
             }
         }
 
+        return IsVipSpawnCadenceDue(_spawnCount);
+    }
+
+    private bool IsNextSpawnVipCadence()
+    {
+        if (_customerPool == null || !_customerPool.HasVipPrefabs)
+            return false;
+
+        if (GetActiveVipCount() >= Mathf.Max(1, _maxActiveVips))
+            return false;
+
+        if (RestaurantSceneMode.IsMainScene)
+        {
+            if (_pranksterManager == null)
+                _pranksterManager = FindFirstObjectByType<PranksterManager>();
+
+            if (_pranksterManager != null
+                && (_pranksterManager.IsVisitActive || _pranksterManager.IsAwaitingPranksterSpawn))
+            {
+                return false;
+            }
+        }
+
+        return IsVipSpawnCadenceDue(_spawnCount + 1);
+    }
+
+    private bool IsVipSpawnCadenceDue(int spawnCount)
+    {
         if (_vipSpawnInterval <= 0)
             return false;
 
-        return _spawnCount % _vipSpawnInterval == 0;
+        return spawnCount % _vipSpawnInterval == 0;
     }
 
     private bool MeetsVipSpawnRequirements()
     {
-        if (WorkerManager.Instance == null || !WorkerManager.Instance.HasVipFloorWaiterHired())
+        if (!AreSecondFloorVipStaffStationed())
             return false;
 
         return HasAvailableVipSeat();
+    }
+
+    /// <summary>
+    /// VIP only after the second-floor hire walk-in finishes (FemaleWaiter + call ladies + performer
+    /// have reached their waypoints). HireSpot flips to Hired only then.
+    /// </summary>
+    private bool AreSecondFloorVipStaffStationed()
+    {
+        HireSpot secondFloorHire = FindSecondFloorWaiterHireSpot();
+        if (secondFloorHire != null)
+            return secondFloorHire.IsHired;
+
+        // Scenes without a second-floor hire spot: fall back to VIP waiter roster.
+        return WorkerManager.Instance != null
+            && WorkerManager.Instance.HasVipFloorWaiterHired();
+    }
+
+    private static HireSpot FindSecondFloorWaiterHireSpot()
+    {
+        HireSpot[] spots = FindObjectsByType<HireSpot>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < spots.Length; i++)
+        {
+            HireSpot spot = spots[i];
+            if (spot != null
+                && spot.Floor == RestaurantFloor.Second
+                && spot.WorkerType == WorkerType.Waiter)
+            {
+                return spot;
+            }
+        }
+
+        return null;
     }
 
     private bool HasAvailableVipSeat()

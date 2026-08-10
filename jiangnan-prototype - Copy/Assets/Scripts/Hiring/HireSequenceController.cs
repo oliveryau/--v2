@@ -137,8 +137,6 @@ public class HireSequenceController : MonoBehaviour
             return;
         }
 
-        bool activatedFirstPending = false;
-
         for (int i = 0; i < _hireOrder.Count; i++)
         {
             HireSpot spot = _hireOrder[i];
@@ -152,18 +150,11 @@ public class HireSequenceController : MonoBehaviour
                 continue;
             }
 
-            if (!activatedFirstPending)
-            {
-                if (!spot.gameObject.activeSelf)
-                    spot.gameObject.SetActive(true);
+            // Ground (and any other unlocked) hire spots appear together — not one-by-one.
+            if (!spot.gameObject.activeSelf)
+                spot.gameObject.SetActive(true);
 
-                spot.ActivateForHiring();
-                activatedFirstPending = true;
-            }
-            else
-            {
-                spot.SetState(HireSpotState.Locked);
-            }
+            spot.ActivateForHiring();
         }
 
         SyncMissionHiredCounts();
@@ -227,7 +218,7 @@ public class HireSequenceController : MonoBehaviour
         spot.HireCompleted += HandleSpotHireCompleted;
         spot.BeginHire();
 
-        ActivateNextPendingSpot();
+        ActivatePendingHireSpots();
     }
 
     private void HandleSpotHireCompleted(HireSpot spot)
@@ -236,36 +227,26 @@ public class HireSequenceController : MonoBehaviour
 
         GameManager.Instance?.RegisterHired(spot.WorkerType);
         PlayerProfileStorage.SetMainSceneHiredSpotCountForCurrentPlayer(CountHiredSpots());
-        EnsureMissionUi()?.NotifyWorkerHired(spot.WorkerType);
+
+        // Absolute hire counts — second-floor waiter team must not complete from ground waiter alone.
+        int chefs = 0;
+        int waiters = 0;
+        for (int i = 0; i < _hireOrder.Count; i++)
+        {
+            HireSpot hiredSpot = _hireOrder[i];
+            if (hiredSpot == null || !hiredSpot.IsHired)
+                continue;
+
+            if (hiredSpot.WorkerType == WorkerType.Chef)
+                chefs++;
+            else if (hiredSpot.WorkerType == WorkerType.Waiter)
+                waiters++;
+        }
+
+        EnsureMissionUi()?.SetHiredCounts(chefs, waiters);
 
         if (AreAllSpotsHired())
             CompleteHiring();
-    }
-
-    private void ActivateNextPendingSpot()
-    {
-        for (int i = 0; i < _hireOrder.Count; i++)
-        {
-            HireSpot spot = _hireOrder[i];
-
-            if (spot == null || spot.IsHired || spot.State == HireSpotState.Hiring)
-                continue;
-
-            if (!CanActivateHireSpot(spot))
-            {
-                spot.SetState(HireSpotState.Locked);
-                continue;
-            }
-
-            if (spot.State == HireSpotState.Active)
-                return;
-
-            if (!spot.gameObject.activeSelf)
-                spot.gameObject.SetActive(true);
-
-            spot.ActivateForHiring();
-            return;
-        }
     }
 
     private int CountHiredSpots()

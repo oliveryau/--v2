@@ -37,6 +37,8 @@ public class UIManager : MonoBehaviour
     [SerializeField] private float _waiterHirePulseMinScale;
     [SerializeField] private float _waiterHirePulseMaxScale;
     [SerializeField] private float _waiterHirePulseSpeed;
+    [Tooltip("Raises billboarded ground hire buttons so they don't clip into the ground.")]
+    [SerializeField] private float _hireUiWorldHeightOffset = 0.85f;
 
     [Header("Seat Payment UI")]
     [SerializeField] private RectTransform _seatPaymentUiRoot;
@@ -49,6 +51,8 @@ public class UIManager : MonoBehaviour
     [SerializeField] private int _vipCoinTrailCount;
     [SerializeField] private float _coinTrailDelay;
     [SerializeField] private float _coinTrailDuration;
+    [Tooltip("Per-coin flight duration for VIP treasure-box coin trails.")]
+    [SerializeField] private float _vipCoinTrailDuration = 1.5f;
     [SerializeField] private float _coinTrailArcHeight;
 
     [Header("VIP UI")]
@@ -325,6 +329,7 @@ public class UIManager : MonoBehaviour
     private Coroutine _openBusinessSequenceRoutine;
     private bool _openBusinessSequencePlayed;
     private readonly HashSet<Button> _wiredHireSpotButtons = new();
+    private readonly Dictionary<HireSpot, Vector3> _hireSpotHomeWorldPositions = new();
 
     private Button _townFirstOptionButton;
     private Button _townCloseBuildingUiButton;
@@ -519,11 +524,8 @@ public class UIManager : MonoBehaviour
         if (_upgradeCostButton != null)
             _upgradeCostButton.onClick.AddListener(HandleUpgradeCostClicked);
 
-        if (_chefHireButton != null)
-            _chefHireButton.onClick.AddListener(HandleHireButtonClicked);
-
-        if (_waiterHireButton != null)
-            _waiterHireButton.onClick.AddListener(HandleHireButtonClicked);
+        // Hire buttons are wired per-spot in EnsureHireSpotButtonWired so chef/waiter
+        // clicks never share a single _activeHireSpot.
 
         if (_seatPaymentUiRoot != null)
             _seatPaymentUiRoot.gameObject.SetActive(false);
@@ -654,12 +656,6 @@ public class UIManager : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (_chefHireButton != null)
-            _chefHireButton.onClick.RemoveListener(HandleHireButtonClicked);
-
-        if (_waiterHireButton != null)
-            _waiterHireButton.onClick.RemoveListener(HandleHireButtonClicked);
-
         if (_openBusinessButton != null)
             _openBusinessButton.onClick.RemoveListener(HandleOpenBusinessClicked);
 
@@ -2782,12 +2778,6 @@ public class UIManager : MonoBehaviour
             if (hireUiRoot == null)
                 continue;
 
-            if (!IsWorldSpaceHireUi(hireUiRoot) && !IsHireAnchorVisibleOnScreen(spot))
-            {
-                hireUiRoot.gameObject.SetActive(false);
-                continue;
-            }
-
             hireUiRoot.gameObject.SetActive(true);
             TryPositionHireSpotUi(hireUiRoot, spot);
             hireUiRoot.localScale = Vector3.one * GetHirePulseScale(spot.WorkerType);
@@ -2863,10 +2853,7 @@ public class UIManager : MonoBehaviour
         if (spot == null || hireButton == null || !_wiredHireSpotButtons.Add(hireButton))
             return;
 
-        // Ground chef/waiter buttons are already wired in Awake.
-        if (hireButton == _chefHireButton || hireButton == _waiterHireButton)
-            return;
-
+        // Each visible hire button must notify its own spot (not a shared _activeHireSpot).
         HireSpot capturedSpot = spot;
         hireButton.onClick.AddListener(() =>
         {
@@ -2875,50 +2862,44 @@ public class UIManager : MonoBehaviour
         });
     }
 
-    private static Vector3 ResolveHireAnchorWorldPosition(HireSpot spot)
+    private Vector3 ResolveHireHomeWorldPosition(HireSpot spot, RectTransform hireUiRoot)
     {
         if (spot == null)
             return Vector3.zero;
 
-        Transform anchor = spot.HireUiAnchor;
+        if (_hireSpotHomeWorldPositions.TryGetValue(spot, out Vector3 cached))
+            return cached;
 
-        if (anchor == null)
-            return spot.transform.position;
+        // Prefer the hire point's authored world position (stable across reparents).
+        Vector3 home = spot.HireUiAnchor != null
+            ? spot.HireUiAnchor.position
+            : (hireUiRoot != null ? hireUiRoot.position : spot.transform.position);
 
-        if (anchor is RectTransform rectTransform)
-            return GetRectTransformWorldCenter(rectTransform);
-
-        return anchor.position;
+        _hireSpotHomeWorldPositions[spot] = home;
+        return home;
     }
 
-    private static Vector3 GetRectTransformWorldCenter(RectTransform rectTransform)
+    private static Transform ResolveHireUiParent(HireSpot spot, RectTransform hireUiRoot)
     {
-        if (rectTransform == null)
-            return Vector3.zero;
+        // Always prefer the authored HireUiAnchor (ChefPoint / WaiterPoint / second-floor point),
+        // even if it starts inactive — activate so the button can render at that offset.
+        Transform preferred = spot != null ? spot.HireUiAnchor : null;
+        if (preferred != null)
+        {
+            if (!preferred.gameObject.activeSelf)
+                preferred.gameObject.SetActive(true);
 
-        Vector3[] corners = new Vector3[4];
-        rectTransform.GetWorldCorners(corners);
-        return (corners[0] + corners[2]) * 0.5f;
-    }
+            return preferred;
+        }
 
-    private bool IsHireAnchorVisibleOnScreen(HireSpot spot)
-    {
-        EnsureScreenUiCaches();
+        if (hireUiRoot != null
+            && hireUiRoot.parent != null
+            && hireUiRoot.parent.gameObject.activeInHierarchy)
+        {
+            return hireUiRoot.parent;
+        }
 
-        if (_worldCamera == null || spot == null)
-            return true;
-
-        Vector3 screenPoint = _worldCamera.WorldToScreenPoint(ResolveHireAnchorWorldPosition(spot));
-
-        if (screenPoint.z <= 0f)
-            return false;
-
-        const float margin = 64f;
-
-        return screenPoint.x >= -margin
-            && screenPoint.x <= Screen.width + margin
-            && screenPoint.y >= -margin
-            && screenPoint.y <= Screen.height + margin;
+        return spot != null ? spot.transform : null;
     }
 
     private void TryPositionHireSpotUi(RectTransform hireUiRoot, HireSpot spot)
@@ -2926,16 +2907,131 @@ public class UIManager : MonoBehaviour
         if (hireUiRoot == null || spot == null)
             return;
 
-        Transform anchor = spot.HireUiAnchor != null ? spot.HireUiAnchor : spot.transform;
+        Vector3 worldAnchor = ResolveHireHomeWorldPosition(spot, hireUiRoot);
 
-        // World-space hire buttons stay parented to their world anchor so camera drag doesn't drift them.
-        if (IsWorldSpaceHireUi(hireUiRoot) || IsUnderWorldSpaceCanvas(anchor))
+        // Screen-space hire UI: clamp to screen edges when dragged away.
+        if (!IsWorldSpaceHireUi(hireUiRoot))
         {
-            EnsureHireUiAnchoredToWorldPoint(hireUiRoot, anchor);
+            if (TryGetEdgeClampedScreenUiLocalPoint(worldAnchor, hireUiRoot, out Vector2 localPoint))
+                hireUiRoot.anchoredPosition = localPoint;
             return;
         }
 
-        TryUpdateScreenUiPosition(hireUiRoot, ResolveHireAnchorWorldPosition(spot));
+        EnsureScreenUiCaches();
+        if (_worldCamera == null)
+            _worldCamera = Camera.main;
+
+        // Second floor: stay on the hire point (no edge-clamp).
+        if (spot.Floor == RestaurantFloor.Second)
+        {
+            Transform secondFloorAnchor = ResolveHireUiParent(spot, hireUiRoot);
+            if (secondFloorAnchor != null && hireUiRoot.parent != secondFloorAnchor)
+                hireUiRoot.SetParent(secondFloorAnchor, false);
+
+            hireUiRoot.anchorMin = new Vector2(0.5f, 0.5f);
+            hireUiRoot.anchorMax = new Vector2(0.5f, 0.5f);
+            hireUiRoot.pivot = new Vector2(0.5f, 0.5f);
+            hireUiRoot.anchoredPosition3D = Vector3.zero;
+
+            if (_worldCamera != null)
+                hireUiRoot.rotation = _worldCamera.transform.rotation;
+
+            return;
+        }
+
+        // First floor: edge-clamp from each HireUiAnchor home (ChefPoint / WaiterPoint).
+        Canvas worldCanvas = _worldCanvas != null ? _worldCanvas : FindWorldCanvas();
+        if (worldCanvas == null || _worldCamera == null)
+        {
+            Transform fallbackAnchor = ResolveHireUiParent(spot, hireUiRoot);
+            EnsureHireUiAnchoredToWorldPoint(hireUiRoot, fallbackAnchor);
+            return;
+        }
+
+        if (!TryGetEdgeClampedScreenPoint(worldAnchor, hireUiRoot, out Vector3 screenPoint))
+            return;
+
+        Camera canvasCamera = worldCanvas.worldCamera != null ? worldCanvas.worldCamera : _worldCamera;
+        RectTransform canvasRect = worldCanvas.transform as RectTransform;
+        if (canvasRect == null)
+            return;
+
+        if (!RectTransformUtility.ScreenPointToWorldPointInRectangle(
+                canvasRect,
+                screenPoint,
+                canvasCamera,
+                out Vector3 worldPoint))
+        {
+            return;
+        }
+
+        if (hireUiRoot.parent != canvasRect)
+            hireUiRoot.SetParent(canvasRect, true);
+
+        hireUiRoot.position = worldPoint + Vector3.up * Mathf.Max(0f, _hireUiWorldHeightOffset);
+        hireUiRoot.rotation = canvasCamera.transform.rotation;
+    }
+
+    private bool TryGetEdgeClampedScreenPoint(
+        Vector3 worldAnchorPosition,
+        RectTransform root,
+        out Vector3 screenPoint)
+    {
+        screenPoint = default;
+
+        EnsureScreenUiCaches();
+
+        if (_worldCamera == null)
+            return false;
+
+        screenPoint = _worldCamera.WorldToScreenPoint(worldAnchorPosition);
+        if (screenPoint.z <= 0f)
+        {
+            Vector3 viewport = _worldCamera.WorldToViewportPoint(worldAnchorPosition);
+            screenPoint.x = viewport.x < 0.5f ? 0f : Screen.width;
+            screenPoint.y = Mathf.Clamp(Screen.height * 0.5f, 0f, Screen.height);
+            screenPoint.z = 1f;
+        }
+
+        float halfW = 48f;
+        float halfH = 48f;
+
+        if (root != null && !IsWorldSpaceHireUi(root))
+        {
+            halfW = Mathf.Max(40f, root.rect.width * 0.5f);
+            halfH = Mathf.Max(40f, root.rect.height * 0.5f);
+        }
+
+        float pad = 24f;
+        screenPoint.x = Mathf.Clamp(screenPoint.x, pad + halfW, Screen.width - pad - halfW);
+        screenPoint.y = Mathf.Clamp(screenPoint.y, pad + halfH, Screen.height - pad - halfH);
+        return true;
+    }
+
+    private bool TryGetEdgeClampedScreenUiLocalPoint(
+        Vector3 worldAnchorPosition,
+        RectTransform root,
+        out Vector2 localPoint)
+    {
+        localPoint = default;
+
+        EnsureScreenUiCaches();
+
+        if (_canvasRect == null || _screenCanvas == null)
+            return false;
+
+        if (!TryGetEdgeClampedScreenPoint(worldAnchorPosition, root, out Vector3 screenPoint))
+            return false;
+
+        Camera canvasCamera = _screenCanvas.renderMode == RenderMode.ScreenSpaceOverlay
+            ? null
+            : _screenCanvas.worldCamera;
+
+        return RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            _canvasRect,
+            screenPoint,
+            canvasCamera,
+            out localPoint);
     }
 
     private void EnsureHireUiAnchoredToWorldPoint(RectTransform hireUiRoot, Transform anchor)
@@ -2960,6 +3056,8 @@ public class UIManager : MonoBehaviour
             hireUiRoot.rotation = _worldCamera.transform.rotation;
         else
             hireUiRoot.localRotation = Quaternion.identity;
+
+        hireUiRoot.position = anchor.position + Vector3.up * Mathf.Max(0f, _hireUiWorldHeightOffset);
     }
 
     private bool IsWorldSpaceHireUi(RectTransform hireUiRoot)
@@ -2987,21 +3085,6 @@ public class UIManager : MonoBehaviour
     private void SyncActiveHireButtonForCurrentFloor()
     {
         SyncAllHireSpotUi();
-    }
-
-    private static HireSpot FindFirstActiveHireSpotOnCurrentFloor()
-    {
-        HireSpot[] spots = FindObjectsByType<HireSpot>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-
-        for (int i = 0; i < spots.Length; i++)
-        {
-            HireSpot spot = spots[i];
-
-            if (spot != null && spot.State == HireSpotState.Active && IsSpotOnCurrentFloor(spot))
-                return spot;
-        }
-
-        return null;
     }
 
     private static bool IsHireMissionActiveForUi()
@@ -4016,18 +4099,6 @@ public class UIManager : MonoBehaviour
             : GetPulseScale(_waiterHirePulseMinScale, _waiterHirePulseMaxScale, _waiterHirePulseSpeed);
     }
 
-    private void HandleHireButtonClicked()
-    {
-        if (_activeHireSpot != null)
-        {
-            _activeHireSpot.NotifyClicked();
-            return;
-        }
-
-        HireSpot spot = FindFirstActiveHireSpotOnCurrentFloor();
-        spot?.NotifyClicked();
-    }
-
     private void HandleSeatPaymentClicked(Transform paymentAnchor)
     {
         Transform collectPoint = ResolveTableCollectPoint(paymentAnchor);
@@ -4035,7 +4106,11 @@ public class UIManager : MonoBehaviour
             && CustomerManager.Instance.HasVipAwaitingPaymentsAt(paymentAnchor);
         CustomerManager.Instance?.CompletePaymentsAtPaymentAnchor(paymentAnchor);
         AudioManager.Play(SfxId.GoldCollect);
-        PlayCoinTrail(collectPoint, isVipCollection);
+
+        // VIP coins fly from the treasure box after the carrier arrives — not on tap.
+        if (!isVipCollection)
+            PlayCoinTrail(collectPoint, useVipCount: false);
+
         TryHideSeatPaymentUi(paymentAnchor);
 
         if (isVipCollection)
@@ -4620,7 +4695,15 @@ public class UIManager : MonoBehaviour
         return paymentAnchor;
     }
 
-    private void PlayCoinTrail(Transform worldStart, bool useVipCount = false)
+    /// <summary>
+    /// VIP treasure delivery coin trail: starts at the treasure Coin Point, uses VIP count + duration.
+    /// </summary>
+    public void PlayVipTreasureCoinTrail(Transform worldStart)
+    {
+        PlayCoinTrail(worldStart, useVipCount: true, durationOverride: _vipCoinTrailDuration);
+    }
+
+    private void PlayCoinTrail(Transform worldStart, bool useVipCount = false, float? durationOverride = null)
     {
         if (_coinVfxRoot == null || _coinTrailPool.Count == 0 || worldStart == null)
             return;
@@ -4639,11 +4722,18 @@ public class UIManager : MonoBehaviour
         StopAllCoinTrailAnimations();
 
         int coinCount = Mathf.Max(1, useVipCount ? _vipCoinTrailCount : _coinTrailCount);
+        float duration = Mathf.Max(0.01f, durationOverride ?? _coinTrailDuration);
         Vector2 controlPoint = (startLocal + endLocal) * 0.5f + Vector2.up * _coinTrailArcHeight;
-        _coinTrailSequenceRoutine = StartCoroutine(PlayCoinTrailSequence(startLocal, endLocal, controlPoint, coinCount));
+        _coinTrailSequenceRoutine = StartCoroutine(
+            PlayCoinTrailSequence(startLocal, endLocal, controlPoint, coinCount, duration));
     }
 
-    private IEnumerator PlayCoinTrailSequence(Vector2 startLocal, Vector2 endLocal, Vector2 controlPoint, int coinCount)
+    private IEnumerator PlayCoinTrailSequence(
+        Vector2 startLocal,
+        Vector2 endLocal,
+        Vector2 controlPoint,
+        int coinCount,
+        float duration)
     {
         coinCount = Mathf.Max(1, coinCount);
 
@@ -4654,7 +4744,7 @@ public class UIManager : MonoBehaviour
             while (_activeCoinTrailAnimations.ContainsKey(coin))
                 yield return null;
 
-            BeginCoinTrailAnimation(coin, startLocal, endLocal, controlPoint);
+            BeginCoinTrailAnimation(coin, startLocal, endLocal, controlPoint, duration);
 
             if (_coinTrailDelay > 0f && i < coinCount - 1)
                 yield return new WaitForSeconds(_coinTrailDelay);
@@ -4667,13 +4757,15 @@ public class UIManager : MonoBehaviour
         RectTransform coin,
         Vector2 startLocal,
         Vector2 endLocal,
-        Vector2 controlPoint)
+        Vector2 controlPoint,
+        float duration)
     {
         coin.gameObject.SetActive(true);
         coin.localScale = Vector3.one;
         coin.SetAsLastSibling();
 
-        Coroutine routine = StartCoroutine(AnimateCoinTrailCoin(coin, startLocal, endLocal, controlPoint));
+        Coroutine routine = StartCoroutine(
+            AnimateCoinTrailCoin(coin, startLocal, endLocal, controlPoint, duration));
         _activeCoinTrailAnimations[coin] = routine;
     }
 
@@ -4709,17 +4801,18 @@ public class UIManager : MonoBehaviour
         RectTransform coin,
         Vector2 startLocal,
         Vector2 endLocal,
-        Vector2 controlPoint)
+        Vector2 controlPoint,
+        float duration)
     {
         coin.anchoredPosition = startLocal;
 
-        float duration = Mathf.Max(0.01f, _coinTrailDuration);
+        float flightDuration = Mathf.Max(0.01f, duration);
         float elapsed = 0f;
 
-        while (elapsed < duration)
+        while (elapsed < flightDuration)
         {
             elapsed += Time.deltaTime;
-            float t = Mathf.Clamp01(elapsed / duration);
+            float t = Mathf.Clamp01(elapsed / flightDuration);
             float smoothT = t * t * (3f - 2f * t);
             coin.anchoredPosition = QuadraticBezier(startLocal, controlPoint, endLocal, smoothT);
             coin.localScale = Vector3.one * Mathf.Lerp(1f, 0.55f, smoothT);

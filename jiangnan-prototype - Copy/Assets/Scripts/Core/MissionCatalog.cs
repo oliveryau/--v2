@@ -171,7 +171,7 @@ public class MissionCatalog : ScriptableObject
             },
             new MissionPartDefinition
             {
-                title = "此后贵宾",
+                title = "准备邀请VIP",
                 revealSecondFloorWhenComplete = false,
                 startHiringWhenComplete = false,
                 tasks = new[]
@@ -182,6 +182,14 @@ public class MissionCatalog : ScriptableObject
                         description = "建造VIP桌子",
                         requiredType = PlaceableType.VipTable,
                         requiredCount = 1
+                    },
+                    new MissionTaskDefinition
+                    {
+                        taskKind = MissionTaskKind.Hire,
+                        description = "招二楼小儿队",
+                        requiredWorkerType = WorkerType.Waiter,
+                        // Ground waiter (mission 2) + second-floor hire spot (waiter/call ladies/performer).
+                        requiredCount = 2
                     }
                 }
             }

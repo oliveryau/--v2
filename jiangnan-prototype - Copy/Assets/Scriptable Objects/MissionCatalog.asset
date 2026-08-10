@@ -67,9 +67,9 @@ MonoBehaviour:
       requiredWorkerType: 0
       requiredCount: 1
     - taskKind: 1
-      description: "\u62DB\u4E8C\u697C\u5C0F\u513F"
+      description: "\u62DB\u4E8C\u697C\u5C0F\u513F\u961F"
       requiredType: 4
       requiredWorkerType: 1
-      requiredCount: 1
+      requiredCount: 2
     revealSecondFloorWhenComplete: 0
     startHiringWhenComplete: 0

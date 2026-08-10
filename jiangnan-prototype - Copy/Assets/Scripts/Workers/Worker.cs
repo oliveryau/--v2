@@ -222,8 +222,15 @@ public class Worker : MonoBehaviour
         {
             HireSpot spot = spots[i];
 
-            if (spot == null || spot.IsHired || spot.Workers == null)
+            // Only stay hidden while the spot is still waiting to be hired.
+            // During Hiring/Hired the walk-in (or restore) owns visibility.
+            if (spot == null
+                || spot.IsHired
+                || spot.State == HireSpotState.Hiring
+                || spot.Workers == null)
+            {
                 continue;
+            }
 
             for (int j = 0; j < spot.Workers.Length; j++)
             {

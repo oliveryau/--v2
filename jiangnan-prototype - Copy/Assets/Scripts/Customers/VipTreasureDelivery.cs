@@ -8,14 +8,26 @@ public class VipTreasureDelivery : MonoBehaviour
 
     private const string CarrierName = "CarrierWorker_Treasure";
     private const string WaypointName = "VIP TreasureChest Waypoint";
+    private const string CoinPointName = "Coin Point";
 
     [SerializeField] private GameObject _carrierWorkerTreasure;
     [SerializeField] private Transform _treasureChestWaypoint;
+    [SerializeField] private Transform _coinPoint;
+    [SerializeField] private Animator _treasureAnimator;
+    [Tooltip("Animator trigger played when the carrier reaches the waypoint. Leave empty if unused.")]
+    [SerializeField] private string _openTrigger = "Open";
     [SerializeField] private float _deliveryDuration = 2.5f;
+    [Tooltip("How long the opened treasure stays visible before despawning.")]
+    [SerializeField] private float _openHoldDuration = 4f;
+    [Tooltip("If true, coin trail waits for OnTreasureBoxOpened() (AnimationEvent). If false, trail starts when open is triggered.")]
+    [SerializeField] private bool _waitForOpenAnimationEvent;
 
     private Vector3 _carrierSpawnPosition;
+    private Quaternion _carrierSpawnRotation;
     private bool _hasCarrierSpawnPosition;
     private Coroutine _deliveryRoutine;
+    private bool _openAnimEventReceived;
+    private bool _coinTrailPlayed;
 
     public bool IsDelivering => _deliveryRoutine != null;
 
@@ -33,6 +45,7 @@ public class VipTreasureDelivery : MonoBehaviour
         if (_carrierWorkerTreasure != null)
         {
             _carrierSpawnPosition = _carrierWorkerTreasure.transform.position;
+            _carrierSpawnRotation = _carrierWorkerTreasure.transform.rotation;
             _hasCarrierSpawnPosition = true;
             _carrierWorkerTreasure.SetActive(false);
         }
@@ -57,18 +70,33 @@ public class VipTreasureDelivery : MonoBehaviour
         _deliveryRoutine = StartCoroutine(DeliveryRoutine());
     }
 
+    /// <summary>
+    /// Optional AnimationEvent on the treasure open clip — fires the VIP coin trail.
+    /// </summary>
+    public void OnTreasureBoxOpened()
+    {
+        _openAnimEventReceived = true;
+        PlayCoinTrailFromTreasure();
+    }
+
     private IEnumerator DeliveryRoutine()
     {
+        _openAnimEventReceived = false;
+        _coinTrailPlayed = false;
+
         Transform carrierTransform = _carrierWorkerTreasure.transform;
         Vector3 spawnPosition = _hasCarrierSpawnPosition
             ? _carrierSpawnPosition
             : carrierTransform.position;
+        Quaternion spawnRotation = _hasCarrierSpawnPosition
+            ? _carrierSpawnRotation
+            : carrierTransform.rotation;
         Vector3 targetPosition = PathMovement.FlattenToFloorY(
             _treasureChestWaypoint.position,
             spawnPosition.y);
         Vector3[] waypoints = PathMovement.BuildWaypoints(System.Array.Empty<Vector3>(), targetPosition);
 
-        carrierTransform.position = spawnPosition;
+        carrierTransform.SetPositionAndRotation(spawnPosition, spawnRotation);
         _carrierWorkerTreasure.SetActive(true);
         RuntimeMeshVisibility.PrepareHierarchyForRuntimeMove(carrierTransform);
 
@@ -79,7 +107,87 @@ public class VipTreasureDelivery : MonoBehaviour
             Mathf.Max(0.01f, _deliveryDuration));
 
         carrierTransform.position = targetPosition;
+        if (_treasureChestWaypoint != null)
+            carrierTransform.rotation = _treasureChestWaypoint.rotation;
+
+        TryPlayOpenAnimation();
+
+        if (!_waitForOpenAnimationEvent)
+            PlayCoinTrailFromTreasure();
+        else
+        {
+            // Fallback if the open clip has no AnimationEvent yet.
+            float waitForEvent = 0f;
+            const float maxEventWait = 1.5f;
+            while (!_openAnimEventReceived && waitForEvent < maxEventWait)
+            {
+                waitForEvent += Time.deltaTime;
+                yield return null;
+            }
+
+            if (!_coinTrailPlayed)
+                PlayCoinTrailFromTreasure();
+        }
+
+        float hold = Mathf.Max(0f, _openHoldDuration);
+        if (hold > 0f)
+            yield return new WaitForSeconds(hold);
+
+        carrierTransform.SetPositionAndRotation(spawnPosition, spawnRotation);
+        _carrierWorkerTreasure.SetActive(false);
         _deliveryRoutine = null;
+    }
+
+    private void TryPlayOpenAnimation()
+    {
+        if (_treasureAnimator == null)
+            _treasureAnimator = _carrierWorkerTreasure != null
+                ? _carrierWorkerTreasure.GetComponentInChildren<Animator>(true)
+                : null;
+
+        if (_treasureAnimator == null || string.IsNullOrEmpty(_openTrigger))
+            return;
+
+        if (HasAnimatorTrigger(_treasureAnimator, _openTrigger))
+            _treasureAnimator.SetTrigger(_openTrigger);
+        else
+            _treasureAnimator.Play(_openTrigger, 0, 0f);
+    }
+
+    private static bool HasAnimatorTrigger(Animator animator, string triggerName)
+    {
+        if (animator == null || animator.runtimeAnimatorController == null)
+            return false;
+
+        AnimatorControllerParameter[] parameters = animator.parameters;
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            AnimatorControllerParameter parameter = parameters[i];
+            if (parameter.type == AnimatorControllerParameterType.Trigger
+                && parameter.name == triggerName)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void PlayCoinTrailFromTreasure()
+    {
+        if (_coinTrailPlayed)
+            return;
+
+        CacheReferences();
+        Transform trailStart = _coinPoint != null
+            ? _coinPoint
+            : (_carrierWorkerTreasure != null ? _carrierWorkerTreasure.transform : null);
+
+        if (trailStart == null)
+            return;
+
+        _coinTrailPlayed = true;
+        UIManager.Instance?.PlayVipTreasureCoinTrail(trailStart);
     }
 
     private void CacheReferences()
@@ -93,6 +201,33 @@ public class VipTreasureDelivery : MonoBehaviour
 
         if (_treasureChestWaypoint == null)
             _treasureChestWaypoint = FindSceneTransformByName(WaypointName);
+
+        if (_coinPoint == null && _carrierWorkerTreasure != null)
+        {
+            Transform nested = FindChildTransformByName(_carrierWorkerTreasure.transform, CoinPointName);
+            if (nested != null)
+                _coinPoint = nested;
+            else
+                _coinPoint = FindSceneTransformByName(CoinPointName);
+        }
+
+        if (_treasureAnimator == null && _carrierWorkerTreasure != null)
+            _treasureAnimator = _carrierWorkerTreasure.GetComponentInChildren<Animator>(true);
+    }
+
+    private static Transform FindChildTransformByName(Transform root, string objectName)
+    {
+        if (root == null || string.IsNullOrEmpty(objectName))
+            return null;
+
+        Transform[] transforms = root.GetComponentsInChildren<Transform>(true);
+        for (int i = 0; i < transforms.Length; i++)
+        {
+            if (transforms[i] != null && transforms[i].name == objectName)
+                return transforms[i];
+        }
+
+        return null;
     }
 
     private static Transform FindSceneTransformByName(string objectName)
