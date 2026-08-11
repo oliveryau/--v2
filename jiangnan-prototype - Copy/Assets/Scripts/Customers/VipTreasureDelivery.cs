@@ -28,6 +28,7 @@ public class VipTreasureDelivery : MonoBehaviour
     private Coroutine _deliveryRoutine;
     private bool _openAnimEventReceived;
     private bool _coinTrailPlayed;
+    private int _pendingGoldAward;
 
     public bool IsDelivering => _deliveryRoutine != null;
 
@@ -57,15 +58,25 @@ public class VipTreasureDelivery : MonoBehaviour
             Instance = null;
     }
 
-    public void PlayDelivery()
+    public void PlayDelivery(int pendingGoldAward = 0)
     {
         CacheReferences();
 
-        if (_carrierWorkerTreasure == null || _treasureChestWaypoint == null)
-            return;
-
         if (_deliveryRoutine != null)
+        {
             StopCoroutine(_deliveryRoutine);
+            _deliveryRoutine = null;
+            // Don't lose gold if a previous delivery was interrupted mid-route.
+            GrantPendingGoldAward();
+        }
+
+        _pendingGoldAward = Mathf.Max(0, pendingGoldAward);
+
+        if (_carrierWorkerTreasure == null || _treasureChestWaypoint == null)
+        {
+            GrantPendingGoldAward();
+            return;
+        }
 
         _deliveryRoutine = StartCoroutine(DeliveryRoutine());
     }
@@ -133,6 +144,9 @@ public class VipTreasureDelivery : MonoBehaviour
         if (hold > 0f)
             yield return new WaitForSeconds(hold);
 
+        // Safety: never lose VIP payment if the open/trail path was skipped.
+        GrantPendingGoldAward();
+
         carrierTransform.SetPositionAndRotation(spawnPosition, spawnRotation);
         _carrierWorkerTreasure.SetActive(false);
         _deliveryRoutine = null;
@@ -187,7 +201,21 @@ public class VipTreasureDelivery : MonoBehaviour
             return;
 
         _coinTrailPlayed = true;
+        // Award gold here so the plus-icon feedback lines up with the chest opening.
+        GrantPendingGoldAward();
         UIManager.Instance?.PlayVipTreasureCoinTrail(trailStart);
+    }
+
+    private void GrantPendingGoldAward()
+    {
+        if (_pendingGoldAward <= 0)
+            return;
+
+        int amount = _pendingGoldAward;
+        _pendingGoldAward = 0;
+
+        if (GoldManager.Instance != null)
+            GoldManager.Instance.AddGold(amount);
     }
 
     private void CacheReferences()

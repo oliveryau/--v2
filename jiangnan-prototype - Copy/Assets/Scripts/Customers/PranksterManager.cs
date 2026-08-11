@@ -11,6 +11,7 @@ public class PranksterManager : MonoBehaviour
     [SerializeField] private Transform _outerSpawnPoint;
     [SerializeField] private Transform _pranksterWaypoint;
     [SerializeField] private Transform _exitPoint;
+    [Tooltip("Optional seed list. Break targets are rebuilt from built Table BuildSpots at runtime.")]
     [SerializeField] private DiningTable[] _tables;
 
     [Header("Scheduling")]
@@ -28,6 +29,7 @@ public class PranksterManager : MonoBehaviour
     private bool _visitActive;
     private bool _chaseDismissed;
     private Coroutine _visitRoutine;
+    private readonly List<DiningTable> _builtTables = new();
     private readonly List<DiningTable> _tableBreakCandidates = new();
 
     private CustomerPool _customerPool;
@@ -57,9 +59,6 @@ public class PranksterManager : MonoBehaviour
 
         if (_exitPoint == null)
             _exitPoint = _outerSpawnPoint;
-
-        if (_tables == null || _tables.Length == 0)
-            _tables = FindObjectsOfType<DiningTable>();
     }
 
     private void OnEnable()
@@ -70,12 +69,17 @@ public class PranksterManager : MonoBehaviour
         GameEvents.CustomerSpawned += HandleCustomerSpawned;
         GameEvents.CustomerStateChanged += HandleCustomerStateChanged;
         GameEvents.StateChanged += HandleStateChanged;
+        GameEvents.BuildSpotStateChanged += HandleBuildSpotStateChanged;
+        RebuildBuiltTablesFromSpots();
     }
 
     private void Start()
     {
         if (_prankster != null)
             _prankster.gameObject.SetActive(false);
+
+        // Build spots may finish restore after Awake/OnEnable.
+        RebuildBuiltTablesFromSpots();
     }
 
     private void OnDisable()
@@ -83,6 +87,7 @@ public class PranksterManager : MonoBehaviour
         GameEvents.CustomerSpawned -= HandleCustomerSpawned;
         GameEvents.CustomerStateChanged -= HandleCustomerStateChanged;
         GameEvents.StateChanged -= HandleStateChanged;
+        GameEvents.BuildSpotStateChanged -= HandleBuildSpotStateChanged;
         CancelActiveVisit();
     }
 
@@ -90,12 +95,24 @@ public class PranksterManager : MonoBehaviour
     {
         if (state == GameState.Business)
         {
+            RebuildBuiltTablesFromSpots();
             ResetVisitTracking();
             return;
         }
 
         CancelActiveVisit();
         ResetVisitTracking();
+    }
+
+    private void HandleBuildSpotStateChanged(BuildSpot spot, BuildSpotState state)
+    {
+        if (spot == null || spot.PlaceableType != PlaceableType.Table)
+            return;
+
+        if (state == BuildSpotState.Built)
+            TryAddBuiltTable(ResolveDiningTable(spot));
+        else
+            TryRemoveBuiltTable(ResolveDiningTable(spot));
     }
 
     private void HandleCustomerSpawned()
@@ -197,7 +214,7 @@ public class PranksterManager : MonoBehaviour
 
         _chaseDismissed = true;
         AudioManager.Play(SfxId.Unhappy);
-        _prankster?.PlayKickAudio(); 
+        _prankster?.PlayKickAudio();
         UIManager.Instance?.PlayPranksterChasedAwayDialogue();
 
         if (_visitRoutine != null)
@@ -292,16 +309,14 @@ public class PranksterManager : MonoBehaviour
 
     private DiningTable PickTableToBreak()
     {
-        if (_tables == null || _tables.Length == 0)
-            return null;
-
+        EnsureBuiltTablesReady();
         _tableBreakCandidates.Clear();
 
-        for (int i = 0; i < _tables.Length; i++)
+        for (int i = 0; i < _builtTables.Count; i++)
         {
-            DiningTable table = _tables[i];
+            DiningTable table = _builtTables[i];
 
-            if (table == null || !table.CanBeBrokenByPrankster || table.HasVipOccupant())
+            if (!IsValidBreakTarget(table))
                 continue;
 
             _tableBreakCandidates.Add(table);
@@ -315,20 +330,89 @@ public class PranksterManager : MonoBehaviour
 
     private int CountBrokenTables()
     {
-        if (_tables == null || _tables.Length == 0)
-            return 0;
-
+        EnsureBuiltTablesReady();
         int brokenCount = 0;
 
-        for (int i = 0; i < _tables.Length; i++)
+        for (int i = 0; i < _builtTables.Count; i++)
         {
-            DiningTable table = _tables[i];
+            DiningTable table = _builtTables[i];
 
             if (table != null && table.IsBroken)
                 brokenCount++;
         }
 
         return brokenCount;
+    }
+
+    private void EnsureBuiltTablesReady()
+    {
+        if (_builtTables.Count == 0)
+            RebuildBuiltTablesFromSpots();
+    }
+
+    private void RebuildBuiltTablesFromSpots()
+    {
+        _builtTables.Clear();
+
+        BuildSpot[] spots = FindObjectsByType<BuildSpot>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        for (int i = 0; i < spots.Length; i++)
+        {
+            BuildSpot spot = spots[i];
+
+            if (spot == null || !spot.IsBuilt || spot.PlaceableType != PlaceableType.Table)
+                continue;
+
+            TryAddBuiltTable(ResolveDiningTable(spot));
+        }
+
+        // Fallback: if spots are not ready yet, keep only active seeded tables.
+        if (_builtTables.Count == 0 && _tables != null)
+        {
+            for (int i = 0; i < _tables.Length; i++)
+            {
+                DiningTable table = _tables[i];
+                if (table != null && table.isActiveAndEnabled && table.gameObject.activeInHierarchy)
+                    TryAddBuiltTable(table);
+            }
+        }
+    }
+
+    private void TryAddBuiltTable(DiningTable table)
+    {
+        if (table == null || table.IsVipTable || _builtTables.Contains(table))
+            return;
+
+        _builtTables.Add(table);
+    }
+
+    private void TryRemoveBuiltTable(DiningTable table)
+    {
+        if (table == null)
+            return;
+
+        _builtTables.Remove(table);
+    }
+
+    private static DiningTable ResolveDiningTable(BuildSpot spot)
+    {
+        if (spot == null || spot.BuiltObject == null)
+            return null;
+
+        DiningTable table = spot.BuiltObject.GetComponent<DiningTable>();
+        if (table != null)
+            return table;
+
+        return spot.BuiltObject.GetComponentInChildren<DiningTable>(true);
+    }
+
+    private static bool IsValidBreakTarget(DiningTable table)
+    {
+        return table != null
+            && table.isActiveAndEnabled
+            && table.gameObject.activeInHierarchy
+            && table.CanBeBrokenByPrankster
+            && !table.HasVipOccupant();
     }
 
     private void CancelActiveVisit()

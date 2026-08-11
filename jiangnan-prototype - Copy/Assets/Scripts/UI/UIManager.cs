@@ -60,7 +60,6 @@ public class UIManager : MonoBehaviour
     [SerializeField] private RectTransform _vipFireworksRoot;
     [SerializeField] private float _vipFireworksHoldDuration = 3f;
     [SerializeField] private float _vipFireworksFadeOutDuration = 0.4f;
-    [SerializeField] private RectTransform _vipDoneEatingRoot;
     [SerializeField] private RectTransform _vipIntroButtonRoot;
     [SerializeField] private Button _vipIntroButton;
     [SerializeField] private RectTransform _vipWaitTimerRoot;
@@ -131,6 +130,7 @@ public class UIManager : MonoBehaviour
         "哼，怠慢本尊?!"
     };
     [SerializeField] private float _vipNegativeDialogueHideDelay = 3f;
+    [SerializeField] private Color _vipNegativeDialogueColor = new Color(0.9450981f, 0.3882353f, 0.3882353f, 1f);
 
     [Header("Table Status UI")]
     [SerializeField] private RectTransform _tableStatusUiRoot;
@@ -178,10 +178,6 @@ public class UIManager : MonoBehaviour
     [SerializeField] private float _openBusinessFadeInDuration = 0.4f;
     [SerializeField] private float _openBusinessHoldDuration = 1.2f;
     [SerializeField] private float _openBusinessFadeOutDuration = 0.5f;
-
-    [Header("Business Overview UI")]
-    [SerializeField] private GameObject _businessOverviewRoot;
-    [SerializeField] private Button _businessAcknowledgeButton;
 
     [Header("Table Build Info UI")]
     [SerializeField] private GameObject _tableBuildInfoRoot;
@@ -264,6 +260,10 @@ public class UIManager : MonoBehaviour
 
     [Header("Scene Navigation")]
     [SerializeField] private Button _townButton;
+    [SerializeField] private Button _townPopupButton;
+    [SerializeField] private float _townPopupPulseMinScale = 0.92f;
+    [SerializeField] private float _townPopupPulseMaxScale = 1.08f;
+    [SerializeField] private float _townPopupPulseSpeed = 8f;
 
     [Header("Main Buttons UI")]
     [SerializeField] private GameObject _mainButtonsRoot;
@@ -298,6 +298,8 @@ public class UIManager : MonoBehaviour
     private int _nextCoinTrailSequenceId;
     private RectTransform _coinTrailTemplate;
     private Coroutine _vipDialogueHideRoutine;
+    private Color _vipDialogueDefaultColor = Color.white;
+    private bool _hasVipDialogueDefaultColor;
     private Graphic[] _vipFireworksGraphics;
     private Color[] _vipFireworksTargetColors;
     private Animator _vipFireworksAnimator;
@@ -391,7 +393,6 @@ public class UIManager : MonoBehaviour
     private const string CoinCollectionExtraGlowName = "Extra Glow";
     private const string VipUiRootName = "VIP Main UI";
     private const string VipFireworksName = "Fireworks";
-    private const string VipDoneEatingRootName = "VIP Done Eating";
     private const string VipMainIconName = "VIP Icon";
     private const string VipIntroButtonName = "VIP Intro Button";
     private const string VipWaitTimerName = "VIP Wait Timer";
@@ -487,13 +488,11 @@ public class UIManager : MonoBehaviour
         CacheGoldChangeUi();
         CacheCoinTrailUi();
         CacheVipUi();
-        CacheVipDoneEatingUi();
         CacheVipIntroButtonUi();
         CacheVipWaitTimerUi();
         CacheVipEventButtonsUi();
 
         InitializeOpenBusinessUi();
-        InitializeBusinessOverviewUi();
 
         CacheTableBuildInfoUiReferences();
 
@@ -523,12 +522,10 @@ public class UIManager : MonoBehaviour
         InitializeRepairTableUi();
 
         HideVipUi();
-        HideVipDoneEating();
         HideVipIntroButton();
         HideVipWaitTimer();
         HideAllVipEventButtons();
         HideBusinessTimer();
-        HideBusinessOverview();
         HideOpenBusiness();
         HideTableBuildInfoUi();
         HideUpgradeTableUi();
@@ -638,9 +635,6 @@ public class UIManager : MonoBehaviour
         if (_openBusinessButton != null)
             _openBusinessButton.onClick.RemoveListener(HandleOpenBusinessClicked);
 
-        if (_businessAcknowledgeButton != null)
-            _businessAcknowledgeButton.onClick.RemoveListener(HandleBusinessAcknowledgeClicked);
-
         if (_tableBuildInfoCloseButton != null)
             _tableBuildInfoCloseButton.onClick.RemoveListener(HandleTableBuildInfoCloseClicked);
 
@@ -673,7 +667,6 @@ public class UIManager : MonoBehaviour
             StopCoroutine(_goldMinusAnimation);
 
         HideVipUi();
-        HideVipDoneEating();
         StopAllCoinTrailAnimations();
         ClearSeatPaymentUis();
         ClearTableStatusUis();
@@ -710,6 +703,7 @@ public class UIManager : MonoBehaviour
         UpdateCompetitorShopNameUiPositions();
         UpdateOwnShopNameUiPosition();
         UpdateOwnRatingUiPosition();
+        UpdateTownPopupUi();
         FlushPendingGoldDelta();
     }
 
@@ -754,6 +748,7 @@ public class UIManager : MonoBehaviour
 
         _vipDialogueText.gameObject.SetActive(true);
         _vipDialogueText.text = chosen;
+        ApplyVipDialogueColor(state);
 
         if (_vipUiRoot != null && !_vipUiRoot.gameObject.activeSelf)
             _vipUiRoot.gameObject.SetActive(true);
@@ -828,7 +823,10 @@ public class UIManager : MonoBehaviour
     private void CacheVipDialogueText()
     {
         if (_vipDialogueText != null)
+        {
+            CacheVipDialogueDefaultColor();
             return;
+        }
 
         EnsureScreenUiCaches();
         CacheVipUi();
@@ -839,6 +837,32 @@ public class UIManager : MonoBehaviour
         Transform textRoot = FindChildTransform(_vipUiRoot, VipDialogueTextName);
         if (textRoot != null)
             _vipDialogueText = textRoot.GetComponent<TextMeshProUGUI>();
+
+        CacheVipDialogueDefaultColor();
+    }
+
+    private void CacheVipDialogueDefaultColor()
+    {
+        if (_hasVipDialogueDefaultColor || _vipDialogueText == null)
+            return;
+
+        _vipDialogueDefaultColor = _vipDialogueText.color;
+        _hasVipDialogueDefaultColor = true;
+    }
+
+    private void ApplyVipDialogueColor(VipDialogueState state)
+    {
+        if (_vipDialogueText == null)
+            return;
+
+        CacheVipDialogueDefaultColor();
+
+        bool isNegative = state == VipDialogueState.UnhappyLeave
+            || state == VipDialogueState.Discontent;
+
+        _vipDialogueText.color = isNegative
+            ? _vipNegativeDialogueColor
+            : _vipDialogueDefaultColor;
     }
 
     /// <summary>Legacy entry point used when the VIP reaches the entry waypoint.</summary>
@@ -958,24 +982,6 @@ public class UIManager : MonoBehaviour
 
         _activeVipEventButton = null;
         _vipEventCustomer = null;
-    }
-
-    private void HideVipDoneEating()
-    {
-        if (_vipDoneEatingRoot != null)
-            _vipDoneEatingRoot.gameObject.SetActive(false);
-    }
-
-    private void CacheVipDoneEatingUi()
-    {
-        if (_screenCanvas == null)
-            return;
-
-        if (_vipDoneEatingRoot == null)
-            _vipDoneEatingRoot = FindRectTransformByName(_screenCanvas.transform, VipDoneEatingRootName);
-
-        if (_vipDoneEatingRoot != null)
-            _vipDoneEatingRoot.gameObject.SetActive(false);
     }
 
     public void PlayPranksterChasedAwayDialogue()
@@ -1450,7 +1456,7 @@ public class UIManager : MonoBehaviour
         if (root == null)
             return;
 
-        // GeTai / stage UI is second-floor only.
+        // 表演 button is second-floor only.
         bool onSecondFloor = CharacterPanelController.Instance == null
             || CharacterPanelController.Instance.CurrentFloor == 2;
 
@@ -1464,12 +1470,14 @@ public class UIManager : MonoBehaviour
         EnsureScreenUiCaches();
 
         Transform stage = CustomerManager.Instance != null
-            ? CustomerManager.Instance.VipStagePoint
+            ? CustomerManager.Instance.VipPerformStagePoint
             : null;
 
         if (stage == null)
-            stage = FindSceneTransformByName("Placeholder Stage")
-                ?? FindSceneTransformByName("GeTai");
+        {
+            stage = FindSceneTransformByName("Stage Position")
+                ?? FindSceneTransformByName("Placeholder Stage");
+        }
 
         if (stage == null)
             return;
@@ -1706,7 +1714,6 @@ public class UIManager : MonoBehaviour
         if (state != GameState.Business)
         {
             HideVipUi();
-            HideVipDoneEating();
             HideUpgradeTableUi();
         }
     }
@@ -2007,7 +2014,6 @@ public class UIManager : MonoBehaviour
         _openBusinessSequencePlayed = true;
         StopOpenBusinessSequence();
         HideOpenBusiness();
-        HideBusinessOverview();
         HideBusinessTimer();
         SyncActiveUi();
         SyncAllNestedBuildSpotCostUi();
@@ -2016,18 +2022,6 @@ public class UIManager : MonoBehaviour
 
     private void HandleBusinessDowntimeStarted()
     {
-        HideBusinessOverview();
-        SyncOpenBusinessUiVisibility();
-        SyncActiveUi();
-        SyncAllNestedBuildSpotCostUi();
-    }
-
-    private void HandleBusinessAcknowledgeClicked()
-    {
-        if (GameManager.Instance == null)
-            return;
-
-        GameManager.Instance.AcknowledgeBusinessCloseSummary();
         SyncOpenBusinessUiVisibility();
         SyncActiveUi();
         SyncAllNestedBuildSpotCostUi();
@@ -2060,12 +2054,6 @@ public class UIManager : MonoBehaviour
         HideBusinessTimer();
         DisableOpenBusinessInteraction();
         // Visibility is synced after mission UI initializes.
-    }
-
-    private void InitializeBusinessOverviewUi()
-    {
-        CacheBusinessOverviewUiReferences();
-        HideBusinessOverview();
     }
 
     private void HandleOpenBusinessClicked()
@@ -2210,7 +2198,6 @@ public class UIManager : MonoBehaviour
 
         AudioManager.Play(SfxId.OpenBusiness);
         HideOpenBusiness();
-        HideBusinessOverview();
 
         MissionUiController missionUi = FindFirstObjectByType<MissionUiController>();
         missionUi?.NotifyOpenBusinessOpened();
@@ -2234,92 +2221,10 @@ public class UIManager : MonoBehaviour
             _openBusinessRoot.SetActive(false);
     }
 
-    private void CacheBusinessOverviewUiReferences()
-    {
-        if (_businessOverviewRoot == null)
-            _businessOverviewRoot = FindSceneUiObject("Business Overview");
-
-        if (_businessOverviewRoot == null)
-            return;
-
-        if (_businessAcknowledgeButton == null)
-        {
-            Transform acknowledge = _businessOverviewRoot.transform.Find("Acknowledge UI");
-            if (acknowledge != null)
-            {
-                _businessAcknowledgeButton = acknowledge.GetComponent<Button>()
-                    ?? acknowledge.gameObject.AddComponent<Button>();
-            }
-        }
-
-        if (_businessAcknowledgeButton != null)
-        {
-            // Scene button often has no TargetGraphic — wire Background image so clicks work.
-            if (_businessAcknowledgeButton.targetGraphic == null)
-            {
-                Transform background = _businessAcknowledgeButton.transform.Find("Background");
-                Graphic graphic = background != null
-                    ? background.GetComponent<Graphic>()
-                    : _businessAcknowledgeButton.GetComponent<Graphic>();
-
-                if (graphic == null)
-                {
-                    Image image = _businessAcknowledgeButton.gameObject.GetComponent<Image>()
-                        ?? _businessAcknowledgeButton.gameObject.AddComponent<Image>();
-                    image.color = new Color(1f, 1f, 1f, 0.01f);
-                    image.raycastTarget = true;
-                    graphic = image;
-                }
-
-                _businessAcknowledgeButton.targetGraphic = graphic;
-            }
-
-            _businessAcknowledgeButton.interactable = true;
-            _businessAcknowledgeButton.onClick.RemoveListener(HandleBusinessAcknowledgeClicked);
-            _businessAcknowledgeButton.onClick.AddListener(HandleBusinessAcknowledgeClicked);
-        }
-    }
-
-    private void HideBusinessOverview()
-    {
-        if (_businessOverviewRoot != null)
-            _businessOverviewRoot.SetActive(false);
-    }
-
-    private void ShowBusinessTimer()
-    {
-        if (_businessTimerText != null)
-            _businessTimerText.gameObject.SetActive(true);
-    }
-
     private void HideBusinessTimer()
     {
         if (_businessTimerText != null)
             _businessTimerText.gameObject.SetActive(false);
-    }
-
-    private void UpdateBusinessTimerUi()
-    {
-        if (_businessTimerText == null)
-            return;
-
-        GameManager gameManager = GameManager.Instance;
-
-        if (gameManager == null || !gameManager.IsBusinessSessionActive)
-        {
-            if (_businessTimerText.gameObject.activeSelf)
-                HideBusinessTimer();
-
-            return;
-        }
-
-        if (!_businessTimerText.gameObject.activeSelf)
-            ShowBusinessTimer();
-
-        int totalSeconds = Mathf.CeilToInt(gameManager.BusinessSessionRemainingSeconds);
-        int minutes = totalSeconds / 60;
-        int seconds = totalSeconds % 60;
-        _businessTimerText.text = $"{minutes:00}:{seconds:00}";
     }
 
     private void CacheTableBuildInfoUiReferences()
@@ -3111,6 +3016,9 @@ public class UIManager : MonoBehaviour
         if (uiRoot.gameObject.activeSelf)
             UpdateScreenUiPosition(uiRoot, paymentAnchor.position);
         ApplyWorldAnchoredUiSiblingOrder();
+
+        if (customer.IsVip)
+            SetVipDialogue(VipDialogueState.SuccessLeave);
     }
 
     private void PlayNormalCustomerAutoCollectFx(Customer customer)
@@ -3805,21 +3713,24 @@ public class UIManager : MonoBehaviour
         Transform collectPoint = ResolveTableCollectPoint(paymentAnchor);
         bool isVipCollection = CustomerManager.Instance != null
             && CustomerManager.Instance.HasVipAwaitingPaymentsAt(paymentAnchor);
-        CustomerManager.Instance?.CompletePaymentsAtPaymentAnchor(paymentAnchor);
-        AudioManager.Play(SfxId.GoldCollect);
-
-        // VIP coins fly from the treasure box after the carrier arrives — not on tap.
-        if (!isVipCollection)
-            PlayCoinTrail(collectPoint, useVipCount: false);
-
-        TryHideSeatPaymentUi(paymentAnchor);
 
         if (isVipCollection)
         {
-            SetVipDialogue(VipDialogueState.SuccessLeave);
+            // Defer gold + plus UI until the carrier opens the treasure chest.
+            int vipPayment = CustomerManager.Instance.CompletePaymentsAtPaymentAnchor(
+                paymentAnchor,
+                awardGold: false);
+            AudioManager.Play(SfxId.GoldCollect);
+            TryHideSeatPaymentUi(paymentAnchor);
             CharacterPanelController.Instance?.GoToFirstFloor();
-            VipTreasureDelivery.Instance?.PlayDelivery();
+            VipTreasureDelivery.Instance?.PlayDelivery(vipPayment);
+            return;
         }
+
+        CustomerManager.Instance?.CompletePaymentsAtPaymentAnchor(paymentAnchor);
+        AudioManager.Play(SfxId.GoldCollect);
+        PlayCoinTrail(collectPoint, useVipCount: false);
+        TryHideSeatPaymentUi(paymentAnchor);
     }
 
     public void ShowNotEnoughMoneyFeedback()
@@ -5110,7 +5021,7 @@ public class UIManager : MonoBehaviour
 
         UnsubscribeEnterCompetitorShopUi();
         WireEnterCompetitorShopButtons();
-        SyncEnterCompetitorShopUiVisibility(true);
+        SyncEnterCompetitorShopUiVisibility(PlayerProfileStorage.IsPostVipLullActiveForCurrentPlayer());
     }
 
     private void UnsubscribeEnterCompetitorShopUi()
@@ -5165,7 +5076,12 @@ public class UIManager : MonoBehaviour
     private void SyncEnterCompetitorShopUiVisibility(bool visible)
     {
         if (_enterCompetitorShopUiBindings == null)
+        {
+            if (_enterCompetitorShopUiRoot != null)
+                _enterCompetitorShopUiRoot.SetActive(visible);
+
             return;
+        }
 
         for (int i = 0; i < _enterCompetitorShopUiBindings.Length; i++)
         {
@@ -5512,7 +5428,7 @@ public class UIManager : MonoBehaviour
             }
         }
 
-        SyncEnterCompetitorShopUiVisibility(true);
+        SyncEnterCompetitorShopUiVisibility(PlayerProfileStorage.IsPostVipLullActiveForCurrentPlayer());
         SyncTownRatingVisibility();
     }
 
@@ -5757,12 +5673,20 @@ public class UIManager : MonoBehaviour
 
         if (_townButton != null)
             _townButton.onClick.AddListener(HandleTownButtonClicked);
+
+        CacheTownPopupButton();
+
+        if (_townPopupButton != null)
+            _townPopupButton.onClick.AddListener(HandleTownButtonClicked);
     }
 
     private void UnsubscribeSceneNavigationUi()
     {
         if (_townButton != null)
             _townButton.onClick.RemoveListener(HandleTownButtonClicked);
+
+        if (_townPopupButton != null)
+            _townPopupButton.onClick.RemoveListener(HandleTownButtonClicked);
     }
 
     private void HandleTownButtonClicked()
@@ -5782,7 +5706,7 @@ public class UIManager : MonoBehaviour
             _townButton = FindTownButton();
 
         HideSceneMenuUi();
-        HideTownPopupIfPresent();
+        InitializeTownPopupUi();
         SyncMainButtonsVisibility();
     }
 
@@ -5827,12 +5751,70 @@ public class UIManager : MonoBehaviour
             ratingBgObject.SetActive(false);
     }
 
-    private void HideTownPopupIfPresent()
+    private void InitializeTownPopupUi()
     {
-        RectTransform townPopup = FindScreenUiRect("Town Popup");
+        CacheTownPopupButton();
 
-        if (townPopup != null)
-            townPopup.gameObject.SetActive(false);
+        if (_townPopupButton == null)
+            return;
+
+        _townPopupButton.gameObject.SetActive(false);
+        _townPopupButton.transform.localScale = Vector3.one;
+        SyncTownPopupVisibility();
+    }
+
+    private void CacheTownPopupButton()
+    {
+        if (_townPopupButton != null)
+            return;
+
+        RectTransform townPopup = FindScreenUiRect("Town Popup");
+        if (townPopup == null)
+            return;
+
+        _townPopupButton = EnsureButtonOnObject(townPopup.gameObject);
+    }
+
+    private void UpdateTownPopupUi()
+    {
+        if (!RestaurantSceneMode.IsMainScene)
+            return;
+
+        SyncTownPopupVisibility();
+        UpdateTownPopupPulse();
+    }
+
+    private void SyncTownPopupVisibility()
+    {
+        CacheTownPopupButton();
+
+        if (_townPopupButton == null)
+            return;
+
+        bool shouldShow = CustomerManager.Instance != null
+            && CustomerManager.Instance.ShouldShowPostVipTownPopup()
+            && GameManager.Instance != null
+            && GameManager.Instance.IsBusiness
+            && GameManager.Instance.IsBusinessSessionActive;
+
+        if (_townPopupButton.gameObject.activeSelf == shouldShow)
+            return;
+
+        _townPopupButton.gameObject.SetActive(shouldShow);
+        _townPopupButton.transform.localScale = Vector3.one;
+    }
+
+    private void UpdateTownPopupPulse()
+    {
+        if (_townPopupButton == null || !_townPopupButton.gameObject.activeInHierarchy)
+            return;
+
+        _townPopupButton.transform.localScale = Vector3.one * GetTownPopupPulseScale();
+    }
+
+    private float GetTownPopupPulseScale()
+    {
+        return GetPulseScale(_townPopupPulseMinScale, _townPopupPulseMaxScale, _townPopupPulseSpeed);
     }
 
     private void InitializePranksterUi()

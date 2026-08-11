@@ -315,6 +315,22 @@ public class WorkerManager : MonoBehaviour
         if (_readyOrders.Count == 0)
             return false;
 
+        // Competitor shops: first-come-first-serve, no VIP priority.
+        if (RestaurantSceneMode.IsCompetitorScene)
+        {
+            DishOrder nextOrder = DequeueFirstMatchingOrder(_readyOrders, candidate =>
+                IsAssignableOrder(candidate)
+                && IsReadyForWaiterServe(candidate)
+                && FindAvailableWaiterForOrder(candidate) != null);
+
+            if (nextOrder == null)
+                return false;
+
+            order = nextOrder;
+            waiter = FindAvailableWaiterForOrder(nextOrder);
+            return waiter != null;
+        }
+
         // Prefer VIP orders when a VIP waiter is free. Skip VIP dishes still held for 上菜.
         DishOrder vipOrder = DequeueFirstMatchingOrder(_readyOrders, candidate =>
             IsVipOrder(candidate)
@@ -653,6 +669,10 @@ public class WorkerManager : MonoBehaviour
         if (waiter == null || order == null)
             return false;
 
+        // Competitor shops have a shared floor — any waiter can serve any order.
+        if (RestaurantSceneMode.IsCompetitorScene)
+            return true;
+
         bool vipOrder = IsVipOrder(order);
         return waiter.ServesVipFloorOnly ? vipOrder : !vipOrder;
     }
@@ -712,6 +732,9 @@ public class WorkerManager : MonoBehaviour
             StopCoroutine(task);
 
         worker.StopMovement();
+
+        if (worker.WorkerType == WorkerType.Chef)
+            StopChefCookingAudio(worker);
 
         if (stopRestingAudio)
             worker.StopRestingAudio();
@@ -774,6 +797,10 @@ public class WorkerManager : MonoBehaviour
 
     private static DishOrder DequeuePrioritizedOrder(Queue<DishOrder> queue)
     {
+        // Competitor shops cook in arrival order — no VIP jump-the-queue.
+        if (RestaurantSceneMode.IsCompetitorScene)
+            return DequeueFirstMatchingOrder(queue, IsAssignableOrder);
+
         DishOrder vipOrder = DequeueFirstMatchingOrder(queue, IsVipOrder);
 
         if (vipOrder != null)

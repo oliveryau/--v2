@@ -770,15 +770,25 @@ public class DiningTable : MonoBehaviour
 
     private TableSeat[] CaptureSeats(TableLevelVisualSet visuals, bool includeInactive = true)
     {
-        if (visuals?.Seats == null)
-            return _seats;
+        Transform seatsRoot = visuals?.Seats != null ? visuals.Seats.transform : null;
 
-        TableSeat[] existingSeats = visuals.Seats.GetComponentsInChildren<TableSeat>(includeInactive);
+        if (seatsRoot == null)
+        {
+            // Keep inspector-authored seats when present (VIP tables, hand-wired setups).
+            if (HasAnySeatReference(_seats))
+                return _seats;
+
+            // Competitor / incomplete setups: discover a Seats child under the table.
+            seatsRoot = FindChildSeatsRoot();
+            if (seatsRoot == null)
+                return _seats ?? Array.Empty<TableSeat>();
+        }
+
+        TableSeat[] existingSeats = seatsRoot.GetComponentsInChildren<TableSeat>(includeInactive);
 
         if (existingSeats != null && existingSeats.Length > 0)
             return existingSeats;
 
-        Transform seatsRoot = visuals.Seats.transform;
         int childCount = seatsRoot.childCount;
 
         if (childCount == 0)
@@ -811,6 +821,36 @@ public class DiningTable : MonoBehaviour
         TableSeat[] trimmedSeats = new TableSeat[seatCount];
         Array.Copy(seats, trimmedSeats, seatCount);
         return trimmedSeats;
+    }
+
+    private static bool HasAnySeatReference(TableSeat[] seats)
+    {
+        if (seats == null || seats.Length == 0)
+            return false;
+
+        for (int i = 0; i < seats.Length; i++)
+        {
+            if (seats[i] != null)
+                return true;
+        }
+
+        return false;
+    }
+
+    private Transform FindChildSeatsRoot()
+    {
+        for (int i = 0; i < transform.childCount; i++)
+        {
+            Transform child = transform.GetChild(i);
+
+            if (child != null
+                && child.name.IndexOf("Seats", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return child;
+            }
+        }
+
+        return null;
     }
 
     private GameObject ResolveTableVisual(TableLevelVisualSet visuals, int level, bool allowEquipmentClone)

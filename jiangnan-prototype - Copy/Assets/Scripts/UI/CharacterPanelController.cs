@@ -17,6 +17,7 @@ public class CharacterPanelController : MonoBehaviour
     private const string SecondFloorEnvironmentName = "Second Floor";
     private const string SecondFloorBuildSpotsName = "BuildSpots_SecondFloor";
     private const string SecondFloorLayerName = "SecondFloor";
+    private const string StoveRootName = "Stove";
 
     [SerializeField] private TextMeshProUGUI _playerNameText;
     [SerializeField] private TextMeshProUGUI _goldAmountText;
@@ -32,13 +33,13 @@ public class CharacterPanelController : MonoBehaviour
     private Camera _floorCamera;
     private Light _mainLight;
     private readonly List<GameObject> _secondFloorRoots = new();
+    private readonly List<ParticleSystem> _groundFloorStoveParticles = new();
     private int _secondFloorLayer = -1;
     private int _currentFloor = 1;
     private bool _floorButtonsWired;
     private bool _secondFloorViewVisible = true;
     private Coroutine _floorTransitionRoutine;
 
-    public TextMeshProUGUI PlayerNameText => _playerNameText;
     public TextMeshProUGUI GoldAmountText => _goldAmountText;
     public RectTransform GoldUiRoot => _goldUiRoot;
     public int CurrentFloor => _currentFloor;
@@ -228,6 +229,7 @@ public class CharacterPanelController : MonoBehaviour
         TryAddSecondFloorRoot(FindSceneObjectByExactName("Second Floor (1)"));
         TryAddSecondFloorRoot(FindSceneObjectByExactName(SecondFloorBuildSpotsName));
         CollectSecondFloorBuiltObjects();
+        CacheGroundFloorStoveParticles();
 
         // Keep the floor slab active so it can be view-culled without killing simulation.
         // Build spots / built props stay owned by BuildSequenceController / BuildSpot.
@@ -332,15 +334,6 @@ public class CharacterPanelController : MonoBehaviour
     public void GoToFirstFloor(bool force = false)
     {
         SetFloor(1, force);
-    }
-
-    /// <summary>Switch the restaurant view to floor 2 when unlocked.</summary>
-    public void GoToSecondFloor(bool force = false)
-    {
-        if (!RestaurantFloorUtil.IsUnlockedForCurrentPlayer())
-            return;
-
-        SetFloor(2, force);
     }
 
     private void SetFloor(int floor, bool force = false)
@@ -448,6 +441,55 @@ public class CharacterPanelController : MonoBehaviour
             {
                 if (colliders[c] != null)
                     colliders[c].enabled = visible;
+            }
+        }
+
+        // Stove smoke/fire stay on Default layer — hide them upstairs so they don't bleed through.
+        SetGroundFloorStoveParticlesVisible(!visible);
+    }
+
+    private void CacheGroundFloorStoveParticles()
+    {
+        _groundFloorStoveParticles.Clear();
+
+        if (!RestaurantSceneMode.IsMainScene)
+            return;
+
+        GameObject stoveRoot = FindSceneObjectByExactName(StoveRootName);
+        if (stoveRoot == null)
+            return;
+
+        ParticleSystem[] particles = stoveRoot.GetComponentsInChildren<ParticleSystem>(true);
+        for (int i = 0; i < particles.Length; i++)
+        {
+            if (particles[i] != null)
+                _groundFloorStoveParticles.Add(particles[i]);
+        }
+    }
+
+    private void SetGroundFloorStoveParticlesVisible(bool visible)
+    {
+        if (_groundFloorStoveParticles.Count == 0)
+            CacheGroundFloorStoveParticles();
+
+        for (int i = 0; i < _groundFloorStoveParticles.Count; i++)
+        {
+            ParticleSystem particle = _groundFloorStoveParticles[i];
+            if (particle == null)
+                continue;
+
+            if (visible)
+            {
+                if (!particle.gameObject.activeSelf)
+                    particle.gameObject.SetActive(true);
+
+                if (!particle.isPlaying)
+                    particle.Play(true);
+            }
+            else
+            {
+                particle.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                particle.gameObject.SetActive(false);
             }
         }
     }
@@ -584,11 +626,6 @@ public class CharacterPanelController : MonoBehaviour
         }
 
         CacheFloorUiReferences();
-    }
-
-    private static void SetLayerRecursively(GameObject root, int layer)
-    {
-        RestaurantFloorUtil.SetLayerRecursively(root, layer);
     }
 
     private static Light FindMainDirectionalLight()

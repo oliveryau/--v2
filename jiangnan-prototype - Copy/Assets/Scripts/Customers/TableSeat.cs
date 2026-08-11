@@ -63,17 +63,81 @@ public class TableSeat : MonoBehaviour
 
     /// <summary>
     /// Fills missing sit/payment refs only. Inspector-authored VIP anchors are left alone.
+    /// Lv2 stool meshes have an off-center pivot; when sit point is the root, recenter onto the collider.
     /// </summary>
     public void EnsureMissingAnchors(Transform fallbackSitPoint, Transform fallbackPaymentAnchor)
     {
-        if (_sitPoint == null)
-            _sitPoint = fallbackSitPoint;
+        if (NeedsCenteredSitPoint(out Vector3 centeredLocal))
+            _sitPoint = EnsureCenteredSitPoint(centeredLocal, fallbackSitPoint);
+        else if (_sitPoint == null)
+            _sitPoint = fallbackSitPoint != null ? fallbackSitPoint : transform;
 
         if (_paymentUiAnchor == null)
             _paymentUiAnchor = fallbackPaymentAnchor;
 
         if (_parentTable == null)
             _parentTable = GetComponentInParent<DiningTable>();
+    }
+
+    private bool NeedsCenteredSitPoint(out Vector3 centeredLocal)
+    {
+        centeredLocal = Vector3.zero;
+
+        // Keep explicit authored sit points (e.g. VIP Seat Point children).
+        if (_sitPoint != null && _sitPoint != transform)
+            return false;
+
+        if (!TryResolveOffsetSitLocal(out centeredLocal))
+            return false;
+
+        return true;
+    }
+
+    private bool TryResolveOffsetSitLocal(out Vector3 local)
+    {
+        local = Vector3.zero;
+
+        if (GetComponent<Collider>() is BoxCollider boxCollider)
+        {
+            local = boxCollider.center;
+            local.y += boxCollider.size.y * 0.35f;
+
+            // Only recenter when the mesh pivot is meaningfully off the visual center.
+            Vector3 horizontal = new Vector3(boxCollider.center.x, 0f, boxCollider.center.z);
+            Vector3 worldHorizontal = transform.TransformVector(horizontal);
+            return worldHorizontal.sqrMagnitude >= 0.0025f; // ~5cm
+        }
+
+        return false;
+    }
+
+    private Transform EnsureCenteredSitPoint(Vector3 localPosition, Transform fallbackSitPoint)
+    {
+        Transform existing = transform.Find("Seat Point");
+        if (existing == null)
+            existing = transform.Find("Sit Point");
+
+        if (existing != null)
+        {
+            existing.localPosition = localPosition;
+            return existing;
+        }
+
+        GameObject seatPointObject = new GameObject("Seat Point");
+        Transform seatPoint = seatPointObject.transform;
+        seatPoint.SetParent(transform, false);
+        seatPoint.localRotation = Quaternion.identity;
+        seatPoint.localScale = Vector3.one;
+        seatPoint.localPosition = localPosition;
+
+        if (localPosition == Vector3.zero
+            && fallbackSitPoint != null
+            && fallbackSitPoint != transform)
+        {
+            seatPoint.position = fallbackSitPoint.position;
+        }
+
+        return seatPoint;
     }
 
     public void RestoreOccupant(Customer customer)

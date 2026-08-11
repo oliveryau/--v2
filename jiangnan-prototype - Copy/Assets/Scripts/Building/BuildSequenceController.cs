@@ -180,7 +180,8 @@ public class BuildSequenceController : MonoBehaviour
             && HasSpotByName(_groundFloorFollowUpSpots, "BuildSpot_Table (6)")
             && HasSpotByName(_groundFloorFollowUpSpots, "BuildSpot_Stairs");
         bool secondOk = HasSpotByName(_secondFloorBuildSpots, "BuildSpot_VIPStage")
-            && HasSpotByName(_secondFloorBuildSpots, "BuildSpot_VIPTable (1)");
+            && (HasSpotByName(_secondFloorBuildSpots, "BuildSpot_VIPTable")
+                || HasSpotByName(_secondFloorBuildSpots, "BuildSpot_VIPTable (1)"));
 
         if (startersOk && tablesOk && groundOk && secondOk)
             return;
@@ -229,8 +230,8 @@ public class BuildSequenceController : MonoBehaviour
             _secondFloorBuildSpots.Clear();
 
             AddIfExists(byExactName, "BuildSpot_VIPStage", _secondFloorBuildSpots);
-            // Table name includes an index in the scene.
-            AddIfExists(byExactName, "BuildSpot_VIPTable (1)", _secondFloorBuildSpots);
+            if (!AddIfExists(byExactName, "BuildSpot_VIPTable", _secondFloorBuildSpots))
+                AddIfExists(byExactName, "BuildSpot_VIPTable (1)", _secondFloorBuildSpots);
         }
 
         // Re-evaluate stairs spot after potential list rewiring.
@@ -253,29 +254,16 @@ public class BuildSequenceController : MonoBehaviour
         return false;
     }
 
-    private static int CountNonNull(List<BuildSpot> list)
-    {
-        if (list == null)
-            return 0;
-
-        int count = 0;
-
-        for (int i = 0; i < list.Count; i++)
-        {
-            if (list[i] != null)
-                count++;
-        }
-
-        return count;
-    }
-
-    private static void AddIfExists(Dictionary<string, BuildSpot> byName, string exactName, List<BuildSpot> target)
+    private static bool AddIfExists(Dictionary<string, BuildSpot> byName, string exactName, List<BuildSpot> target)
     {
         if (byName == null || target == null)
-            return;
+            return false;
 
-        if (byName.TryGetValue(exactName, out BuildSpot spot) && spot != null)
-            target.Add(spot);
+        if (!byName.TryGetValue(exactName, out BuildSpot spot) || spot == null)
+            return false;
+
+        target.Add(spot);
+        return true;
     }
 
     private void AddSpotToFollowUpGroup(BuildSpot spot)
@@ -411,7 +399,9 @@ public class BuildSequenceController : MonoBehaviour
         // Mission 2: hire only — no build spots.
         bool showMissionTables = missionPart >= MissionCatalog.TableBuildMissionPartIndex;
         bool showGroundFollowUps = missionPart > MissionCatalog.TableBuildMissionPartIndex;
-        bool showSecondFloor = showGroundFollowUps && IsSecondFloorUnlocked;
+        // VIP table / stage only during mission 5 (after stairs unlock the second floor).
+        bool showSecondFloor = missionPart >= MissionCatalog.VipPrepMissionPartIndex
+            && IsSecondFloorUnlocked;
 
         SetSpotGroupState(_starterSpots, activateUnbuilt: showStarters);
         SetSpotGroupState(_missionTableSpots, activateUnbuilt: showMissionTables);

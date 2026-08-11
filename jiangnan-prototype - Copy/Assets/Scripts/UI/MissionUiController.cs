@@ -2,21 +2,34 @@ using System;
 using System.Collections;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 [DisallowMultipleComponent]
 [DefaultExecutionOrder(160)]
 public class MissionUiController : MonoBehaviour
 {
     private const string MissionRootName = "Mission";
+    private const string ClosedRootName = "Closed";
+    private const string OpenedRootName = "Opened";
+    private const string ClosedBgName = "Bg";
+    private const string OpenButtonName = "Open Button";
+    private const string CloseButtonName = "Close Button";
     private const string TitleName = "Title";
 
     [SerializeField] private MissionCatalog _missionCatalog;
     [SerializeField] private GameObject _missionRoot;
+    [SerializeField] private GameObject _closedUiRoot;
+    [SerializeField] private GameObject _openedUiRoot;
+    [SerializeField] private Button _openButton;
+    [SerializeField] private Button _closeButton;
     [SerializeField] private TextMeshProUGUI _titleText;
     [SerializeField] private TextMeshProUGUI[] _taskTexts = new TextMeshProUGUI[MissionCatalog.MaxTasksPerPart];
     [SerializeField] private Color _incompleteTaskColor = Color.white;
     [SerializeField] private Color _completeTaskColor = new Color(0.25f, 0.85f, 0.3f, 1f);
     [SerializeField] private float _completedPartHoldSeconds;
+    [SerializeField] private float _openButtonPulseMinScale = 0.95f;
+    [SerializeField] private float _openButtonPulseMaxScale = 1.05f;
+    [SerializeField] private float _openButtonPulseSpeed = 3f;
 
     private readonly int[] _placedCounts = new int[Enum.GetValues(typeof(PlaceableType)).Length];
     private readonly int[] _hiredCounts = new int[Enum.GetValues(typeof(WorkerType)).Length];
@@ -25,6 +38,8 @@ public class MissionUiController : MonoBehaviour
     private Coroutine _advancePartRoutine;
     private bool _isAdvancingPart;
     private bool _initialized;
+    private bool _isPanelOpen;
+    private bool _buttonsWired;
 
     public int CurrentPartIndex => _currentPartIndex;
 
@@ -42,6 +57,7 @@ public class MissionUiController : MonoBehaviour
             _missionCatalog = MissionCatalog.LoadOrCreateDefault();
 
         CacheReferences();
+        WirePanelButtons();
 
         if (_initialized)
             return;
@@ -55,6 +71,8 @@ public class MissionUiController : MonoBehaviour
             _openBusinessCompletions = 1;
         }
 
+        // Default: mission panel starts closed.
+        SetPanelOpen(false);
         _initialized = true;
     }
 
@@ -70,11 +88,13 @@ public class MissionUiController : MonoBehaviour
             return;
 
         GameEvents.StateChanged += HandleStateChanged;
+        WirePanelButtons();
     }
 
     private void OnDisable()
     {
         GameEvents.StateChanged -= HandleStateChanged;
+        UnwirePanelButtons();
 
         if (_advancePartRoutine != null)
         {
@@ -87,6 +107,11 @@ public class MissionUiController : MonoBehaviour
         }
     }
 
+    private void Update()
+    {
+        UpdateOpenButtonPulse();
+    }
+
     public void NotifyPlaceableBuilt(PlaceableType type)
     {
         int index = (int)type;
@@ -96,31 +121,6 @@ public class MissionUiController : MonoBehaviour
 
         _placedCounts[index]++;
         RefreshUiAndAdvanceIfNeeded();
-    }
-
-    public void NotifyWorkerHired(WorkerType type)
-    {
-        int index = (int)type;
-
-        if (index < 0 || index >= _hiredCounts.Length)
-            return;
-
-        _hiredCounts[index]++;
-        RefreshUiAndAdvanceIfNeeded();
-    }
-
-    public void SetPlacedCounts(int receptions, int stoves, int tables)
-    {
-        SyncPlacedCounts(receptions, stoves, tables);
-        RefreshUiAndAdvanceIfNeeded();
-    }
-
-    public void SyncPlacedCounts(int receptions, int stoves, int tables)
-    {
-        SetPlacedCount(PlaceableType.Reception, receptions);
-        SetPlacedCount(PlaceableType.Stove, stoves);
-        SetPlacedCount(PlaceableType.Table, tables);
-        RefreshUi();
     }
 
     public void SyncPlacedCounts(int receptions, int stoves, int tables, int stairs, int vipTables, int vipStages = 0)
@@ -150,12 +150,6 @@ public class MissionUiController : MonoBehaviour
     public void NotifyOpenBusinessOpened()
     {
         _openBusinessCompletions++;
-        RefreshUiAndAdvanceIfNeeded();
-    }
-
-    public void SetOpenBusinessCompletions(int count)
-    {
-        _openBusinessCompletions = Mathf.Max(0, count);
         RefreshUiAndAdvanceIfNeeded();
     }
 
@@ -282,7 +276,116 @@ public class MissionUiController : MonoBehaviour
             && !AreAllMissionsComplete()
             && (state == GameState.Building || state == GameState.Business);
 
+        bool wasActive = _missionRoot.activeSelf;
         _missionRoot.SetActive(shouldShow);
+
+        if (!shouldShow)
+            return;
+
+        // Freshly shown mission UI starts closed.
+        if (!wasActive)
+            SetPanelOpen(false);
+        else
+            ApplyPanelVisibility();
+    }
+
+    private void WirePanelButtons()
+    {
+        if (_buttonsWired)
+            return;
+
+        if (_openButton != null)
+            _openButton.onClick.AddListener(HandleOpenButtonClicked);
+
+        if (_closeButton != null)
+            _closeButton.onClick.AddListener(HandleCloseButtonClicked);
+
+        _buttonsWired = _openButton != null || _closeButton != null;
+    }
+
+    private void UnwirePanelButtons()
+    {
+        if (!_buttonsWired)
+            return;
+
+        if (_openButton != null)
+            _openButton.onClick.RemoveListener(HandleOpenButtonClicked);
+
+        if (_closeButton != null)
+            _closeButton.onClick.RemoveListener(HandleCloseButtonClicked);
+
+        _buttonsWired = false;
+    }
+
+    private void HandleOpenButtonClicked()
+    {
+        SetPanelOpen(true);
+    }
+
+    private void HandleCloseButtonClicked()
+    {
+        SetPanelOpen(false);
+    }
+
+    private void SetPanelOpen(bool open)
+    {
+        _isPanelOpen = open;
+        ApplyPanelVisibility();
+    }
+
+    private void ApplyPanelVisibility()
+    {
+        if (_closedUiRoot != null)
+        {
+            _closedUiRoot.SetActive(!_isPanelOpen);
+            _closedUiRoot.transform.localScale = Vector3.one;
+        }
+
+        if (_openedUiRoot != null)
+            _openedUiRoot.SetActive(_isPanelOpen);
+
+        if (_openButton != null)
+            _openButton.transform.localScale = Vector3.one;
+    }
+
+    private void UpdateOpenButtonPulse()
+    {
+        if (_isPanelOpen)
+            return;
+
+        if (_closedUiRoot == null || !_closedUiRoot.activeInHierarchy)
+            return;
+
+        if (!HasIncompleteMission())
+        {
+            _closedUiRoot.transform.localScale = Vector3.one;
+            if (_openButton != null)
+                _openButton.transform.localScale = Vector3.one;
+            return;
+        }
+
+        float pulseScale = GetOpenButtonPulseScale();
+        // Pulse the whole closed mission UI (bg + open button).
+        _closedUiRoot.transform.localScale = Vector3.one * pulseScale;
+    }
+
+    private float GetOpenButtonPulseScale()
+    {
+        float speed = Mathf.Max(0f, _openButtonPulseSpeed);
+
+        if (speed <= 0f)
+            return 1f;
+
+        float pulseT = (Mathf.Sin(Time.time * speed) + 1f) * 0.5f;
+        return Mathf.Lerp(_openButtonPulseMinScale, _openButtonPulseMaxScale, pulseT);
+    }
+
+    private bool HasIncompleteMission()
+    {
+        return RestaurantSceneMode.IsMainScene
+            && !AreAllMissionsComplete()
+            && _missionCatalog != null
+            && _missionCatalog.TryGetPart(_currentPartIndex, out _);
     }
 
     private bool AreAllMissionsComplete()
@@ -450,9 +553,25 @@ public class MissionUiController : MonoBehaviour
         if (_missionRoot == null)
             return;
 
+        Transform missionTransform = _missionRoot.transform;
+
+        if (_closedUiRoot == null)
+        {
+            Transform closed = FindChildRecursive(missionTransform, ClosedRootName);
+            _closedUiRoot = closed != null ? closed.gameObject : null;
+        }
+
+        if (_openedUiRoot == null)
+        {
+            Transform opened = FindChildRecursive(missionTransform, OpenedRootName);
+            _openedUiRoot = opened != null ? opened.gameObject : null;
+        }
+
+        Transform contentRoot = _openedUiRoot != null ? _openedUiRoot.transform : missionTransform;
+
         if (_titleText == null)
         {
-            Transform title = _missionRoot.transform.Find(TitleName);
+            Transform title = FindChildRecursive(contentRoot, TitleName);
             _titleText = title != null ? title.GetComponent<TextMeshProUGUI>() : null;
         }
 
@@ -463,11 +582,73 @@ public class MissionUiController : MonoBehaviour
             if (_taskTexts[i] != null)
                 continue;
 
-            Transform taskTransform = _missionRoot.transform.Find($"Task ({i + 1})");
+            Transform taskTransform = FindChildRecursive(contentRoot, $"Task ({i + 1})");
 
             if (taskTransform != null)
                 _taskTexts[i] = taskTransform.GetComponent<TextMeshProUGUI>();
         }
+
+        if (_openButton == null)
+            _openButton = ResolveOpenButton(missionTransform);
+
+        if (_closeButton == null)
+        {
+            Transform closeButtonTransform = _openedUiRoot != null
+                ? FindChildRecursive(_openedUiRoot.transform, CloseButtonName)
+                : FindChildRecursive(missionTransform, CloseButtonName);
+            _closeButton = closeButtonTransform != null
+                ? closeButtonTransform.GetComponent<Button>()
+                : null;
+        }
+    }
+
+    private Button ResolveOpenButton(Transform missionTransform)
+    {
+        // Prefer the Closed Bg button (current setup), then legacy Open Button, then any Closed button.
+        if (_closedUiRoot != null)
+        {
+            Transform closedBg = FindChildRecursive(_closedUiRoot.transform, ClosedBgName);
+            Button bgButton = closedBg != null ? closedBg.GetComponent<Button>() : null;
+            if (bgButton != null)
+                return bgButton;
+
+            Transform openButtonTransform = FindChildRecursive(_closedUiRoot.transform, OpenButtonName);
+            Button namedButton = openButtonTransform != null
+                ? openButtonTransform.GetComponent<Button>()
+                : null;
+            if (namedButton != null)
+                return namedButton;
+
+            Button closedButton = _closedUiRoot.GetComponentInChildren<Button>(true);
+            if (closedButton != null)
+                return closedButton;
+        }
+
+        Transform fallbackOpen = FindChildRecursive(missionTransform, OpenButtonName);
+        return fallbackOpen != null ? fallbackOpen.GetComponent<Button>() : null;
+    }
+
+    private static Transform FindChildRecursive(Transform root, string childName)
+    {
+        if (root == null || string.IsNullOrEmpty(childName))
+            return null;
+
+        Transform direct = root.Find(childName);
+        if (direct != null)
+            return direct;
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform child = root.GetChild(i);
+            if (string.Equals(child.name, childName, StringComparison.OrdinalIgnoreCase))
+                return child;
+
+            Transform nested = FindChildRecursive(child, childName);
+            if (nested != null)
+                return nested;
+        }
+
+        return null;
     }
 
     private void EnsureTaskTextArray()

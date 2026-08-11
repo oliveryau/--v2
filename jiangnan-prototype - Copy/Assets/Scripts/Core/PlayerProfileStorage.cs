@@ -18,7 +18,10 @@ public class PlayerProfileData
     public bool mainSceneSecondFloorRevealed;
     public int mainSceneHiredSpotCount;
     public bool mainSceneBusinessStarted;
+    /// <summary>How many VIPs have arrived in the main restaurant (not successful serves).</summary>
     public int mainSceneServedVipCount;
+    /// <summary>True once the post-VIP lull has unlocked (enough visits and all VIPs have left).</summary>
+    public bool mainScenePostVipLullUnlocked;
     public int[] tableLevels;
     public bool[] brokenTables;
     public bool[] unlockedDishes;
@@ -229,18 +232,28 @@ public static class PlayerProfileStorage
         ModifyCurrentProfile(profile => profile.mainSceneServedVipCount = Mathf.Max(0, servedVipCount));
 
     /// <summary>
-    /// True when the main restaurant should keep spawning customers
-    /// (business open and VIP serve-stop threshold not reached).
+    /// Post-VIP lull unlock threshold: this many VIP visits (arrivals), then lull after they leave.
     /// </summary>
-    public static bool ShouldMainSceneSpawnCustomersForCurrentPlayer(int servedVipSpawnStopCount)
+    public const int PostVipLullServedVipThreshold = 2;
+
+    public static void SetPostVipLullUnlockedForCurrentPlayer()
     {
-        if (!HasMainSceneBusinessStartedForCurrentPlayer())
+        if (IsPostVipLullActiveForCurrentPlayer())
+            return;
+
+        ModifyCurrentProfile(profile => profile.mainScenePostVipLullUnlocked = true);
+    }
+
+    /// <summary>
+    /// Persisted unlock for town competitor-entry UI. Set when the lull first activates
+    /// (enough VIP visits and no VIP left in the restaurant).
+    /// </summary>
+    public static bool IsPostVipLullActiveForCurrentPlayer()
+    {
+        if (!TryGetCurrentProfile(out PlayerProfileData profile))
             return false;
 
-        if (servedVipSpawnStopCount <= 0)
-            return true;
-
-        return GetMainSceneServedVipCountForCurrentPlayer() < servedVipSpawnStopCount;
+        return profile.mainScenePostVipLullUnlocked;
     }
 
     public static int GetTableLevelForCurrentPlayer(int tableIndex)
