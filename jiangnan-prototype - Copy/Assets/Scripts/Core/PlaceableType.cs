@@ -4,5 +4,6 @@ public enum PlaceableType
     Stove,
     Table,
     Stairs,
-    VipTable
+    VipTable,
+    VipStage
 }

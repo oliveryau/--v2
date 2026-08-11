@@ -208,6 +208,10 @@ public class HireSequenceController : MonoBehaviour
         if (!CanActivateHireSpot(spot))
             return;
 
+        // Second-floor hire walk-in is watched from the ground-floor camera (same as 一楼).
+        if (spot.Floor == RestaurantFloor.Second)
+            CharacterPanelController.Instance?.GoToFirstFloor();
+
         if (WorkerMovement.Instance == null)
             return;
 

@@ -1053,10 +1053,9 @@ public class CustomerManager : MonoBehaviour
         if (_customerPool == null || _spawnPoint == null || CustomerMovement.Instance == null || !CanSpawnCustomer())
             return;
 
-        // Hold the VIP cadence slot until second-floor staff finish walking to their waypoints.
+        // Hold the VIP cadence slot until mission 5 + VIP seat/staff are ready.
         // Otherwise a normal customer would fill that tick and the VIP would arrive too early.
-        if (IsNextSpawnVipCadence()
-            && (!AreSecondFloorVipStaffStationed() || !HasAvailableVipSeat()))
+        if (IsNextSpawnVipCadence() && !MeetsVipSpawnRequirements())
         {
             return;
         }
@@ -1167,10 +1166,48 @@ public class CustomerManager : MonoBehaviour
 
     private bool MeetsVipSpawnRequirements()
     {
+        // VIP only after mission 5 (VIP table + 2F staff + stage) is fully complete.
+        if (!HasCompletedVipPrepMission())
+            return false;
+
         if (!AreSecondFloorVipStaffStationed())
             return false;
 
+        if (!HasVipStageBuilt())
+            return false;
+
         return HasAvailableVipSeat();
+    }
+
+    private static bool HasCompletedVipPrepMission()
+    {
+        if (!RestaurantSceneMode.IsMainScene)
+            return true;
+
+        int missionPart = PlayerProfileStorage.GetMainSceneMissionPartIndexForCurrentPlayer();
+        MissionUiController missionUi = FindFirstObjectByType<MissionUiController>();
+
+        if (missionUi != null)
+        {
+            missionUi.EnsureInitialized();
+            missionPart = Mathf.Max(missionPart, missionUi.CurrentPartIndex);
+        }
+
+        return missionPart > MissionCatalog.VipPrepMissionPartIndex;
+    }
+
+    private static bool HasVipStageBuilt()
+    {
+        BuildSpot[] spots = FindObjectsByType<BuildSpot>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        for (int i = 0; i < spots.Length; i++)
+        {
+            BuildSpot spot = spots[i];
+            if (spot != null && spot.IsBuilt && spot.PlaceableType == PlaceableType.VipStage)
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>

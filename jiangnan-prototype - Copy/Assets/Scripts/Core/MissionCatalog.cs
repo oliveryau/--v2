@@ -37,6 +37,7 @@ public class MissionCatalog : ScriptableObject
     public const int HireMissionPartIndex = 1;
     public const int TableBuildMissionPartIndex = 2;
     public const int OpenBusinessMissionPartIndex = 3; // Stairs mission — unlocks auto-open after tables.
+    public const int VipPrepMissionPartIndex = 4; // VIP table + 2F staff + stage.
 
     [SerializeField] private MissionPartDefinition[] _parts = CreateDefaultParts();
 
@@ -190,6 +191,13 @@ public class MissionCatalog : ScriptableObject
                         requiredWorkerType = WorkerType.Waiter,
                         // Ground waiter (mission 2) + second-floor hire spot (waiter/call ladies/performer).
                         requiredCount = 2
+                    },
+                    new MissionTaskDefinition
+                    {
+                        taskKind = MissionTaskKind.Build,
+                        description = "建造歌台",
+                        requiredType = PlaceableType.VipStage,
+                        requiredCount = 1
                     }
                 }
             }

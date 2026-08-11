@@ -123,13 +123,14 @@ public class MissionUiController : MonoBehaviour
         RefreshUi();
     }
 
-    public void SyncPlacedCounts(int receptions, int stoves, int tables, int stairs, int vipTables)
+    public void SyncPlacedCounts(int receptions, int stoves, int tables, int stairs, int vipTables, int vipStages = 0)
     {
         SetPlacedCount(PlaceableType.Reception, receptions);
         SetPlacedCount(PlaceableType.Stove, stoves);
         SetPlacedCount(PlaceableType.Table, tables);
         SetPlacedCount(PlaceableType.Stairs, stairs);
         SetPlacedCount(PlaceableType.VipTable, vipTables);
+        SetPlacedCount(PlaceableType.VipStage, vipStages);
         RefreshUi();
     }
 

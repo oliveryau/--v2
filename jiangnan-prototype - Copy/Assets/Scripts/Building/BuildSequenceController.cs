@@ -636,6 +636,7 @@ public class BuildSequenceController : MonoBehaviour
         int tables = 0;
         int stairs = 0;
         int vipTables = 0;
+        int vipStages = 0;
 
         for (int i = 0; i < _allSpots.Count; i++)
         {
@@ -661,10 +662,13 @@ public class BuildSequenceController : MonoBehaviour
                 case PlaceableType.VipTable:
                     vipTables++;
                     break;
+                case PlaceableType.VipStage:
+                    vipStages++;
+                    break;
             }
         }
 
-        _missionUi.SyncPlacedCounts(receptions, stoves, tables, stairs, vipTables);
+        _missionUi.SyncPlacedCounts(receptions, stoves, tables, stairs, vipTables, vipStages);
     }
 
     private void RebuildSpotList()
