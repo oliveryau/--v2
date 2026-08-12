@@ -25,38 +25,7 @@ Transform:
   m_GameObject: {fileID: 6283682693295788304}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 2.1, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 6847317101402445448}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &8640018345324071808
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 5190829252340224114}
-  m_Layer: 0
-  m_Name: LaKePoint
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &5190829252340224114
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8640018345324071808}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 2.25, z: 0}
+  m_LocalPosition: {x: 0, y: 3, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -254,10 +223,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: 92431bab908cb644980fafaad63d0900,
         type: 3}
       insertIndex: -1
-      addedObject: {fileID: 5190829252340224114}
-    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: 92431bab908cb644980fafaad63d0900,
-        type: 3}
-      insertIndex: -1
       addedObject: {fileID: 5156933203183290732}
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 92431bab908cb644980fafaad63d0900,
@@ -327,7 +292,7 @@ MonoBehaviour:
   _agent: {fileID: 0}
   _locomotion: {fileID: 0}
   _reactPoint: {fileID: 5156933203183290732}
-  _lakePoint: {fileID: 5190829252340224114}
+  _lakePoint: {fileID: 0}
 --- !u!195 &94117843313907160
 NavMeshAgent:
   m_ObjectHideFlags: 0

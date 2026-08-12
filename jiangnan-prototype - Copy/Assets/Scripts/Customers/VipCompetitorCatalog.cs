@@ -41,6 +41,8 @@ public class VipCompetitorCatalog : ScriptableObject
                 RestaurantName = "戴威饭店",
                 DisplayName = "戴威",
                 RestaurantRating = 4.4f,
+                ChaseThresholdMinSeconds = 6f,
+                ChaseThresholdMaxSeconds = 8f,
                 SignatureDishes = new[]
                 {
                     new VipCompetitorDishOption { dishIndex = 7, displayName = "北京烧鸭", fightRating = 78 },
@@ -51,9 +53,11 @@ public class VipCompetitorCatalog : ScriptableObject
             {
                 Competitor = VipCompetitor.JiaHeng,
                 TownShopIndex = 2,
-                RestaurantName = "嘉恒饭店",
-                DisplayName = "嘉恒",
+                RestaurantName = "韩熙饭店",
+                DisplayName = "韩熙",
                 RestaurantRating = 3.7f,
+                ChaseThresholdMinSeconds = 1f,
+                ChaseThresholdMaxSeconds = 2f,
                 SignatureDishes = new[]
                 {
                     new VipCompetitorDishOption { dishIndex = 8, displayName = "佛跳墙", fightRating = 73 },
@@ -67,6 +71,8 @@ public class VipCompetitorCatalog : ScriptableObject
                 RestaurantName = "春华饭店",
                 DisplayName = "春华",
                 RestaurantRating = 3.9f,
+                ChaseThresholdMinSeconds = 4f,
+                ChaseThresholdMaxSeconds = 5f,
                 SignatureDishes = new[]
                 {
                     new VipCompetitorDishOption { dishIndex = 0, displayName = "东坡肉", fightRating = 88 },
@@ -80,6 +86,8 @@ public class VipCompetitorCatalog : ScriptableObject
                 RestaurantName = "红姐饭店",
                 DisplayName = "红姐",
                 RestaurantRating = 4.1f,
+                ChaseThresholdMinSeconds = 10f,
+                ChaseThresholdMaxSeconds = 11f,
                 SignatureDishes = new[]
                 {
                     new VipCompetitorDishOption { dishIndex = 7, displayName = "麻婆豆腐", fightRating = 74 },

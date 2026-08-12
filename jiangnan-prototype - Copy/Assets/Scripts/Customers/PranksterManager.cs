@@ -244,7 +244,21 @@ public class PranksterManager : MonoBehaviour
         }
 
         _prankster.EnterStationary();
-        yield return new WaitForSeconds(_waitAtWaypointDuration);
+        float waitDuration = Mathf.Max(0f, _waitAtWaypointDuration);
+        UIManager.Instance?.PlayPranksterArrivalDialogue(waitDuration);
+
+        float elapsed = 0f;
+        while (elapsed < waitDuration)
+        {
+            if (_chaseDismissed)
+                break;
+
+            UIManager.Instance?.UpdatePranksterWaitTimer(waitDuration - elapsed, waitDuration);
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        UIManager.Instance?.HidePranksterWaitTimer();
 
         if (_chaseDismissed)
         {
@@ -293,6 +307,8 @@ public class PranksterManager : MonoBehaviour
             yield return MovePrankster(leavePosition);
             _prankster.gameObject.SetActive(false);
         }
+
+        UIManager.Instance?.HidePranksterDialogue();
 
         _visitActive = false;
         _visitRoutine = null;

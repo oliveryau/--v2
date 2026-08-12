@@ -25,38 +25,7 @@ Transform:
   m_GameObject: {fileID: 1708516428978579572}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 2.1, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 3870349907418089999}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &9148248303913506700
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 3350233308254643047}
-  m_Layer: 0
-  m_Name: LaKePoint
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &3350233308254643047
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9148248303913506700}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 2.25, z: 0}
+  m_LocalPosition: {x: 0, y: 3, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -175,10 +144,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: 5d14a5ee65831d1408afd104137553db,
         type: 3}
       insertIndex: -1
-      addedObject: {fileID: 3350233308254643047}
-    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: 5d14a5ee65831d1408afd104137553db,
-        type: 3}
-      insertIndex: -1
       addedObject: {fileID: 8251839100628141553}
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 5d14a5ee65831d1408afd104137553db,
@@ -254,7 +219,7 @@ MonoBehaviour:
   _agent: {fileID: 0}
   _locomotion: {fileID: 0}
   _reactPoint: {fileID: 8251839100628141553}
-  _lakePoint: {fileID: 3350233308254643047}
+  _lakePoint: {fileID: 0}
 --- !u!195 &6786571538621607806
 NavMeshAgent:
   m_ObjectHideFlags: 0

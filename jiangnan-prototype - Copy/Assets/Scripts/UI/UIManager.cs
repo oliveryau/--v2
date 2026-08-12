@@ -146,12 +146,19 @@ public class UIManager : MonoBehaviour
     [SerializeField] private float _chasePranksterPulseMaxScale = 1.1f;
     [SerializeField] private float _chasePranksterPulseSpeed = 10f;
     [SerializeField] private RectTransform _pranksterDialogueRoot;
+    [SerializeField] private TextMeshProUGUI _pranksterDialogueText;
+    [SerializeField] private Image _pranksterDialogueIconImage;
     [SerializeField] private Sprite _pranksterDialogueSmirkIcon;
     [SerializeField] private Sprite _pranksterDialogueAngryIcon1;
     [SerializeField] private Sprite _pranksterDialogueAngryIcon2;
     [SerializeField] private float _pranksterDialogueFadeInDuration = 0.35f;
     [SerializeField] private float _pranksterDialogueHoldDuration = 1f;
     [SerializeField] private float _pranksterDialogueFadeOutDuration = 0.3f;
+    [SerializeField] private string[] _pranksterArrivalMessages =
+    {
+        "嘿嘿, 又来蹭饭了!",
+        "老板, 今日可有空招待?"
+    };
     [SerializeField] private string[] _pranksterChasedAwayMessages =
     {
         "算你狠! 走着瞧!",
@@ -162,6 +169,12 @@ public class UIManager : MonoBehaviour
         "哈哈, 让你开门做生意!",
         "哎呀，手滑了~"
     };
+    [SerializeField] private RectTransform _pranksterWaitTimerRoot;
+    [SerializeField] private Image _pranksterWaitTimerFillImage;
+    [SerializeField] private TextMeshProUGUI _pranksterWaitTimerCountdownText;
+    [SerializeField] private float _pranksterIconPulseMinScale = 0.95f;
+    [SerializeField] private float _pranksterIconPulseMaxScale = 1.05f;
+    [SerializeField] private float _pranksterIconPulseSpeed = 4f;
 
     [Header("Repair Table UI")]
     [SerializeField] private RectTransform _repairTableUiRoot;
@@ -250,6 +263,15 @@ public class UIManager : MonoBehaviour
     [Header("Competitor Catalog")]
     [SerializeField] private VipCompetitorCatalog _competitorCatalog;
 
+    [Header("Competitor Visit")]
+    [SerializeField] private float _competitorStayDurationSeconds = 15f;
+    [SerializeField] private float _competitorChaseThresholdMinSeconds = 1f;
+    [SerializeField] private float _competitorChaseThresholdMaxSeconds = 5f;
+    [SerializeField] private float _chasedAlertHoldSeconds = 3f;
+    [SerializeField] private float _chasedAlertPulseMinScale = 0.97f;
+    [SerializeField] private float _chasedAlertPulseMaxScale = 1.03f;
+    [SerializeField] private float _chasedAlertPulseSpeed = 4f;
+
     [Header("Town Owner Shop Name UI")]
     [SerializeField] private RectTransform _ownShopNameUiRoot;
     [SerializeField] private TextMeshProUGUI _ownShopNameText;
@@ -313,11 +335,13 @@ public class UIManager : MonoBehaviour
     private bool _vipIntroButtonWired;
     private bool _vipEventButtonsWired;
     private RectTransform _pranksterDialogueRootRuntime;
-    private TextMeshProUGUI _pranksterDialogueText;
-    private Image _pranksterDialogueIconImage;
+    private RectTransform _pranksterDialogueIconRoot;
     private Graphic[] _pranksterDialogueGraphics;
     private Color[] _pranksterDialogueTargetColors;
     private Coroutine _pranksterDialogueRoutine;
+    private float _pranksterWaitTimerRemaining;
+    private float _pranksterWaitTimerDuration;
+    private bool _pranksterWaitTimerActive;
     private Coroutine _dushRepairEffectRoutine;
     private Coroutine _openBusinessSequenceRoutine;
     private bool _openBusinessSequencePlayed;
@@ -329,6 +353,9 @@ public class UIManager : MonoBehaviour
     private Button _enterShopIconButton;
     private bool _enterShopUiVisible;
     private readonly List<EnterCompetitorShopButtonHandler> _enterCompetitorShopButtonHandlers = new();
+    private RectTransform _chasedAlertRoot;
+    private TextMeshProUGUI _chasedAlertNameText;
+    private Coroutine _chasedAlertRoutine;
     private Coroutine _townBuildRoutine;
     private bool _townBuildingEffectVisible;
     private GameObject[] _townOpponentShops;
@@ -408,7 +435,11 @@ public class UIManager : MonoBehaviour
     private const string PranksterNameUiName = "Prankster Name";
     private const string PranksterDialogueRootName = "Prankster Dialogue";
     private const string PranksterDialogueTextName = "Prankster Text";
+    private const string PranksterDialogueTextBgName = "Text Bg";
     private const string PranksterDialogueIconName = "Prankster Icon";
+    private const string PranksterWaitTimerName = "Prankster Timer";
+    private const string PranksterWaitTimerFillName = "Energy Bar";
+    private const string PranksterWaitTimerCountdownName = "Countdown";
     private const string RepairTableUiName = "Repair Table";
     private const string DushRepairUiName = "Dush_Repair";
     private const string NotEnoughMoneyUiRootName = "Not enough money";
@@ -416,6 +447,7 @@ public class UIManager : MonoBehaviour
 
     private enum PranksterDialogueType
     {
+        Arrived,
         ChasedAway,
         TableBroken
     }
@@ -453,6 +485,9 @@ public class UIManager : MonoBehaviour
     private const string ShopRatingPointName = "Rating Point";
     private const string EnterCompetitorShopTemplateName = "EnterCompetitorShop";
     private const string EnterCompetitorShopPrefix = "EnterCompetitorShop (";
+    private const string ChasedAlertUiName = "Chased Alert";
+    private const string ChasedAlertNameTextName = "Name Text";
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -536,6 +571,7 @@ public class UIManager : MonoBehaviour
         InitializeEnterCompetitorShopUi();
         InitializeCompetitorSceneNameUi();
         InitializeCompetitorShopNameUi();
+        InitializeCompetitorVisitUi();
         InitializeOwnShopNameUi();
         InitializeTownRatingUi();
         InitializeSceneNavigationUi();
@@ -567,6 +603,7 @@ public class UIManager : MonoBehaviour
         {
             SyncTownRatingTexts();
             SyncTownCompetitorShopVisibility();
+            TryPlayPendingTownChasedAlert();
         }
     }
 
@@ -666,6 +703,12 @@ public class UIManager : MonoBehaviour
         if (_goldMinusAnimation != null)
             StopCoroutine(_goldMinusAnimation);
 
+        if (_chasedAlertRoutine != null)
+        {
+            StopCoroutine(_chasedAlertRoutine);
+            _chasedAlertRoutine = null;
+        }
+
         HideVipUi();
         StopAllCoinTrailAnimations();
         ClearSeatPaymentUis();
@@ -696,6 +739,7 @@ public class UIManager : MonoBehaviour
         UpdateTableStatusPositions();
         UpdateNotEnoughMoneyUiPositions();
         UpdatePranksterChaseUi();
+        UpdatePranksterDialoguePresentation();
         UpdateRepairTableUis();
         UpdateEnterShopUiPosition();
         UpdateEnterCompetitorShopUiPositions();
@@ -704,6 +748,7 @@ public class UIManager : MonoBehaviour
         UpdateOwnShopNameUiPosition();
         UpdateOwnRatingUiPosition();
         UpdateTownPopupUi();
+        UpdateChasedAlertPulse();
         FlushPendingGoldDelta();
     }
 
@@ -984,14 +1029,45 @@ public class UIManager : MonoBehaviour
         _vipEventCustomer = null;
     }
 
+    public void PlayPranksterArrivalDialogue(float waitDuration = 0f)
+    {
+        PlayPranksterDialogue(PranksterDialogueType.Arrived);
+
+        if (waitDuration > 0f)
+            ShowPranksterWaitTimer(waitDuration);
+        else
+            HidePranksterWaitTimer();
+    }
+
     public void PlayPranksterChasedAwayDialogue()
     {
+        HidePranksterWaitTimer();
         PlayPranksterDialogue(PranksterDialogueType.ChasedAway);
     }
 
     public void PlayPranksterTableBrokenDialogue()
     {
+        HidePranksterWaitTimer();
         PlayPranksterDialogue(PranksterDialogueType.TableBroken);
+    }
+
+    public void UpdatePranksterWaitTimer(float remaining, float duration)
+    {
+        if (!_pranksterWaitTimerActive)
+            return;
+
+        _pranksterWaitTimerDuration = Mathf.Max(0.01f, duration);
+        _pranksterWaitTimerRemaining = Mathf.Clamp(remaining, 0f, _pranksterWaitTimerDuration);
+        ApplyPranksterWaitTimerVisuals();
+    }
+
+    public void HidePranksterWaitTimer()
+    {
+        _pranksterWaitTimerActive = false;
+        _pranksterWaitTimerRemaining = 0f;
+
+        if (_pranksterWaitTimerRoot != null)
+            _pranksterWaitTimerRoot.gameObject.SetActive(false);
     }
 
     private void PlayPranksterDialogue(PranksterDialogueType dialogueType)
@@ -999,18 +1075,37 @@ public class UIManager : MonoBehaviour
         if (!RestaurantSceneMode.IsMainScene)
             return;
 
-        CachePranksterDialogueUi();
+        CachePranksterDialogueUi(keepVisibleIfActive: true);
 
         if (_pranksterDialogueRootRuntime == null)
             return;
 
         if (_pranksterDialogueRoutine != null)
+        {
             StopCoroutine(_pranksterDialogueRoutine);
+            _pranksterDialogueRoutine = null;
+        }
 
-        _pranksterDialogueRoutine = StartCoroutine(PlayPranksterDialogueCoroutine(dialogueType));
+        bool alreadyVisible = _pranksterDialogueRootRuntime.gameObject.activeSelf;
+        PreparePranksterDialogueContent(dialogueType);
+        CapturePranksterDialogueTargetColors();
+
+        if (alreadyVisible)
+        {
+            // Keep UI up for the whole visit — only refresh text/icon.
+            UiGraphicFade.RestoreColors(_pranksterDialogueGraphics, _pranksterDialogueTargetColors);
+            return;
+        }
+
+        _pranksterDialogueRoutine = StartCoroutine(ShowPranksterDialogueCoroutine());
     }
 
-    private void HidePranksterDialogue()
+    public void HidePranksterDialogue()
+    {
+        HidePranksterDialogue(immediate: false);
+    }
+
+    private void HidePranksterDialogue(bool immediate)
     {
         if (_pranksterDialogueRoutine != null)
         {
@@ -1018,16 +1113,43 @@ public class UIManager : MonoBehaviour
             _pranksterDialogueRoutine = null;
         }
 
-        if (_pranksterDialogueRootRuntime == null)
+        HidePranksterWaitTimer();
+        CachePranksterDialogueUi(keepVisibleIfActive: true);
+        ResetPranksterIconScale();
+
+        if (_pranksterDialogueRootRuntime == null || !_pranksterDialogueRootRuntime.gameObject.activeSelf)
             return;
 
-        if (_pranksterDialogueGraphics != null && _pranksterDialogueTargetColors != null)
-            UiGraphicFade.RestoreColors(_pranksterDialogueGraphics, _pranksterDialogueTargetColors);
+        if (immediate || !isActiveAndEnabled)
+        {
+            if (_pranksterDialogueGraphics != null && _pranksterDialogueTargetColors != null)
+                UiGraphicFade.RestoreColors(_pranksterDialogueGraphics, _pranksterDialogueTargetColors);
 
-        _pranksterDialogueRootRuntime.gameObject.SetActive(false);
+            _pranksterDialogueRootRuntime.gameObject.SetActive(false);
+            return;
+        }
+
+        _pranksterDialogueRoutine = StartCoroutine(HidePranksterDialogueCoroutine());
     }
 
-    private void CachePranksterDialogueUi()
+    private void ShowPranksterWaitTimer(float duration)
+    {
+        CachePranksterDialogueUi(keepVisibleIfActive: true);
+
+        if (_pranksterWaitTimerRoot == null)
+            return;
+
+        if (_pranksterDialogueRootRuntime != null && !_pranksterDialogueRootRuntime.gameObject.activeSelf)
+            _pranksterDialogueRootRuntime.gameObject.SetActive(true);
+
+        _pranksterWaitTimerDuration = Mathf.Max(0.01f, duration);
+        _pranksterWaitTimerRemaining = _pranksterWaitTimerDuration;
+        _pranksterWaitTimerActive = true;
+        _pranksterWaitTimerRoot.gameObject.SetActive(true);
+        ApplyPranksterWaitTimerVisuals();
+    }
+
+    private void CachePranksterDialogueUi(bool keepVisibleIfActive = false)
     {
         if (_screenCanvas == null)
             return;
@@ -1055,36 +1177,111 @@ public class UIManager : MonoBehaviour
             _pranksterDialogueIconImage = iconRoot != null ? iconRoot.GetComponent<Image>() : null;
         }
 
-        _pranksterDialogueGraphics = _pranksterDialogueRootRuntime.GetComponentsInChildren<Graphic>(true);
-        _pranksterDialogueTargetColors = UiGraphicFade.CaptureColors(_pranksterDialogueGraphics);
+        if (_pranksterDialogueIconRoot == null && _pranksterDialogueIconImage != null)
+            _pranksterDialogueIconRoot = _pranksterDialogueIconImage.transform as RectTransform;
 
-        for (int i = 0; i < _pranksterDialogueGraphics.Length; i++)
+        if (_pranksterWaitTimerRoot == null)
         {
-            if (_pranksterDialogueGraphics[i] != null)
-                _pranksterDialogueGraphics[i].raycastTarget = false;
+            Transform timerRoot = FindChildTransform(_pranksterDialogueRootRuntime, PranksterWaitTimerName);
+            _pranksterWaitTimerRoot = timerRoot as RectTransform;
         }
 
-        _pranksterDialogueRootRuntime.gameObject.SetActive(false);
+        if (_pranksterWaitTimerRoot != null)
+        {
+            if (_pranksterWaitTimerFillImage == null)
+            {
+                Transform fillTransform = FindChildTransform(_pranksterWaitTimerRoot, PranksterWaitTimerFillName);
+                if (fillTransform != null)
+                    _pranksterWaitTimerFillImage = fillTransform.GetComponent<Image>();
+                else
+                    _pranksterWaitTimerFillImage = _pranksterWaitTimerRoot.GetComponent<Image>();
+            }
+
+            if (_pranksterWaitTimerCountdownText == null)
+            {
+                Transform countdownTransform = FindChildTransform(_pranksterWaitTimerRoot, PranksterWaitTimerCountdownName);
+                if (countdownTransform != null)
+                    _pranksterWaitTimerCountdownText = countdownTransform.GetComponent<TextMeshProUGUI>();
+            }
+        }
+
+        bool wasActive = _pranksterDialogueRootRuntime.gameObject.activeSelf;
+
+        CapturePranksterDialogueTargetColors();
+
+        if (_pranksterDialogueGraphics != null)
+        {
+            for (int i = 0; i < _pranksterDialogueGraphics.Length; i++)
+            {
+                if (_pranksterDialogueGraphics[i] != null)
+                    _pranksterDialogueGraphics[i].raycastTarget = false;
+            }
+        }
+
+        if (!keepVisibleIfActive || !wasActive)
+        {
+            _pranksterDialogueRootRuntime.gameObject.SetActive(false);
+            HidePranksterWaitTimer();
+        }
+        else if (!_pranksterWaitTimerActive && _pranksterWaitTimerRoot != null)
+        {
+            _pranksterWaitTimerRoot.gameObject.SetActive(false);
+        }
+    }
+
+    private void CapturePranksterDialogueTargetColors()
+    {
+        if (_pranksterDialogueRootRuntime == null)
+            return;
+
+        // Snapshot while fully opaque so mid-fade refreshes don't lock in transparent targets.
+        if (_pranksterDialogueGraphics != null && _pranksterDialogueTargetColors != null)
+            UiGraphicFade.RestoreColors(_pranksterDialogueGraphics, _pranksterDialogueTargetColors);
+
+        _pranksterDialogueGraphics = _pranksterDialogueRootRuntime.GetComponentsInChildren<Graphic>(true);
+        _pranksterDialogueTargetColors = UiGraphicFade.CaptureColors(_pranksterDialogueGraphics);
     }
 
     private void PreparePranksterDialogueContent(PranksterDialogueType dialogueType)
     {
+        Transform textBg = FindChildTransform(_pranksterDialogueRootRuntime, PranksterDialogueTextBgName);
+        if (textBg != null)
+            textBg.gameObject.SetActive(true);
+
         PreparePranksterDialogueIcon(dialogueType);
 
         if (_pranksterDialogueText != null)
         {
             _pranksterDialogueText.gameObject.SetActive(true);
 
-            string[] messages = dialogueType == PranksterDialogueType.TableBroken
-                ? _pranksterTableBrokenMessages
-                : _pranksterChasedAwayMessages;
+            string[] messages = ResolvePranksterDialogueMessages(dialogueType);
 
             if (messages != null && messages.Length > 0)
                 _pranksterDialogueText.text = messages[UnityEngine.Random.Range(0, messages.Length)];
+
+            Color textColor = _pranksterDialogueText.color;
+            if (textColor.a < 0.99f)
+            {
+                textColor.a = 1f;
+                _pranksterDialogueText.color = textColor;
+            }
         }
 
         if (_pranksterDialogueIconImage != null)
             _pranksterDialogueIconImage.gameObject.SetActive(true);
+    }
+
+    private string[] ResolvePranksterDialogueMessages(PranksterDialogueType dialogueType)
+    {
+        switch (dialogueType)
+        {
+            case PranksterDialogueType.Arrived:
+                return _pranksterArrivalMessages;
+            case PranksterDialogueType.TableBroken:
+                return _pranksterTableBrokenMessages;
+            default:
+                return _pranksterChasedAwayMessages;
+        }
     }
 
     private void PreparePranksterDialogueIcon(PranksterDialogueType dialogueType)
@@ -1094,7 +1291,9 @@ public class UIManager : MonoBehaviour
 
         _pranksterDialogueIconImage.gameObject.SetActive(true);
 
-        if (dialogueType == PranksterDialogueType.TableBroken)
+        // Arrival + table-break taunts use smirk; chased-away uses angry.
+        if (dialogueType == PranksterDialogueType.TableBroken
+            || dialogueType == PranksterDialogueType.Arrived)
         {
             if (_pranksterDialogueSmirkIcon != null)
                 _pranksterDialogueIconImage.sprite = _pranksterDialogueSmirkIcon;
@@ -1122,12 +1321,9 @@ public class UIManager : MonoBehaviour
         return hasAngry2 ? _pranksterDialogueAngryIcon2 : null;
     }
 
-    private IEnumerator PlayPranksterDialogueCoroutine(PranksterDialogueType dialogueType)
+    private IEnumerator ShowPranksterDialogueCoroutine()
     {
-        PreparePranksterDialogueContent(dialogueType);
-
-        _pranksterDialogueGraphics = _pranksterDialogueRootRuntime.GetComponentsInChildren<Graphic>(true);
-        _pranksterDialogueTargetColors = UiGraphicFade.CaptureColors(_pranksterDialogueGraphics);
+        CapturePranksterDialogueTargetColors();
         Color[] transparentColors = UiGraphicFade.BuildTransparentColors(_pranksterDialogueTargetColors);
 
         _pranksterDialogueRootRuntime.gameObject.SetActive(true);
@@ -1139,8 +1335,19 @@ public class UIManager : MonoBehaviour
             _pranksterDialogueTargetColors,
             _pranksterDialogueFadeInDuration);
 
-        if (_pranksterDialogueHoldDuration > 0f)
-            yield return new WaitForSeconds(_pranksterDialogueHoldDuration);
+        _pranksterDialogueRoutine = null;
+    }
+
+    private IEnumerator HidePranksterDialogueCoroutine()
+    {
+        if (_pranksterDialogueRootRuntime == null)
+        {
+            _pranksterDialogueRoutine = null;
+            yield break;
+        }
+
+        CapturePranksterDialogueTargetColors();
+        Color[] transparentColors = UiGraphicFade.BuildTransparentColors(_pranksterDialogueTargetColors);
 
         yield return UiGraphicFade.FadeColors(
             _pranksterDialogueGraphics,
@@ -1150,7 +1357,62 @@ public class UIManager : MonoBehaviour
 
         _pranksterDialogueRootRuntime.gameObject.SetActive(false);
         UiGraphicFade.RestoreColors(_pranksterDialogueGraphics, _pranksterDialogueTargetColors);
+        ResetPranksterIconScale();
         _pranksterDialogueRoutine = null;
+    }
+
+    private void UpdatePranksterDialoguePresentation()
+    {
+        UpdatePranksterIconPulse();
+    }
+
+    private void UpdatePranksterIconPulse()
+    {
+        if (_pranksterDialogueIconRoot == null)
+        {
+            if (_pranksterDialogueIconImage != null)
+                _pranksterDialogueIconRoot = _pranksterDialogueIconImage.transform as RectTransform;
+            else
+                return;
+        }
+
+        bool shouldPulse = _pranksterDialogueRootRuntime != null
+            && _pranksterDialogueRootRuntime.gameObject.activeInHierarchy;
+
+        if (shouldPulse)
+        {
+            _pranksterDialogueIconRoot.localScale = Vector3.one * GetPulseScale(
+                _pranksterIconPulseMinScale,
+                _pranksterIconPulseMaxScale,
+                _pranksterIconPulseSpeed);
+            return;
+        }
+
+        ResetPranksterIconScale();
+    }
+
+    private void ResetPranksterIconScale()
+    {
+        if (_pranksterDialogueIconRoot != null)
+            _pranksterDialogueIconRoot.localScale = Vector3.one;
+    }
+
+    private void ApplyPranksterWaitTimerVisuals()
+    {
+        float normalized = _pranksterWaitTimerDuration > 0f
+            ? Mathf.Clamp01(_pranksterWaitTimerRemaining / _pranksterWaitTimerDuration)
+            : 0f;
+
+        if (_pranksterWaitTimerFillImage != null)
+            _pranksterWaitTimerFillImage.fillAmount = normalized;
+
+        if (_pranksterWaitTimerCountdownText != null)
+        {
+            int totalSeconds = Mathf.CeilToInt(Mathf.Max(0f, _pranksterWaitTimerRemaining));
+            int minutes = totalSeconds / 60;
+            int seconds = totalSeconds % 60;
+            _pranksterWaitTimerCountdownText.text = $"{minutes:00}:{seconds:00}";
+        }
     }
 
     private void CacheVipUi()
@@ -5069,6 +5331,9 @@ public class UIManager : MonoBehaviour
 
     private void HandleEnterCompetitorShopClicked(int shopIndex)
     {
+        if (CompetitorSceneSelection.IsTownShopEnterBlocked(shopIndex))
+            return;
+
         CompetitorSceneSelection.SelectFromTownShopIndex(shopIndex);
         SceneManager.LoadScene(RestaurantSceneMode.CompetitorSceneName);
     }
@@ -5090,11 +5355,119 @@ public class UIManager : MonoBehaviour
             if (binding?.UiRoot == null)
                 continue;
 
+            int shopIndex = ResolveEnterCompetitorShopIndex(binding, i + 1);
             binding.UiRoot.gameObject.SetActive(visible);
 
             if (!visible)
+            {
+                binding.UiRoot.localScale = Vector3.one;
+                continue;
+            }
+
+            bool blocked = CompetitorSceneSelection.IsTownShopEnterBlocked(shopIndex);
+            ApplyEnterCompetitorShopBlockedVisual(binding.UiRoot, blocked);
+
+            if (blocked)
                 binding.UiRoot.localScale = Vector3.one;
         }
+    }
+
+    private static void ApplyEnterCompetitorShopBlockedVisual(RectTransform uiRoot, bool blocked)
+    {
+        if (uiRoot == null)
+            return;
+
+        CanvasGroup canvasGroup = uiRoot.GetComponent<CanvasGroup>();
+        if (canvasGroup == null)
+            canvasGroup = uiRoot.gameObject.AddComponent<CanvasGroup>();
+
+        canvasGroup.alpha = blocked ? 0.4f : 1f;
+        canvasGroup.interactable = !blocked;
+        canvasGroup.blocksRaycasts = !blocked;
+
+        Transform iconTransform = uiRoot.Find("Icon");
+        GameObject clickTarget = iconTransform != null ? iconTransform.gameObject : uiRoot.gameObject;
+        Button button = clickTarget.GetComponent<Button>();
+        if (button != null)
+            button.interactable = !blocked;
+    }
+
+    private void TryPlayPendingTownChasedAlert()
+    {
+        if (!IsActiveTownScene())
+            return;
+
+        if (!CompetitorSceneSelection.TryConsumePendingChasedAlert(out _, out VipCompetitor competitor))
+            return;
+
+        CacheChasedAlertUi();
+
+        if (_chasedAlertRoot == null)
+            return;
+
+        if (_chasedAlertNameText != null)
+            _chasedAlertNameText.text = CompetitorSceneSelection.GetChasedAlertMessage(competitor);
+
+        if (_chasedAlertRoutine != null)
+            StopCoroutine(_chasedAlertRoutine);
+
+        _chasedAlertRoutine = StartCoroutine(PlayChasedAlertRoutine());
+    }
+
+    private void CacheChasedAlertUi()
+    {
+        if (_chasedAlertRoot == null)
+        {
+            GameObject alertObject = FindSceneUiObject(ChasedAlertUiName);
+            if (alertObject != null)
+                _chasedAlertRoot = alertObject.transform as RectTransform;
+        }
+
+        if (_chasedAlertRoot == null)
+            return;
+
+        if (_chasedAlertNameText == null)
+        {
+            Transform nameTransform = FindChildTransform(_chasedAlertRoot, ChasedAlertNameTextName);
+            if (nameTransform != null)
+                _chasedAlertNameText = nameTransform.GetComponent<TextMeshProUGUI>();
+        }
+
+        _chasedAlertRoot.gameObject.SetActive(false);
+    }
+
+    private IEnumerator PlayChasedAlertRoutine()
+    {
+        if (_chasedAlertRoot == null)
+            yield break;
+
+        _chasedAlertRoot.localScale = Vector3.one;
+        _chasedAlertRoot.gameObject.SetActive(true);
+        yield return new WaitForSeconds(Mathf.Max(0.01f, _chasedAlertHoldSeconds));
+
+        if (_chasedAlertRoot != null)
+        {
+            _chasedAlertRoot.localScale = Vector3.one;
+            _chasedAlertRoot.gameObject.SetActive(false);
+        }
+
+        _chasedAlertRoutine = null;
+    }
+
+    private void UpdateChasedAlertPulse()
+    {
+        if (!IsActiveTownScene()
+            || _chasedAlertRoot == null
+            || !_chasedAlertRoot.gameObject.activeInHierarchy
+            || _chasedAlertRoutine == null)
+        {
+            return;
+        }
+
+        _chasedAlertRoot.localScale = Vector3.one * GetPulseScale(
+            _chasedAlertPulseMinScale,
+            _chasedAlertPulseMaxScale,
+            _chasedAlertPulseSpeed);
     }
 
     private void UpdateEnterCompetitorShopUiPositions()
@@ -5112,7 +5485,10 @@ public class UIManager : MonoBehaviour
                 continue;
 
             UpdateScreenUiPosition(binding.UiRoot, binding.Anchor.position);
-            binding.UiRoot.localScale = Vector3.one * pulseScale;
+
+            int shopIndex = ResolveEnterCompetitorShopIndex(binding, i + 1);
+            bool blocked = CompetitorSceneSelection.IsTownShopEnterBlocked(shopIndex);
+            binding.UiRoot.localScale = blocked ? Vector3.one : Vector3.one * pulseScale;
         }
     }
 
@@ -5255,6 +5631,28 @@ public class UIManager : MonoBehaviour
             return;
 
         _competitorRestaurantNameText.text = CompetitorSceneSelection.GetRestaurantName();
+    }
+
+    private void InitializeCompetitorVisitUi()
+    {
+        if (!RestaurantSceneMode.IsCompetitorScene)
+            return;
+
+        CompetitorVisitController visitController = GetComponent<CompetitorVisitController>();
+        if (visitController == null)
+            visitController = gameObject.AddComponent<CompetitorVisitController>();
+
+        visitController.ConfigureStayDuration(_competitorStayDurationSeconds);
+
+        float chaseMin = _competitorChaseThresholdMinSeconds;
+        float chaseMax = _competitorChaseThresholdMaxSeconds;
+        if (CompetitorSceneSelection.TryGetChaseThresholdRange(out float profileMin, out float profileMax))
+        {
+            chaseMin = profileMin;
+            chaseMax = profileMax;
+        }
+
+        visitController.ConfigureChaseThreshold(chaseMin, chaseMax);
     }
 
     private void InitializeOwnShopNameUi()
@@ -5841,7 +6239,7 @@ public class UIManager : MonoBehaviour
 
         SafeSetUiActive(_pranksterNameUiRoot, false);
         CachePranksterDialogueUi();
-        HidePranksterDialogue();
+        HidePranksterDialogue(immediate: true);
     }
 
     private void InitializeRepairTableUi()
@@ -6121,7 +6519,7 @@ public class UIManager : MonoBehaviour
         }
 
         SafeSetUiActive(_pranksterNameUiRoot, false);
-        HidePranksterDialogue();
+        HidePranksterDialogue(immediate: true);
     }
 
     private void ClearRepairTableUis()

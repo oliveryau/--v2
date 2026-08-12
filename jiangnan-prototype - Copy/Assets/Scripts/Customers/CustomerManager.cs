@@ -29,14 +29,23 @@ public class CustomerManager : MonoBehaviour
     [SerializeField] private Transform _vipEntryWaypoint;
 
     [Header("Business Resume Prewarm")]
-    [Tooltip("When returning to an open business, seed this many mid-visit customers (respects the post-VIP cap).")]
-    [SerializeField] private int _resumePrewarmMinCustomers = 2;
-    [SerializeField] private int _resumePrewarmMaxCustomers = 6;
+    [Tooltip("When returning to an open business outside the post-VIP lull, seed this many mid-visit customers.")]
+    [SerializeField] private int _resumePrewarmMinCustomers = 4;
+    [SerializeField] private int _resumePrewarmMaxCustomers = 8;
+    [Tooltip("When returning during the post-VIP lull, seed this lighter mid-visit count.")]
+    [SerializeField] private int _resumePrewarmLullMinCustomers = 2;
+    [SerializeField] private int _resumePrewarmLullMaxCustomers = 4;
 
     [Header("Timings")]
     [SerializeField] private float _queueWaitTimeout;
     [SerializeField] private float _foodWaitTimeout;
     [SerializeField] private float _eatDuration;
+    [Tooltip("Competitor scene only: seconds a VIP waits at the VIP waypoint after a seat is free before walking to it.")]
+    [SerializeField] private float _vipWaypointHoldSeconds = 5f;
+    [Tooltip("Competitor scene only: seconds a normal customer waits in queue after a seat is free before walking to it.")]
+    [SerializeField] private float _competitorQueueHoldSeconds = 3f;
+    [Tooltip("Competitor scene only: extra delay per queue slot after Waypoint_1 before walking to a seat (slot 0 = Waypoint_1).")]
+    [SerializeField] private float _competitorSeatStaggerSeconds = 1f;
 
     [Header("VIP Events")]
     [SerializeField] private float _vipSettleDelay = 3f;
@@ -68,6 +77,8 @@ public class CustomerManager : MonoBehaviour
     private bool _awaitingVipAfterPrankster;
     private int _customersSincePranksterLeft;
     private int _servedVipCount;
+    private int _runtimeVipSpawnStopCount;
+    private bool _appliedCurrentLullSideEffects;
     private bool _callLadiesActive;
     private bool _callLadiesStationed;
     private bool _performerOnStage;
@@ -731,7 +742,28 @@ public class CustomerManager : MonoBehaviour
         if (_spawnRoutine != null)
             return;
 
+        bool resumeAfterSteal = false;
+        int stolenShopCount = 0;
+        if (RestaurantSceneMode.IsMainScene)
+            resumeAfterSteal = CompetitorSceneSelection.ConsumePendingBusinessResumeAfterSteal(out stolenShopCount);
+
         RestoreServedVipCountFromSave();
+        RestoreVipSpawnStopCountFromSave();
+
+        // Successful competitor steal exits post-VIP lull traffic and restarts the VIP cycle.
+        if (resumeAfterSteal)
+        {
+            _servedVipCount = 0;
+            PlayerProfileStorage.SetMainSceneServedVipCountForCurrentPlayer(0);
+            ResetAlternationSpawnTracking();
+            _appliedCurrentLullSideEffects = false;
+
+            // Base limit (usually 2) + one VIP per distinct competitor shop stolen from this outing.
+            int baseStopCount = Mathf.Max(1, _servedVipSpawnStopCount);
+            _runtimeVipSpawnStopCount = baseStopCount + Mathf.Max(0, stolenShopCount);
+            PlayerProfileStorage.SetMainSceneVipSpawnStopCountOverrideForCurrentPlayer(_runtimeVipSpawnStopCount);
+        }
+
         // Resume / migrate: if enough VIPs already visited and none are active, unlock lull now.
         TryUnlockPostVipLull();
 
@@ -743,7 +775,7 @@ public class CustomerManager : MonoBehaviour
             _awaitingVipAfterPrankster = true;
         }
 
-        bool prewarm = ShouldPrewarmBusinessOnResume();
+        bool prewarm = ShouldPrewarmBusinessOnResume(resumeAfterSteal);
         _spawnRoutine = StartCoroutine(SpawnLoopWithOptionalPrewarm(prewarm));
     }
 
@@ -759,7 +791,26 @@ public class CustomerManager : MonoBehaviour
         _servedVipCount = PlayerProfileStorage.GetMainSceneServedVipCountForCurrentPlayer();
     }
 
-    private static bool ShouldPrewarmBusinessOnResume()
+    private void RestoreVipSpawnStopCountFromSave()
+    {
+        if (!RestaurantSceneMode.IsMainScene)
+        {
+            _runtimeVipSpawnStopCount = 0;
+            return;
+        }
+
+        _runtimeVipSpawnStopCount = PlayerProfileStorage.GetMainSceneVipSpawnStopCountOverrideForCurrentPlayer();
+    }
+
+    private int GetEffectiveVipSpawnStopCount()
+    {
+        if (_runtimeVipSpawnStopCount > 0)
+            return _runtimeVipSpawnStopCount;
+
+        return Mathf.Max(0, _servedVipSpawnStopCount);
+    }
+
+    private static bool ShouldPrewarmBusinessOnResume(bool resumeAfterSteal = false)
     {
         if (GameManager.Instance == null)
             return false;
@@ -771,8 +822,10 @@ public class CustomerManager : MonoBehaviour
         if (!RestaurantSceneMode.IsMainScene)
             return false;
 
-        // KIV: returning from competitor steal should also keep prewarm active
-        // (treat steal-return like a normal business resume).
+        // After stealing from a competitor, reopen mid-service like a normal busy resume.
+        if (resumeAfterSteal || CompetitorSceneSelection.HasPendingBusinessResumeAfterSteal)
+            return true;
+
         return GameManager.Instance.DidResumeBusinessSessionOnLoad;
     }
 
@@ -800,8 +853,8 @@ public class CustomerManager : MonoBehaviour
         if (!RestaurantSceneMode.IsMainScene)
             return false;
 
-        return _servedVipSpawnStopCount > 0
-            && _servedVipCount >= _servedVipSpawnStopCount;
+        int stopCount = GetEffectiveVipSpawnStopCount();
+        return stopCount > 0 && _servedVipCount >= stopCount;
     }
 
     /// <summary>
@@ -819,9 +872,22 @@ public class CustomerManager : MonoBehaviour
     private void TryUnlockPostVipLull()
     {
         if (!IsPostVipLullActive())
+        {
+            _appliedCurrentLullSideEffects = false;
             return;
+        }
 
         PlayerProfileStorage.SetPostVipLullUnlockedForCurrentPlayer();
+
+        if (_appliedCurrentLullSideEffects)
+            return;
+
+        _appliedCurrentLullSideEffects = true;
+
+        // Lull cycle start: drop steal VIP bonus and re-enable competitor enter buttons.
+        _runtimeVipSpawnStopCount = 0;
+        PlayerProfileStorage.ClearMainSceneVipSpawnStopCountOverrideForCurrentPlayer();
+        CompetitorSceneSelection.ClearBlockedTownShops();
     }
 
     /// <summary>
@@ -866,8 +932,19 @@ public class CustomerManager : MonoBehaviour
         if (maxCustomers <= 0)
             return;
 
-        int minCount = Mathf.Max(0, _resumePrewarmMinCustomers);
-        int maxCount = Mathf.Max(minCount, _resumePrewarmMaxCustomers);
+        int minCount;
+        int maxCount;
+        if (IsPostVipLullActive())
+        {
+            minCount = Mathf.Max(0, _resumePrewarmLullMinCustomers);
+            maxCount = Mathf.Max(minCount, _resumePrewarmLullMaxCustomers);
+        }
+        else
+        {
+            minCount = Mathf.Max(0, _resumePrewarmMinCustomers);
+            maxCount = Mathf.Max(minCount, _resumePrewarmMaxCustomers);
+        }
+
         int target = Random.Range(minCount, maxCount + 1);
         target = Mathf.Min(target, maxCustomers);
 
@@ -1198,9 +1275,10 @@ public class CustomerManager : MonoBehaviour
 
     private bool MeetsVipSpawnRequirements()
     {
-        // Competitor shops only need a free VIP seat — no mission/stage/staff gate.
+        // Competitor shops: VIPs may queue at the VIP waypoint even when the seat is taken
+        // (up to _maxActiveVips). Seat availability is handled in the VIP flow.
         if (RestaurantSceneMode.IsCompetitorScene)
-            return HasAvailableVipSeat();
+            return true;
 
         // VIP only after mission 5 (VIP table + 2F staff + stage) is fully complete.
         if (!HasCompletedVipPrepMission())
@@ -1357,10 +1435,10 @@ public class CustomerManager : MonoBehaviour
 
         customer.EnterStationary();
 
-        // Competitor restaurants have no VIP intro UI — seat the VIP immediately.
+        // Competitor: hold at VIP waypoint, then seat (no intro/events).
         if (RestaurantSceneMode.IsCompetitorScene)
         {
-            yield return SeatVipCustomer(customer);
+            yield return RunCompetitorVipSeatAndServe(customer);
             yield break;
         }
 
@@ -1392,6 +1470,57 @@ public class CustomerManager : MonoBehaviour
         }
 
         yield return SeatVipCustomer(customer);
+    }
+
+    private IEnumerator RunCompetitorVipSeatAndServe(Customer customer)
+    {
+        float seatWait = 0f;
+        TableSeat reservedSeat = null;
+        float holdSeconds = Mathf.Max(0f, _vipWaypointHoldSeconds);
+
+        while (reservedSeat == null && seatWait < _queueWaitTimeout)
+        {
+            TableSeat seat = FindFreeSeat(customer);
+            if (seat == null || !seat.TryReserve(customer))
+            {
+                seatWait += Time.deltaTime;
+                yield return null;
+                continue;
+            }
+
+            NotifyTableSeatChanged(seat);
+
+            float holdElapsed = 0f;
+            while (holdElapsed < holdSeconds)
+            {
+                holdElapsed += Time.deltaTime;
+                yield return null;
+            }
+
+            reservedSeat = seat;
+        }
+
+        if (reservedSeat == null)
+        {
+            yield return Leave(customer);
+            yield break;
+        }
+
+        TableSeat assignedSeat = null;
+        yield return TryWalkCustomerToSeat(customer, reservedSeat, result => assignedSeat = result);
+
+        if (assignedSeat == null)
+        {
+            yield return Leave(customer);
+            yield break;
+        }
+
+        customer.SetState(CustomerState.Ordering);
+
+        DishOrder order = WorkerManager.Instance != null
+            ? WorkerManager.Instance.SubmitOrder(customer)
+            : null;
+        yield return RunCustomerFlowFromOrdering(customer, assignedSeat, order);
     }
 
     private IEnumerator SeatVipCustomer(Customer customer)
@@ -2005,21 +2134,39 @@ public class CustomerManager : MonoBehaviour
 
     private IEnumerator RunCustomerFlowAfterQueued(Customer customer)
     {
-        TableSeat seat = null;
         float waitTimer = 0f;
+        TableSeat reservedSeat = null;
 
-        while (seat == null && waitTimer < _queueWaitTimeout)
+        while (reservedSeat == null && waitTimer < _queueWaitTimeout)
         {
-            seat = FindFreeSeat(customer);
-
-            if (seat == null)
+            TableSeat seat = FindFreeSeat(customer);
+            if (seat == null || !seat.TryReserve(customer))
             {
                 waitTimer += Time.deltaTime;
                 yield return null;
+                continue;
             }
+
+            NotifyTableSeatChanged(seat);
+
+            // Competitor: hold in queue, then stagger walks by slot (Waypoint_1 first, then +1s each).
+            if (RestaurantSceneMode.IsCompetitorScene)
+            {
+                int queueSlot = Mathf.Max(0, customer.QueueSlotIndex);
+                float holdSeconds = Mathf.Max(0f, _competitorQueueHoldSeconds)
+                    + queueSlot * Mathf.Max(0f, _competitorSeatStaggerSeconds);
+                float holdElapsed = 0f;
+                while (holdElapsed < holdSeconds)
+                {
+                    holdElapsed += Time.deltaTime;
+                    yield return null;
+                }
+            }
+
+            reservedSeat = seat;
         }
 
-        if (seat == null)
+        if (reservedSeat == null)
         {
             _customerQueue.Release(customer.QueueSlotIndex);
             customer.QueueSlotIndex = -1;
@@ -2031,7 +2178,7 @@ public class CustomerManager : MonoBehaviour
         customer.QueueSlotIndex = -1;
 
         TableSeat assignedSeat = null;
-        yield return TryWalkCustomerToSeat(customer, seat, result => assignedSeat = result);
+        yield return TryWalkCustomerToSeat(customer, reservedSeat, result => assignedSeat = result);
 
         if (assignedSeat == null)
         {
@@ -2039,14 +2186,13 @@ public class CustomerManager : MonoBehaviour
             yield break;
         }
 
-        seat = assignedSeat;
         customer.SetState(CustomerState.Ordering);
 
         DishOrder order = WorkerManager.Instance != null
             ? WorkerManager.Instance.SubmitOrder(customer)
             : null;
 
-        yield return RunCustomerFlowFromOrdering(customer, seat, order);
+        yield return RunCustomerFlowFromOrdering(customer, assignedSeat, order);
     }
 
     private IEnumerator RunCustomerFlowFromOrdering(Customer customer, TableSeat seat, DishOrder order)
@@ -2149,7 +2295,10 @@ public class CustomerManager : MonoBehaviour
             if (seat == null)
                 break;
 
-            seat.TryReserve(customer);
+            // Prefer/hold seat may already be taken by someone else — never walk onto an occupied seat.
+            if (!seat.TryReserve(customer))
+                continue;
+
             customer.Locomotion.ExitStationary();
             customer.SetState(CustomerState.WalkingToSeat);
             yield return CustomerMovement.Instance.MoveTo(customer, seat.WalkDestination);
@@ -2232,6 +2381,25 @@ public class CustomerManager : MonoBehaviour
         }
 
         return customersToExpel;
+    }
+
+    /// <summary>
+    /// Competitor scene: steal a customer/VIP who is still queuing. They leave immediately.
+    /// </summary>
+    public bool TryStealQueuedCustomer(Customer customer)
+    {
+        if (!RestaurantSceneMode.IsCompetitorScene || customer == null)
+            return false;
+
+        if (customer.IsImmuneToCompetitorSteal || customer.WasStolenByCompetitor)
+            return false;
+
+        if (customer.State != CustomerState.Queue)
+            return false;
+
+        customer.MarkStolenByCompetitor();
+        ExpelCustomerImmediately(customer);
+        return true;
     }
 
     private void ExpelCustomerImmediately(Customer customer)

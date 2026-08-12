@@ -1,14 +1,27 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 public static class CompetitorSceneSelection
 {
     private static VipCompetitorProfile[] _profiles = Array.Empty<VipCompetitorProfile>();
     private static readonly Dictionary<VipCompetitor, VipCompetitorProfile> _profileByCompetitor = new();
     private static readonly Dictionary<int, VipCompetitorProfile> _profileByTownShopIndex = new();
+    private static readonly HashSet<int> _blockedTownShopIndices = new();
+    private static readonly HashSet<int> _stolenTownShopIndicesThisRun = new();
     private static VipCompetitor _selectedCompetitor = VipCompetitor.DaiWei;
+    private static int _selectedTownShopIndex;
+    private static bool _pendingChasedAlert;
+    private static int _pendingChasedTownShopIndex;
+    private static bool _pendingBusinessResumeAfterSteal;
+    private static int _stolenNormalCustomersThisRun;
+    private static int _stolenVipCustomersThisRun;
+
+    private const int RequiredNormalStealsForBusinessResume = 3;
+    private const int RequiredVipStealsForBusinessResume = 1;
 
     public static VipCompetitor SelectedCompetitor => _selectedCompetitor;
+    public static int SelectedTownShopIndex => _selectedTownShopIndex;
 
     public static void Configure(VipCompetitorProfile[] profiles)
     {
@@ -32,6 +45,8 @@ public static class CompetitorSceneSelection
 
     public static void SelectFromTownShopIndex(int shopIndex)
     {
+        _selectedTownShopIndex = shopIndex;
+
         if (_profileByTownShopIndex.TryGetValue(shopIndex, out VipCompetitorProfile profile))
         {
             _selectedCompetitor = profile.Competitor;
@@ -39,6 +54,115 @@ public static class CompetitorSceneSelection
         }
 
         _selectedCompetitor = VipCompetitor.DaiWei;
+    }
+
+    /// <summary>
+    /// Called when the player is chased out of a competitor restaurant.
+    /// Blocks re-entry for that town shop and queues the town chased alert.
+    /// </summary>
+    public static void MarkChasedOutFromCurrentVisit()
+    {
+        int shopIndex = ResolveCurrentTownShopIndex();
+        if (shopIndex > 0)
+        {
+            _blockedTownShopIndices.Add(shopIndex);
+            _pendingChasedTownShopIndex = shopIndex;
+        }
+
+        _pendingChasedAlert = true;
+    }
+
+    public static bool IsTownShopEnterBlocked(int shopIndex)
+    {
+        return shopIndex > 0 && _blockedTownShopIndices.Contains(shopIndex);
+    }
+
+    public static void ClearBlockedTownShops()
+    {
+        _blockedTownShopIndices.Clear();
+    }
+
+    public static bool TryConsumePendingChasedAlert(out int townShopIndex, out VipCompetitor competitor)
+    {
+        townShopIndex = 0;
+        competitor = VipCompetitor.DaiWei;
+
+        if (!_pendingChasedAlert)
+            return false;
+
+        _pendingChasedAlert = false;
+        townShopIndex = _pendingChasedTownShopIndex > 0
+            ? _pendingChasedTownShopIndex
+            : ResolveCurrentTownShopIndex();
+        competitor = _selectedCompetitor;
+        _pendingChasedTownShopIndex = 0;
+        return true;
+    }
+
+    /// <summary>
+    /// Successful competitor steal. Main-scene lull only ends after enough steals this outing:
+    /// at least 3 normal customers, or at least 1 VIP.
+    /// </summary>
+    public static void RegisterSuccessfulSteal(bool isVip)
+    {
+        int shopIndex = ResolveCurrentTownShopIndex();
+        if (shopIndex > 0)
+            _stolenTownShopIndicesThisRun.Add(shopIndex);
+
+        if (isVip)
+            _stolenVipCustomersThisRun++;
+        else
+            _stolenNormalCustomersThisRun++;
+
+        if (!HasMetBusinessResumeStealRequirement())
+            return;
+
+        _pendingBusinessResumeAfterSteal = true;
+        PlayerProfileStorage.SetMainSceneServedVipCountForCurrentPlayer(0);
+        PlayerProfileStorage.SetCompetitorVipStealAttemptedForCurrentPlayer();
+    }
+
+    public static bool HasMetBusinessResumeStealRequirement()
+    {
+        return _stolenVipCustomersThisRun >= RequiredVipStealsForBusinessResume
+            || _stolenNormalCustomersThisRun >= RequiredNormalStealsForBusinessResume;
+    }
+
+    public static bool ConsumePendingBusinessResumeAfterSteal(out int stolenShopCount)
+    {
+        stolenShopCount = 0;
+
+        if (!_pendingBusinessResumeAfterSteal)
+            return false;
+
+        _pendingBusinessResumeAfterSteal = false;
+        stolenShopCount = _stolenTownShopIndicesThisRun.Count;
+        ClearStealProgressThisRun();
+        return true;
+    }
+
+    public static bool ConsumePendingBusinessResumeAfterSteal()
+    {
+        return ConsumePendingBusinessResumeAfterSteal(out _);
+    }
+
+    public static bool HasPendingBusinessResumeAfterSteal => _pendingBusinessResumeAfterSteal;
+
+    private static void ClearStealProgressThisRun()
+    {
+        _stolenTownShopIndicesThisRun.Clear();
+        _stolenNormalCustomersThisRun = 0;
+        _stolenVipCustomersThisRun = 0;
+    }
+
+    private static int ResolveCurrentTownShopIndex()
+    {
+        if (_selectedTownShopIndex > 0)
+            return _selectedTownShopIndex;
+
+        return TryGetProfile(_selectedCompetitor, out VipCompetitorProfile profile)
+            ? profile.TownShopIndex
+            : 0;
     }
 
     public static VipCompetitor PickRandomStealCompetitor()
@@ -58,6 +182,26 @@ public static class CompetitorSceneSelection
     public static bool TryGetProfileByTownShopIndex(int shopIndex, out VipCompetitorProfile profile)
     {
         return _profileByTownShopIndex.TryGetValue(shopIndex, out profile);
+    }
+
+    public static bool TryGetChaseThresholdRange(out float minSeconds, out float maxSeconds)
+    {
+        return TryGetChaseThresholdRange(_selectedCompetitor, out minSeconds, out maxSeconds);
+    }
+
+    public static bool TryGetChaseThresholdRange(
+        VipCompetitor competitor,
+        out float minSeconds,
+        out float maxSeconds)
+    {
+        minSeconds = 0f;
+        maxSeconds = 0f;
+
+        if (!TryGetProfile(competitor, out VipCompetitorProfile profile) || profile == null)
+            return false;
+
+        profile.GetChaseThresholdRange(out minSeconds, out maxSeconds);
+        return true;
     }
 
     public static string GetRestaurantName(VipCompetitor competitor)
@@ -112,5 +256,32 @@ public static class CompetitorSceneSelection
             return "你来抢戴威的贵客了!";
 
         return $"你来抢{profile.GetStealMessageName()}的贵客了!";
+    }
+
+    public static string GetChasedAlertMessage(VipCompetitor competitor)
+    {
+        return $"{GetCompetitorDisplayName(competitor)}不让你进店了！";
+    }
+
+    public static Sprite GetAngryFace(VipCompetitor competitor)
+    {
+        if (TryGetProfile(competitor, out VipCompetitorProfile profile) && profile.AngryFace != null)
+            return profile.AngryFace;
+
+        string resourcePath = competitor switch
+        {
+            VipCompetitor.DaiWei => "Face/dw-angry",
+            VipCompetitor.JiaHeng => "Face/hx-angry",
+            VipCompetitor.ChunHua => "Face/ch-angry",
+            VipCompetitor.HongJie => "Face/hong-angry",
+            _ => "Face/dw-angry"
+        };
+
+        return Resources.Load<Sprite>(resourcePath);
+    }
+
+    public static Sprite GetAngryFace()
+    {
+        return GetAngryFace(_selectedCompetitor);
     }
 }

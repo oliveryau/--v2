@@ -22,6 +22,10 @@ public class PlayerProfileData
     public int mainSceneServedVipCount;
     /// <summary>True once the post-VIP lull has unlocked (enough visits and all VIPs have left).</summary>
     public bool mainScenePostVipLullUnlocked;
+    /// <summary>
+    /// Temporary VIP visit limit after a competitor-steal outing (0 = use scene default stop count).
+    /// </summary>
+    public int mainSceneVipSpawnStopCountOverride;
     public int[] tableLevels;
     public bool[] brokenTables;
     public bool[] unlockedDishes;
@@ -255,6 +259,15 @@ public static class PlayerProfileStorage
 
         return profile.mainScenePostVipLullUnlocked;
     }
+
+    public static int GetMainSceneVipSpawnStopCountOverrideForCurrentPlayer() =>
+        TryGetCurrentProfile(out PlayerProfileData profile) ? Mathf.Max(0, profile.mainSceneVipSpawnStopCountOverride) : 0;
+
+    public static void SetMainSceneVipSpawnStopCountOverrideForCurrentPlayer(int stopCount) =>
+        ModifyCurrentProfile(profile => profile.mainSceneVipSpawnStopCountOverride = Mathf.Max(0, stopCount));
+
+    public static void ClearMainSceneVipSpawnStopCountOverrideForCurrentPlayer() =>
+        ModifyCurrentProfile(profile => profile.mainSceneVipSpawnStopCountOverride = 0);
 
     public static int GetTableLevelForCurrentPlayer(int tableIndex)
     {

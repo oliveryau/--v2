@@ -17,7 +17,17 @@ public class VipCompetitorProfile
     public string RestaurantName;
     public string DisplayName;
     public float RestaurantRating = 3f;
+    [Tooltip("Chase when stay timer remaining is within this range (seconds left).")]
+    [Min(0f)] public float ChaseThresholdMinSeconds = 1f;
+    [Min(0f)] public float ChaseThresholdMaxSeconds = 5f;
+    public Sprite AngryFace;
     public VipCompetitorDishOption[] SignatureDishes = Array.Empty<VipCompetitorDishOption>();
+
+    public void GetChaseThresholdRange(out float minSeconds, out float maxSeconds)
+    {
+        minSeconds = Mathf.Max(0f, ChaseThresholdMinSeconds);
+        maxSeconds = Mathf.Max(minSeconds, ChaseThresholdMaxSeconds);
+    }
 
     public string GetStealMessageName()
     {

@@ -28,7 +28,14 @@ public class TableSeat : MonoBehaviour
 
     public bool TryReserve(Customer customer)
     {
-        if (_occupant != null || customer == null)
+        if (customer == null)
+            return false;
+
+        // Already held by this customer (e.g. reserved during queue hold before walking).
+        if (_occupant == customer)
+            return true;
+
+        if (_occupant != null)
             return false;
 
         _occupant = customer;
