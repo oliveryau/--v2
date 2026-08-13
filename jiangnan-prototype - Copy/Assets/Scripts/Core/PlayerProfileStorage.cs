@@ -42,6 +42,16 @@ public class PlayerProfileData
     public float restaurantRating;
     public int restaurantRatingServedProgress;
     public int restaurantRatingLeaveProgress;
+    public BagInventoryEntry[] bagItems;
+}
+
+[Serializable]
+public class BagInventoryEntry
+{
+    public string itemName;
+    public int count;
+    public int cost;
+    public int worth;
 }
 
 public static class PlayerProfileStorage
@@ -143,6 +153,159 @@ public static class PlayerProfileStorage
 
     public static void SaveGoldForCurrentPlayer(int gold) =>
         ModifyCurrentProfile(profile => profile.gold = Mathf.Max(0, gold));
+
+    public static BagInventoryEntry[] GetBagItemsForCurrentPlayer()
+    {
+        if (!TryGetCurrentProfile(out PlayerProfileData profile) || profile.bagItems == null)
+            return Array.Empty<BagInventoryEntry>();
+
+        List<BagInventoryEntry> result = new List<BagInventoryEntry>();
+        for (int i = 0; i < profile.bagItems.Length; i++)
+        {
+            BagInventoryEntry entry = profile.bagItems[i];
+            if (entry == null || string.IsNullOrWhiteSpace(entry.itemName) || entry.count <= 0)
+                continue;
+
+            string itemName = entry.itemName.Trim();
+            int count = entry.count;
+            bool merged = false;
+
+            for (int j = 0; j < result.Count; j++)
+            {
+                if (!string.Equals(result[j].itemName, itemName, StringComparison.Ordinal))
+                    continue;
+
+                result[j].count += count;
+                // Keep first saved cost/worth; fill in if older saves left them at 0.
+                if (result[j].cost <= 0 && entry.cost > 0)
+                    result[j].cost = entry.cost;
+                if (result[j].worth <= 0 && entry.worth > 0)
+                    result[j].worth = entry.worth;
+                merged = true;
+                break;
+            }
+
+            if (!merged)
+            {
+                result.Add(new BagInventoryEntry
+                {
+                    itemName = itemName,
+                    count = count,
+                    cost = Mathf.Max(0, entry.cost),
+                    worth = Mathf.Max(0, entry.worth)
+                });
+            }
+        }
+
+        return result.ToArray();
+    }
+
+    public static int GetBagTotalItemCountForCurrentPlayer()
+    {
+        BagInventoryEntry[] items = GetBagItemsForCurrentPlayer();
+        int total = 0;
+        for (int i = 0; i < items.Length; i++)
+            total += Mathf.Max(0, items[i].count);
+        return total;
+    }
+
+    public static void AddBagItemForCurrentPlayer(ShopItemDefinition item, int amount = 1)
+    {
+        if (item == null)
+            return;
+
+        AddBagItemForCurrentPlayer(item.Name, amount, item.Cost, item.Worth);
+    }
+
+    public static void AddBagItemForCurrentPlayer(string itemName, int amount = 1, int cost = 0, int worth = 0)
+    {
+        if (string.IsNullOrWhiteSpace(itemName) || amount <= 0)
+            return;
+
+        if (!EnsureCurrentPlayerLoaded())
+        {
+            Debug.LogWarning("PlayerProfileStorage: cannot save bag item without a current player.");
+            return;
+        }
+
+        string normalizedName = itemName.Trim();
+        int normalizedCost = Mathf.Max(0, cost);
+        int normalizedWorth = Mathf.Max(0, worth);
+
+        ModifyCurrentProfile(profile =>
+        {
+            List<BagInventoryEntry> items = CopyBagItems(profile.bagItems);
+
+            bool found = false;
+            for (int i = 0; i < items.Count; i++)
+            {
+                if (!string.Equals(items[i].itemName, normalizedName, StringComparison.Ordinal))
+                    continue;
+
+                items[i].count += amount;
+                if (items[i].cost <= 0 && normalizedCost > 0)
+                    items[i].cost = normalizedCost;
+                if (items[i].worth <= 0 && normalizedWorth > 0)
+                    items[i].worth = normalizedWorth;
+                found = true;
+                break;
+            }
+
+            if (!found)
+            {
+                items.Add(new BagInventoryEntry
+                {
+                    itemName = normalizedName,
+                    count = amount,
+                    cost = normalizedCost,
+                    worth = normalizedWorth
+                });
+            }
+
+            profile.bagItems = items.ToArray();
+        });
+
+        GameEvents.RaiseBagInventoryChanged();
+    }
+
+    /// <summary>Forces a profile rewrite of the current bag (used after bulk inventory edits).</summary>
+    public static void SaveBagItemsForCurrentPlayer(BagInventoryEntry[] bagItems)
+    {
+        if (!EnsureCurrentPlayerLoaded())
+            return;
+
+        ModifyCurrentProfile(profile =>
+        {
+            List<BagInventoryEntry> items = CopyBagItems(bagItems);
+            profile.bagItems = items.ToArray();
+        });
+
+        GameEvents.RaiseBagInventoryChanged();
+    }
+
+    private static List<BagInventoryEntry> CopyBagItems(BagInventoryEntry[] source)
+    {
+        List<BagInventoryEntry> items = new List<BagInventoryEntry>();
+        if (source == null)
+            return items;
+
+        for (int i = 0; i < source.Length; i++)
+        {
+            BagInventoryEntry entry = source[i];
+            if (entry == null || string.IsNullOrWhiteSpace(entry.itemName) || entry.count <= 0)
+                continue;
+
+            items.Add(new BagInventoryEntry
+            {
+                itemName = entry.itemName.Trim(),
+                count = entry.count,
+                cost = Mathf.Max(0, entry.cost),
+                worth = Mathf.Max(0, entry.worth)
+            });
+        }
+
+        return items;
+    }
 
     public static bool HasBuiltTownRestaurantForCurrentPlayer() =>
         TryGetCurrentProfile(out PlayerProfileData profile) && profile.hasBuiltTownRestaurant;

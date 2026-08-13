@@ -267,10 +267,6 @@ MonoBehaviour:
   _vipWaitTimerCountdownText: {fileID: 0}
   _vipServeDishButtonRoot: {fileID: 0}
   _vipServeDishButton: {fileID: 0}
-  _vipFeetMassageButtonRoot: {fileID: 0}
-  _vipFeetMassageButton: {fileID: 0}
-  _vipServeTeaButtonRoot: {fileID: 0}
-  _vipServeTeaButton: {fileID: 0}
   _vipCallLadyButtonRoot: {fileID: 0}
   _vipCallLadyButton: {fileID: 0}
   _tableStatusUiRoot: {fileID: 0}

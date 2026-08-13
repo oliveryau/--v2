@@ -20,7 +20,7 @@ public class CustomerManager : MonoBehaviour
     [SerializeField] private int _maxCustomersPerAdditionalTable = 4;
     [SerializeField] private int _vipSpawnInterval;
     [SerializeField] private int _maxActiveVips;
-    [Tooltip("After this many VIPs have visited (arrived), stop spawning more VIPs. Lull starts once they have all left. 0 = unlimited.")]
+    [Tooltip("After this many VIPs have fully left (happy or discontent), stop spawning more VIPs. Lull starts once none remain. 0 = unlimited.")]
     [SerializeField] private int _servedVipSpawnStopCount = 2;
     [Tooltip("Max active customers during the post-VIP lull.")]
     [SerializeField] private int _postVipServeMaxCustomers = 4;
@@ -52,9 +52,6 @@ public class CustomerManager : MonoBehaviour
     [SerializeField] private float _vipEventGapDelay = 1.5f;
     [SerializeField] private int _vipEventBonusPerRequest = 1000;
     [SerializeField] private float _vipCallLadyLeaveDelay = 2.5f;
-    [SerializeField] private float _vipSideServiceHoldDuration = 3f;
-    [SerializeField] private Worker _vipFloorWaiter;
-    [SerializeField] private Transform _vipWaiterServePoint;
     [SerializeField] private Worker[] _vipCallLadyWorkers;
     [SerializeField] private Transform[] _vipLackeyPoints;
     [SerializeField] private Transform[] _vipCallLadyWaypoints;
@@ -138,7 +135,6 @@ public class CustomerManager : MonoBehaviour
             _vipEntryWaypoint = FindTransformByName("Customer Waypoint_4");
 
         CacheVipCallLadyReferences();
-        CacheVipFloorWaiterReferences();
         CacheVipPerformerReferences();
         HideVipCallLadyWorkers();
         HideVipPerformerIfUnhired();
@@ -151,29 +147,6 @@ public class CustomerManager : MonoBehaviour
         CacheVipPerformerReferences();
         if (AreCallLadiesAlreadyStationed())
             _callLadiesStationed = true;
-    }
-
-    private void CacheVipFloorWaiterReferences()
-    {
-        if (_vipWaiterServePoint == null)
-            _vipWaiterServePoint = FindTransformByName("Waiter3 Servepoint");
-
-        if (_vipFloorWaiter != null)
-            return;
-
-        Worker[] workers = FindObjectsByType<Worker>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        for (int i = 0; i < workers.Length; i++)
-        {
-            Worker worker = workers[i];
-            if (worker == null || worker.ExcludeFromServicePool || !worker.ServesVipFloorOnly)
-                continue;
-
-            if (worker.WorkerType != WorkerType.Waiter)
-                continue;
-
-            _vipFloorWaiter = worker;
-            return;
-        }
     }
 
     private void CacheVipCallLadyReferences()
@@ -764,7 +737,7 @@ public class CustomerManager : MonoBehaviour
             PlayerProfileStorage.SetMainSceneVipSpawnStopCountOverrideForCurrentPlayer(_runtimeVipSpawnStopCount);
         }
 
-        // Resume / migrate: if enough VIPs already visited and none are active, unlock lull now.
+        // Resume / migrate: if enough VIPs already left and none are active, unlock lull now.
         TryUnlockPostVipLull();
 
         _spawnCount = 0;
@@ -787,7 +760,7 @@ public class CustomerManager : MonoBehaviour
             return;
         }
 
-        // Saved value is VIP visit count (how many VIPs have arrived), not successful serves.
+        // Saved value is how many VIPs have fully left this cycle (happy or discontent).
         _servedVipCount = PlayerProfileStorage.GetMainSceneServedVipCountForCurrentPlayer();
     }
 
@@ -838,7 +811,11 @@ public class CustomerManager : MonoBehaviour
         _spawnRoutine = null;
     }
 
-    private void RegisterVipVisit()
+    /// <summary>
+    /// Counts a VIP toward the post-VIP lull only after they fully leave
+    /// (happy payment leave or discontented leave). Mid-visit quit does not count.
+    /// </summary>
+    private void RegisterVipServed()
     {
         if (!RestaurantSceneMode.IsMainScene)
             return;
@@ -847,7 +824,7 @@ public class CustomerManager : MonoBehaviour
         PlayerProfileStorage.SetMainSceneServedVipCountForCurrentPlayer(_servedVipCount);
     }
 
-    /// <summary>True once enough VIPs have visited — no more VIP spawns.</summary>
+    /// <summary>True once enough VIPs have fully left — no more VIP spawns.</summary>
     private bool HasReachedVipVisitLimit()
     {
         if (!RestaurantSceneMode.IsMainScene)
@@ -858,7 +835,7 @@ public class CustomerManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Lull: enough VIP visits have happened and every VIP has fully left the restaurant.
+    /// Lull: enough VIPs have fully left and none remain in the restaurant.
     /// Main scene only — competitor restaurants keep normal traffic indefinitely.
     /// </summary>
     private bool IsPostVipLullActive()
@@ -1154,13 +1131,6 @@ public class CustomerManager : MonoBehaviour
         if (_customerPool == null || _spawnPoint == null || CustomerMovement.Instance == null || !CanSpawnCustomer())
             return;
 
-        // Hold the VIP cadence slot until mission 5 + VIP seat/staff are ready.
-        // Otherwise a normal customer would fill that tick and the VIP would arrive too early.
-        if (IsNextSpawnVipCadence() && !MeetsVipSpawnRequirements())
-        {
-            return;
-        }
-
         _spawnCount++;
         if (IsVipPranksterAlternationEnabled() && _awaitingVipAfterPrankster)
         {
@@ -1171,6 +1141,8 @@ public class CustomerManager : MonoBehaviour
                 _customersSincePranksterLeft++;
         }
 
+        // Before VIP prep (stairs / VIP table / stage / 2F staff) is ready, keep spawning normals.
+        // VIP only appears once MeetsVipSpawnRequirements() is true on a VIP cadence tick.
         bool spawnVip = ShouldSpawnVip();
         Customer customer = spawnVip
             ? _customerPool.GetVip(_spawnPoint.position)
@@ -1190,7 +1162,6 @@ public class CustomerManager : MonoBehaviour
 
         if (spawnVip)
         {
-            RegisterVipVisit();
             MarkFirstVipCustomerReceivedIfNeeded(customer);
             AudioManager.Play(SfxId.VipArrival);
         }
@@ -1213,7 +1184,7 @@ public class CustomerManager : MonoBehaviour
         if (_customerPool == null || !_customerPool.HasVipPrefabs)
             return false;
 
-        // No more VIPs after enough have visited — only the reduced normal-customer trickle.
+        // No more VIPs after enough have fully left — only the reduced normal-customer trickle.
         if (HasReachedVipVisitLimit())
             return false;
 
@@ -1237,32 +1208,6 @@ public class CustomerManager : MonoBehaviour
         }
 
         return IsVipSpawnCadenceDue(_spawnCount);
-    }
-
-    private bool IsNextSpawnVipCadence()
-    {
-        if (_customerPool == null || !_customerPool.HasVipPrefabs)
-            return false;
-
-        if (HasReachedVipVisitLimit())
-            return false;
-
-        if (GetActiveVipCount() >= Mathf.Max(1, _maxActiveVips))
-            return false;
-
-        if (RestaurantSceneMode.IsMainScene)
-        {
-            if (_pranksterManager == null)
-                _pranksterManager = FindFirstObjectByType<PranksterManager>();
-
-            if (_pranksterManager != null
-                && (_pranksterManager.IsVisitActive || _pranksterManager.IsAwaitingPranksterSpawn))
-            {
-                return false;
-            }
-        }
-
-        return IsVipSpawnCadenceDue(_spawnCount + 1);
     }
 
     private bool IsVipSpawnCadenceDue(int spawnCount)
@@ -1664,38 +1609,18 @@ public class CustomerManager : MonoBehaviour
         if (RestaurantSceneMode.IsCompetitorScene)
             return new[] { VipEventType.ServeDish };
 
-        // Always include ServeDish; pick 1–2 more from the available pool.
-        VipEventType[] optionalPool =
+        // Always ServeDish + exactly one of CallLady / WatchStage, shuffled order.
+        VipEventType optionalEvent = Random.value < 0.5f
+            ? VipEventType.CallLady
+            : VipEventType.WatchStage;
+
+        VipEventType[] sequence = { optionalEvent, VipEventType.ServeDish };
+
+        if (Random.value < 0.5f)
         {
-            VipEventType.FeetMassage,
-            VipEventType.ServeTea,
-            VipEventType.CallLady,
-            VipEventType.WatchStage
-        };
-
-        int optionalCount = Random.Range(0, 2) == 0 ? 1 : 2;
-        optionalCount = Mathf.Min(optionalCount, optionalPool.Length);
-
-        for (int i = optionalPool.Length - 1; i > 0; i--)
-        {
-            int swapIndex = Random.Range(0, i + 1);
-            VipEventType temp = optionalPool[i];
-            optionalPool[i] = optionalPool[swapIndex];
-            optionalPool[swapIndex] = temp;
-        }
-
-        VipEventType[] sequence = new VipEventType[optionalCount + 1];
-        for (int i = 0; i < optionalCount; i++)
-            sequence[i] = optionalPool[i];
-
-        sequence[optionalCount] = VipEventType.ServeDish;
-
-        for (int i = sequence.Length - 1; i > 0; i--)
-        {
-            int swapIndex = Random.Range(0, i + 1);
-            VipEventType temp = sequence[i];
-            sequence[i] = sequence[swapIndex];
-            sequence[swapIndex] = temp;
+            VipEventType temp = sequence[0];
+            sequence[0] = sequence[1];
+            sequence[1] = temp;
         }
 
         return sequence;
@@ -1808,8 +1733,6 @@ public class CustomerManager : MonoBehaviour
 
         if (eventType == VipEventType.CallLady)
             yield return SpawnVipCallLadies(customer);
-        else if (eventType == VipEventType.ServeTea || eventType == VipEventType.FeetMassage)
-            yield return RunVipFloorWaiterSideService(customer);
         else if (eventType == VipEventType.WatchStage)
             yield return RunVipWatchStage(customer);
 
@@ -1844,76 +1767,6 @@ public class CustomerManager : MonoBehaviour
         FaceWorkerToward(performer, faceTarget);
         performer.Locomotion?.EnterStationary();
         _performerOnStage = true;
-    }
-
-    private IEnumerator RunVipFloorWaiterSideService(Customer vip)
-    {
-        CacheVipFloorWaiterReferences();
-
-        Worker waiter = _vipFloorWaiter;
-        if (waiter == null || !waiter.gameObject.activeInHierarchy)
-            yield break;
-
-        // Wait until she's free, then lock so dish runs don't interrupt 上茶 / 泡脚.
-        if (WorkerManager.Instance != null)
-        {
-            float waitForFree = 0f;
-            const float maxWaitForFree = 30f;
-            while (!WorkerManager.Instance.TryBeginExternalTask(waiter) && waitForFree < maxWaitForFree)
-            {
-                waitForFree += Time.deltaTime;
-                yield return null;
-            }
-
-            if (waitForFree >= maxWaitForFree && !WorkerManager.Instance.TryBeginExternalTask(waiter))
-                yield break;
-        }
-
-        Transform servePoint = _vipWaiterServePoint;
-        Transform returnPoint = waiter.WaitPoint;
-
-        waiter.Locomotion?.ExitStationary();
-
-        if (servePoint != null)
-        {
-            yield return MoveWorkerTo(waiter, servePoint.position);
-            waiter.FaceDirection(servePoint.rotation);
-        }
-        else
-        {
-            FaceWorkerToward(waiter, vip != null ? vip.transform : null);
-        }
-
-        waiter.Locomotion?.EnterStationary();
-
-        WorkerCharacterAnimator waiterAnimator = waiter.GetComponent<WorkerCharacterAnimator>();
-        waiterAnimator?.SetCleaning(true);
-
-        float hold = Mathf.Max(0f, _vipSideServiceHoldDuration);
-        if (hold > 0f)
-            yield return new WaitForSeconds(hold);
-
-        waiterAnimator?.SetCleaning(false);
-        waiter.Locomotion?.ExitStationary();
-
-        bool needsRest = waiter.Energy != null && waiter.Energy.ApplyServeCost();
-
-        if (needsRest && WorkerManager.Instance != null)
-        {
-            yield return WorkerManager.Instance.RunRestRoutine(waiter);
-            WorkerManager.Instance.EndExternalTask(waiter);
-            yield break;
-        }
-
-        if (returnPoint != null)
-        {
-            yield return MoveWorkerTo(waiter, returnPoint.position);
-            waiter.FaceDirection(returnPoint.rotation);
-        }
-
-        waiter.Locomotion?.EnterStationary();
-        waiter.SetState(WorkerState.Wait);
-        WorkerManager.Instance?.EndExternalTask(waiter);
     }
 
     private IEnumerator SpawnVipCallLadies(Customer vip)
@@ -2276,10 +2129,15 @@ public class CustomerManager : MonoBehaviour
         ReleaseCustomerSeatAndNotify(customer);
         ReleaseCustomerToPool(customer);
 
-        if (wasVip && GetActiveVipCount() <= 0)
+        if (wasVip)
         {
-            UIManager.Instance?.HideVipUi();
-            TryUnlockPostVipLull();
+            RegisterVipServed();
+
+            if (GetActiveVipCount() <= 0)
+            {
+                UIManager.Instance?.HideVipUi();
+                TryUnlockPostVipLull();
+            }
         }
     }
 

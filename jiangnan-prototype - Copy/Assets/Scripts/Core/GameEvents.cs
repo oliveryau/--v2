@@ -24,6 +24,7 @@ public static class GameEvents
     public static event Action<DiningTable> TableUpgraded;
     public static event Action<DiningTable> TableStatusChanged;
     public static event Action CustomerSpawned;
+    public static event Action BagInventoryChanged;
 
     public static void RaiseStateChanged(GameState state)
     {
@@ -133,5 +134,10 @@ public static class GameEvents
     public static void RaiseCustomerSpawned()
     {
         CustomerSpawned?.Invoke();
+    }
+
+    public static void RaiseBagInventoryChanged()
+    {
+        BagInventoryChanged?.Invoke();
     }
 }

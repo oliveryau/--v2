@@ -17,9 +17,17 @@ public class CompetitorVisitController : MonoBehaviour
     private const string StayTimerCountdownName = "Countdown";
     private const string ChasedUiName = "Chased UI";
     private const string CompetitorFaceUiName = "Competitor Face";
+    private const string StealResultTextUiName = "Steal Result";
+    private const string NameBgUiName = "Name Bg";
+    private const string ProfilePicUiName = "Profile Pic";
+    private const string StatusTextUiName = "Status Text";
     private const string StolenUiRootName = "Stolen UI";
     private const string StolenTextNamePrefix = "Stolen Text";
     private const string TownButtonUiName = "Town Button";
+    private const string OnlineStatusLabel = "Online";
+    private const string OfflineStatusLabel = "Offline";
+    private const string StealResultFailLabel = "只抢几个客人！";
+    private const string StealResultSuccessLabel = "成功抢顾客！";
 
     [Header("Stay Timer")]
     [SerializeField] private float _stayDurationSeconds = 15f;
@@ -32,6 +40,10 @@ public class CompetitorVisitController : MonoBehaviour
     [SerializeField] private float _stayTimerPulseMinScale = 0.95f;
     [SerializeField] private float _stayTimerPulseMaxScale = 1.05f;
     [SerializeField] private float _stayTimerPulseSpeed = 2f;
+    [SerializeField] private Color _onlineStatusColor = new Color(0.2f, 0.85f, 0.35f, 1f);
+    [SerializeField] private Color _offlineStatusColor = new Color(0.94509804f, 0.3882353f, 0.3882353f, 1f);
+    [SerializeField] private Color _stealResultSuccessColor = new Color(0.2f, 0.85f, 0.35f, 1f);
+    [SerializeField] private Color _stealResultFailColor = new Color(0.94509804f, 0.3882353f, 0.3882353f, 1f);
 
     [Header("Steal Customers Pulse")]
     [SerializeField] private float _stealPulseMinScale = 0.9f;
@@ -50,6 +62,9 @@ public class CompetitorVisitController : MonoBehaviour
     private TextMeshProUGUI _stayTimerCountdownText;
     private RectTransform _chasedUiRoot;
     private Image _chasedCompetitorFaceImage;
+    private TextMeshProUGUI _stealResultText;
+    private Image _profilePicImage;
+    private TextMeshProUGUI _statusText;
     private RectTransform _stolenUiRoot;
     private RectTransform _stolenTextTemplate;
     private GameObject _townButtonRoot;
@@ -109,6 +124,7 @@ public class CompetitorVisitController : MonoBehaviour
         if (_stayTimerRunning && !_chaseSequenceStarted)
         {
             _chaseThreshold = Random.Range(_chaseThresholdMinSeconds, _chaseThresholdMaxSeconds);
+            ApplyCompetitorStatusVisuals();
         }
     }
 
@@ -137,6 +153,8 @@ public class CompetitorVisitController : MonoBehaviour
 
         CacheUi();
         HideVisitChrome();
+        ApplyCompetitorProfileUi();
+        ApplyCompetitorStatusVisuals(forceOffline: true);
         SyncStealUiForActiveQueuedCustomers();
     }
 
@@ -313,6 +331,40 @@ public class CompetitorVisitController : MonoBehaviour
                 _chasedCompetitorFaceImage = faceTransform.GetComponent<Image>();
         }
 
+        if (_chasedUiRoot != null && _stealResultText == null)
+        {
+            Transform stealResultTransform = FindChildTransform(_chasedUiRoot, StealResultTextUiName);
+            if (stealResultTransform != null)
+                _stealResultText = stealResultTransform.GetComponent<TextMeshProUGUI>();
+        }
+
+        if (_profilePicImage == null || _statusText == null)
+        {
+            GameObject nameBgObject = FindSceneUiObject(NameBgUiName);
+            Transform nameBg = nameBgObject != null ? nameBgObject.transform : null;
+
+            if (_profilePicImage == null && nameBg != null)
+            {
+                Transform profilePicTransform = FindChildTransform(nameBg, ProfilePicUiName);
+                if (profilePicTransform != null)
+                    _profilePicImage = profilePicTransform.GetComponent<Image>();
+            }
+
+            if (_statusText == null)
+            {
+                Transform statusRoot = _profilePicImage != null
+                    ? _profilePicImage.transform
+                    : nameBg;
+
+                if (statusRoot != null)
+                {
+                    Transform statusTransform = FindChildTransform(statusRoot, StatusTextUiName);
+                    if (statusTransform != null)
+                        _statusText = statusTransform.GetComponent<TextMeshProUGUI>();
+                }
+            }
+        }
+
         if (_townButtonRoot == null)
             _townButtonRoot = FindSceneUiObject(TownButtonUiName);
 
@@ -421,6 +473,7 @@ public class CompetitorVisitController : MonoBehaviour
         _stayTimerRunning = true;
         _stayTimerRoot.gameObject.SetActive(true);
         ApplyStayTimerVisuals();
+        ApplyCompetitorStatusVisuals();
     }
 
     private void HideTownButtonUi()
@@ -439,6 +492,7 @@ public class CompetitorVisitController : MonoBehaviour
 
         _stayRemaining = Mathf.Max(0f, _stayRemaining - Time.deltaTime);
         ApplyStayTimerVisuals();
+        ApplyCompetitorStatusVisuals();
 
         if (_stayRemaining <= _chaseThreshold)
             BeginChaseSequence();
@@ -480,6 +534,7 @@ public class CompetitorVisitController : MonoBehaviour
 
         _chaseSequenceStarted = true;
         _stayTimerRunning = false;
+        ApplyCompetitorStatusVisuals(forceOffline: true);
 
         if (_stayTimerRoot != null)
             _stayTimerRoot.localScale = Vector3.one;
@@ -495,6 +550,7 @@ public class CompetitorVisitController : MonoBehaviour
     private IEnumerator RunChaseSequence()
     {
         ApplyChasedCompetitorFace();
+        ApplyStealResultVisuals();
 
         if (_chasedUiRoot != null)
         {
@@ -519,6 +575,36 @@ public class CompetitorVisitController : MonoBehaviour
             _chasedUiPulseSpeed);
     }
 
+    private void ApplyCompetitorProfileUi()
+    {
+        CacheUi();
+
+        if (_profilePicImage == null)
+            return;
+
+        Sprite profilePic = CompetitorSceneSelection.GetProfilePic();
+        if (profilePic != null)
+            _profilePicImage.sprite = profilePic;
+    }
+
+    private void ApplyCompetitorStatusVisuals(bool forceOffline = false)
+    {
+        if (_statusText == null)
+            CacheUi();
+
+        if (_statusText == null)
+            return;
+
+        float onlineRemainingThreshold = 1f + _chaseThresholdMaxSeconds;
+        bool isOnline = !forceOffline
+            && _stayTimerRunning
+            && !_chaseSequenceStarted
+            && _stayRemaining <= onlineRemainingThreshold;
+
+        _statusText.text = isOnline ? OnlineStatusLabel : OfflineStatusLabel;
+        _statusText.color = isOnline ? _onlineStatusColor : _offlineStatusColor;
+    }
+
     private void ApplyChasedCompetitorFace()
     {
         CacheUi();
@@ -529,6 +615,18 @@ public class CompetitorVisitController : MonoBehaviour
         Sprite angryFace = CompetitorSceneSelection.GetAngryFace();
         if (angryFace != null)
             _chasedCompetitorFaceImage.sprite = angryFace;
+    }
+
+    private void ApplyStealResultVisuals()
+    {
+        CacheUi();
+
+        if (_stealResultText == null)
+            return;
+
+        bool success = CompetitorSceneSelection.HasMetBusinessResumeStealRequirement();
+        _stealResultText.text = success ? StealResultSuccessLabel : StealResultFailLabel;
+        _stealResultText.color = success ? _stealResultSuccessColor : _stealResultFailColor;
     }
 
     private void ShowStealUi(Customer customer)

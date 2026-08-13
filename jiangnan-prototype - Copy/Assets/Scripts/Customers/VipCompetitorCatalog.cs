@@ -42,27 +42,17 @@ public class VipCompetitorCatalog : ScriptableObject
                 DisplayName = "戴威",
                 RestaurantRating = 4.4f,
                 ChaseThresholdMinSeconds = 6f,
-                ChaseThresholdMaxSeconds = 8f,
-                SignatureDishes = new[]
-                {
-                    new VipCompetitorDishOption { dishIndex = 7, displayName = "北京烧鸭", fightRating = 78 },
-                    new VipCompetitorDishOption { dishIndex = 1, displayName = "叫花鸡", fightRating = 85 }
-                }
+                ChaseThresholdMaxSeconds = 8f
             },
             new VipCompetitorProfile
             {
-                Competitor = VipCompetitor.JiaHeng,
+                Competitor = VipCompetitor.HanXi,
                 TownShopIndex = 2,
                 RestaurantName = "韩熙饭店",
                 DisplayName = "韩熙",
                 RestaurantRating = 3.7f,
                 ChaseThresholdMinSeconds = 1f,
-                ChaseThresholdMaxSeconds = 2f,
-                SignatureDishes = new[]
-                {
-                    new VipCompetitorDishOption { dishIndex = 8, displayName = "佛跳墙", fightRating = 73 },
-                    new VipCompetitorDishOption { dishIndex = 6, displayName = "红烧肉", fightRating = 68 }
-                }
+                ChaseThresholdMaxSeconds = 2f
             },
             new VipCompetitorProfile
             {
@@ -72,12 +62,7 @@ public class VipCompetitorCatalog : ScriptableObject
                 DisplayName = "春华",
                 RestaurantRating = 3.9f,
                 ChaseThresholdMinSeconds = 4f,
-                ChaseThresholdMaxSeconds = 5f,
-                SignatureDishes = new[]
-                {
-                    new VipCompetitorDishOption { dishIndex = 0, displayName = "东坡肉", fightRating = 88 },
-                    new VipCompetitorDishOption { dishIndex = 6, displayName = "鱼", fightRating = 70 }
-                }
+                ChaseThresholdMaxSeconds = 5f
             },
             new VipCompetitorProfile
             {
@@ -87,12 +72,7 @@ public class VipCompetitorCatalog : ScriptableObject
                 DisplayName = "红姐",
                 RestaurantRating = 4.1f,
                 ChaseThresholdMinSeconds = 10f,
-                ChaseThresholdMaxSeconds = 11f,
-                SignatureDishes = new[]
-                {
-                    new VipCompetitorDishOption { dishIndex = 7, displayName = "麻婆豆腐", fightRating = 74 },
-                    new VipCompetitorDishOption { dishIndex = 8, displayName = "包子", fightRating = 66 }
-                }
+                ChaseThresholdMaxSeconds = 11f
             }
         };
     }

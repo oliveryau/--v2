@@ -8,6 +8,7 @@ public static class CompetitorSceneSelection
     private static readonly Dictionary<VipCompetitor, VipCompetitorProfile> _profileByCompetitor = new();
     private static readonly Dictionary<int, VipCompetitorProfile> _profileByTownShopIndex = new();
     private static readonly HashSet<int> _blockedTownShopIndices = new();
+    private static readonly HashSet<int> _onlineTownShopIndices = new();
     private static readonly HashSet<int> _stolenTownShopIndicesThisRun = new();
     private static VipCompetitor _selectedCompetitor = VipCompetitor.DaiWei;
     private static int _selectedTownShopIndex;
@@ -47,6 +48,9 @@ public static class CompetitorSceneSelection
     {
         _selectedTownShopIndex = shopIndex;
 
+        if (shopIndex > 0)
+            MarkTownShopOnline(shopIndex);
+
         if (_profileByTownShopIndex.TryGetValue(shopIndex, out VipCompetitorProfile profile))
         {
             _selectedCompetitor = profile.Competitor;
@@ -66,6 +70,7 @@ public static class CompetitorSceneSelection
         if (shopIndex > 0)
         {
             _blockedTownShopIndices.Add(shopIndex);
+            MarkTownShopOnline(shopIndex);
             _pendingChasedTownShopIndex = shopIndex;
         }
 
@@ -77,9 +82,21 @@ public static class CompetitorSceneSelection
         return shopIndex > 0 && _blockedTownShopIndices.Contains(shopIndex);
     }
 
+    public static void MarkTownShopOnline(int shopIndex)
+    {
+        if (shopIndex > 0)
+            _onlineTownShopIndices.Add(shopIndex);
+    }
+
+    public static bool IsTownShopOnline(int shopIndex)
+    {
+        return shopIndex > 0 && _onlineTownShopIndices.Contains(shopIndex);
+    }
+
     public static void ClearBlockedTownShops()
     {
         _blockedTownShopIndices.Clear();
+        _onlineTownShopIndices.Clear();
     }
 
     public static bool TryConsumePendingChasedAlert(out int townShopIndex, out VipCompetitor competitor)
@@ -107,7 +124,10 @@ public static class CompetitorSceneSelection
     {
         int shopIndex = ResolveCurrentTownShopIndex();
         if (shopIndex > 0)
+        {
             _stolenTownShopIndicesThisRun.Add(shopIndex);
+            MarkTownShopOnline(shopIndex);
+        }
 
         if (isVip)
             _stolenVipCustomersThisRun++;
@@ -228,13 +248,6 @@ public static class CompetitorSceneSelection
         return GetRestaurantRating(_selectedCompetitor);
     }
 
-    public static VipCompetitorDishOption[] GetSignatureDishes(VipCompetitor competitor)
-    {
-        return TryGetProfile(competitor, out VipCompetitorProfile profile)
-            ? profile.SignatureDishes
-            : Array.Empty<VipCompetitorDishOption>();
-    }
-
     public static string GetCompetitorDisplayName(VipCompetitor competitor)
     {
         return TryGetProfile(competitor, out VipCompetitorProfile profile)
@@ -271,7 +284,7 @@ public static class CompetitorSceneSelection
         string resourcePath = competitor switch
         {
             VipCompetitor.DaiWei => "Face/dw-angry",
-            VipCompetitor.JiaHeng => "Face/hx-angry",
+            VipCompetitor.HanXi => "Face/hx-angry",
             VipCompetitor.ChunHua => "Face/ch-angry",
             VipCompetitor.HongJie => "Face/hong-angry",
             _ => "Face/dw-angry"
@@ -283,5 +296,18 @@ public static class CompetitorSceneSelection
     public static Sprite GetAngryFace()
     {
         return GetAngryFace(_selectedCompetitor);
+    }
+
+    public static Sprite GetProfilePic(VipCompetitor competitor)
+    {
+        if (TryGetProfile(competitor, out VipCompetitorProfile profile) && profile.ProfilePic != null)
+            return profile.ProfilePic;
+
+        return null;
+    }
+
+    public static Sprite GetProfilePic()
+    {
+        return GetProfilePic(_selectedCompetitor);
     }
 }

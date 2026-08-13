@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
@@ -18,11 +19,18 @@ public class CharacterPanelController : MonoBehaviour
     private const string SecondFloorBuildSpotsName = "BuildSpots_SecondFloor";
     private const string SecondFloorLayerName = "SecondFloor";
     private const string StoveRootName = "Stove";
+    private const string BagRootName = "Bag";
+    private const string BagCountName = "Count";
+    private const string BagInventoryListName = "Inventory List";
 
     [SerializeField] private TextMeshProUGUI _playerNameText;
     [SerializeField] private TextMeshProUGUI _goldAmountText;
     [SerializeField] private RectTransform _goldUiRoot;
     [SerializeField] private GameObject _floorsRoot;
+    [SerializeField] private GameObject _bagRoot;
+    [SerializeField] private Button _bagButton;
+    [SerializeField] private TextMeshProUGUI _bagCountText;
+    [SerializeField] private GameObject _bagInventoryListRoot;
     [SerializeField] private Button _firstFloorButton;
     [SerializeField] private Button _secondFloorButton;
     [SerializeField] private Vector3 _firstFloorCameraPosition = Vector3.zero;
@@ -34,9 +42,12 @@ public class CharacterPanelController : MonoBehaviour
     private Light _mainLight;
     private readonly List<GameObject> _secondFloorRoots = new();
     private readonly List<ParticleSystem> _groundFloorStoveParticles = new();
+    private readonly List<TextMeshProUGUI> _bagInventoryItemTexts = new();
     private int _secondFloorLayer = -1;
     private int _currentFloor = 1;
     private bool _floorButtonsWired;
+    private bool _bagButtonWired;
+    private bool _bagInventoryVisible;
     private bool _secondFloorViewVisible = true;
     private Coroutine _floorTransitionRoutine;
 
@@ -63,20 +74,27 @@ public class CharacterPanelController : MonoBehaviour
         RefreshPlayerName();
         ReparentToSceneCanvas();
         SyncFloorsVisibility();
+        SyncBagVisibility();
         SyncFloorSwitching();
+        WireBagButton();
+        SetBagInventoryVisible(false);
+        RefreshBagUi();
     }
 
     private void OnEnable()
     {
         SceneManager.sceneLoaded += HandleSceneLoaded;
         GameEvents.SecondFloorUnlocked += HandleSecondFloorUnlocked;
+        GameEvents.BagInventoryChanged += HandleBagInventoryChanged;
     }
 
     private void OnDisable()
     {
         SceneManager.sceneLoaded -= HandleSceneLoaded;
         GameEvents.SecondFloorUnlocked -= HandleSecondFloorUnlocked;
+        GameEvents.BagInventoryChanged -= HandleBagInventoryChanged;
         UnsubscribeFloorButtons();
+        UnsubscribeBagButton();
 
         if (_floorTransitionRoutine != null)
         {
@@ -133,10 +151,19 @@ public class CharacterPanelController : MonoBehaviour
         ReparentToSceneCanvas();
         RefreshPlayerName();
         SyncFloorsVisibility();
+        SyncBagVisibility();
         SyncFloorSwitching();
+        WireBagButton();
+        SetBagInventoryVisible(false);
+        RefreshBagUi();
 
         if (GoldManager.Instance != null)
             GameEvents.RaiseGoldChanged(GoldManager.Instance.CurrentGold);
+    }
+
+    private void HandleBagInventoryChanged()
+    {
+        RefreshBagUi();
     }
 
     private void ReparentToSceneCanvas()
@@ -164,6 +191,25 @@ public class CharacterPanelController : MonoBehaviour
             return;
 
         _floorsRoot.SetActive(RestaurantSceneMode.IsMainScene);
+    }
+
+    private static bool ShouldShowBagUi()
+    {
+        return RestaurantSceneMode.IsMainScene || RestaurantSceneMode.IsFutureScene;
+    }
+
+    private void SyncBagVisibility()
+    {
+        CacheBagUiReferences();
+
+        if (_bagRoot == null)
+            return;
+
+        bool showBag = ShouldShowBagUi();
+        _bagRoot.SetActive(showBag);
+
+        if (!showBag)
+            SetBagInventoryVisible(false);
     }
 
     private void SyncFloorSwitching()
@@ -626,6 +672,132 @@ public class CharacterPanelController : MonoBehaviour
         }
 
         CacheFloorUiReferences();
+        CacheBagUiReferences();
+    }
+
+    private void CacheBagUiReferences()
+    {
+        if (_bagRoot == null)
+        {
+            Transform bag = transform.Find(BagRootName);
+            if (bag != null)
+                _bagRoot = bag.gameObject;
+        }
+
+        if (_bagRoot == null)
+            return;
+
+        if (_bagButton == null)
+            _bagButton = _bagRoot.GetComponent<Button>() ?? _bagRoot.AddComponent<Button>();
+
+        if (_bagButton != null && _bagButton.targetGraphic == null)
+        {
+            Image bagImage = _bagRoot.GetComponent<Image>();
+            if (bagImage != null)
+                _bagButton.targetGraphic = bagImage;
+        }
+
+        if (_bagCountText == null)
+        {
+            Transform count = _bagRoot.transform.Find(BagCountName);
+            if (count != null)
+                _bagCountText = count.GetComponent<TextMeshProUGUI>();
+        }
+
+        if (_bagInventoryListRoot == null)
+        {
+            Transform inventoryList = _bagRoot.transform.Find(BagInventoryListName);
+            if (inventoryList != null)
+                _bagInventoryListRoot = inventoryList.gameObject;
+        }
+
+        CacheBagInventoryItemSlots();
+    }
+
+    private void CacheBagInventoryItemSlots()
+    {
+        _bagInventoryItemTexts.Clear();
+
+        if (_bagInventoryListRoot == null)
+            return;
+
+        Transform listTransform = _bagInventoryListRoot.transform;
+        for (int i = 0; i < listTransform.childCount; i++)
+        {
+            Transform child = listTransform.GetChild(i);
+            if (child == null || !child.name.StartsWith("Item", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            TextMeshProUGUI itemText = child.GetComponent<TextMeshProUGUI>();
+            if (itemText != null)
+                _bagInventoryItemTexts.Add(itemText);
+        }
+    }
+
+    private void WireBagButton()
+    {
+        CacheBagUiReferences();
+
+        if (_bagButtonWired || _bagButton == null)
+            return;
+
+        _bagButton.onClick.AddListener(HandleBagClicked);
+        _bagButtonWired = true;
+    }
+
+    private void UnsubscribeBagButton()
+    {
+        if (!_bagButtonWired || _bagButton == null)
+            return;
+
+        _bagButton.onClick.RemoveListener(HandleBagClicked);
+        _bagButtonWired = false;
+    }
+
+    private void HandleBagClicked()
+    {
+        if (!ShouldShowBagUi() || _bagRoot == null || !_bagRoot.activeSelf)
+            return;
+
+        SetBagInventoryVisible(!_bagInventoryVisible);
+    }
+
+    private void SetBagInventoryVisible(bool visible)
+    {
+        _bagInventoryVisible = visible;
+
+        if (_bagInventoryListRoot != null)
+            _bagInventoryListRoot.SetActive(visible);
+    }
+
+    public void RefreshBagUi()
+    {
+        CacheBagUiReferences();
+
+        BagInventoryEntry[] items = PlayerProfileStorage.GetBagItemsForCurrentPlayer();
+        int totalCount = PlayerProfileStorage.GetBagTotalItemCountForCurrentPlayer();
+
+        if (_bagCountText != null)
+            _bagCountText.text = $"x{totalCount}";
+
+        for (int i = 0; i < _bagInventoryItemTexts.Count; i++)
+        {
+            TextMeshProUGUI itemText = _bagInventoryItemTexts[i];
+            if (itemText == null)
+                continue;
+
+            if (i < items.Length)
+            {
+                BagInventoryEntry entry = items[i];
+                itemText.gameObject.SetActive(true);
+                itemText.text = $"{entry.itemName} x{Mathf.Max(0, entry.count)}";
+            }
+            else
+            {
+                itemText.text = string.Empty;
+                itemText.gameObject.SetActive(false);
+            }
+        }
     }
 
     private static Light FindMainDirectionalLight()

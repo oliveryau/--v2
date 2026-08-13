@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public enum TableStatusType
@@ -344,7 +345,7 @@ public class DiningTable : MonoBehaviour
         if (snapAnchor != null)
             SnapToAnchor(brokenTable.transform, snapAnchor);
 
-        brokenTable.SetActive(true);
+        SetActiveInHierarchy(brokenTable, true);
         _activeBrokenTable = brokenTable;
         RefreshBrokenTapCollider(brokenTable);
     }
@@ -418,17 +419,68 @@ public class DiningTable : MonoBehaviour
 
     private static GameObject FindReferenceTable(string objectName)
     {
-        GameObject referenceRoot = GameObject.Find("ReferenceTables");
+        Transform[] transforms = FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        Transform referenceRoot = null;
+
+        for (int i = 0; i < transforms.Length; i++)
+        {
+            Transform candidate = transforms[i];
+            if (candidate != null && candidate.name == "ReferenceTables")
+            {
+                referenceRoot = candidate;
+                break;
+            }
+        }
 
         if (referenceRoot != null)
         {
-            Transform found = referenceRoot.transform.Find(objectName);
-
+            Transform found = referenceRoot.Find(objectName);
             if (found != null)
                 return found.gameObject;
+
+            for (int i = 0; i < referenceRoot.childCount; i++)
+            {
+                Transform child = referenceRoot.GetChild(i);
+                if (child != null && child.name == objectName)
+                    return child.gameObject;
+            }
         }
 
-        return GameObject.Find(objectName);
+        for (int i = 0; i < transforms.Length; i++)
+        {
+            Transform candidate = transforms[i];
+            if (candidate != null && candidate.name == objectName)
+                return candidate.gameObject;
+        }
+
+        return null;
+    }
+
+    private static void SetActiveInHierarchy(GameObject target, bool active)
+    {
+        if (target == null)
+            return;
+
+        if (!active)
+        {
+            target.SetActive(false);
+            return;
+        }
+
+        // Activate parents first so off-screen reference templates can become visible when used.
+        Transform current = target.transform;
+        List<Transform> chain = new();
+        while (current != null)
+        {
+            chain.Add(current);
+            current = current.parent;
+        }
+
+        for (int i = chain.Count - 1; i >= 0; i--)
+        {
+            if (chain[i] != null && !chain[i].gameObject.activeSelf)
+                chain[i].gameObject.SetActive(true);
+        }
     }
 
     private void HideAllLevelVisuals()
@@ -627,7 +679,10 @@ public class DiningTable : MonoBehaviour
 
         if (table != null)
         {
-            table.SetActive(active);
+            if (active)
+                SetActiveInHierarchy(table, true);
+            else
+                table.SetActive(false);
 
             if (active)
                 RuntimeMeshVisibility.Prepare(table.transform);
@@ -635,7 +690,10 @@ public class DiningTable : MonoBehaviour
 
         if (visuals.Seats != null)
         {
-            visuals.Seats.SetActive(active);
+            if (active)
+                SetActiveInHierarchy(visuals.Seats, true);
+            else
+                visuals.Seats.SetActive(false);
 
             if (active)
                 RuntimeMeshVisibility.Prepare(visuals.Seats.transform);

@@ -27,9 +27,6 @@ public class MissionUiController : MonoBehaviour
     [SerializeField] private Color _incompleteTaskColor = Color.white;
     [SerializeField] private Color _completeTaskColor = new Color(0.25f, 0.85f, 0.3f, 1f);
     [SerializeField] private float _completedPartHoldSeconds;
-    [SerializeField] private float _openButtonPulseMinScale = 0.95f;
-    [SerializeField] private float _openButtonPulseMaxScale = 1.05f;
-    [SerializeField] private float _openButtonPulseSpeed = 3f;
 
     private readonly int[] _placedCounts = new int[Enum.GetValues(typeof(PlaceableType)).Length];
     private readonly int[] _hiredCounts = new int[Enum.GetValues(typeof(WorkerType)).Length];
@@ -105,11 +102,6 @@ public class MissionUiController : MonoBehaviour
             {
             }
         }
-    }
-
-    private void Update()
-    {
-        UpdateOpenButtonPulse();
     }
 
     public void NotifyPlaceableBuilt(PlaceableType type)
@@ -346,46 +338,6 @@ public class MissionUiController : MonoBehaviour
 
         if (_openButton != null)
             _openButton.transform.localScale = Vector3.one;
-    }
-
-    private void UpdateOpenButtonPulse()
-    {
-        if (_isPanelOpen)
-            return;
-
-        if (_closedUiRoot == null || !_closedUiRoot.activeInHierarchy)
-            return;
-
-        if (!HasIncompleteMission())
-        {
-            _closedUiRoot.transform.localScale = Vector3.one;
-            if (_openButton != null)
-                _openButton.transform.localScale = Vector3.one;
-            return;
-        }
-
-        float pulseScale = GetOpenButtonPulseScale();
-        // Pulse the whole closed mission UI (bg + open button).
-        _closedUiRoot.transform.localScale = Vector3.one * pulseScale;
-    }
-
-    private float GetOpenButtonPulseScale()
-    {
-        float speed = Mathf.Max(0f, _openButtonPulseSpeed);
-
-        if (speed <= 0f)
-            return 1f;
-
-        float pulseT = (Mathf.Sin(Time.time * speed) + 1f) * 0.5f;
-        return Mathf.Lerp(_openButtonPulseMinScale, _openButtonPulseMaxScale, pulseT);
-    }
-
-    private bool HasIncompleteMission()
-    {
-        return RestaurantSceneMode.IsMainScene
-            && !AreAllMissionsComplete()
-            && _missionCatalog != null
-            && _missionCatalog.TryGetPart(_currentPartIndex, out _);
     }
 
     private bool AreAllMissionsComplete()

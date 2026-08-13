@@ -2,14 +2,6 @@ using System;
 using UnityEngine;
 
 [Serializable]
-public struct VipCompetitorDishOption
-{
-    public int dishIndex;
-    public string displayName;
-    public int fightRating;
-}
-
-[Serializable]
 public class VipCompetitorProfile
 {
     public VipCompetitor Competitor;
@@ -21,7 +13,7 @@ public class VipCompetitorProfile
     [Min(0f)] public float ChaseThresholdMinSeconds = 1f;
     [Min(0f)] public float ChaseThresholdMaxSeconds = 5f;
     public Sprite AngryFace;
-    public VipCompetitorDishOption[] SignatureDishes = Array.Empty<VipCompetitorDishOption>();
+    public Sprite ProfilePic;
 
     public void GetChaseThresholdRange(out float minSeconds, out float maxSeconds)
     {

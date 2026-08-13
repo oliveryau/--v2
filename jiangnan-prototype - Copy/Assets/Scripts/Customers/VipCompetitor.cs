@@ -1,7 +1,7 @@
 public enum VipCompetitor
 {
     DaiWei,
-    JiaHeng,
+    HanXi,
     ChunHua,
     HongJie
 }

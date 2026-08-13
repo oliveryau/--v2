@@ -21,10 +21,7 @@ MonoBehaviour:
     ChaseThresholdMinSeconds: 6
     ChaseThresholdMaxSeconds: 8
     AngryFace: {fileID: 21300000, guid: 9aac32aec9472554384a9c06d7aaae86, type: 3}
-    SignatureDishes:
-    - dishIndex: 1
-      displayName: "\u53EB\u82B1\u9E21"
-      fightRating: 80
+    ProfilePic: {fileID: 21300000, guid: d1d9743b64ee1104bad6516061cca8df, type: 3}
   - Competitor: 1
     TownShopIndex: 2
     RestaurantName: "\u97e9\u7199\u996D\u5E97"
@@ -33,10 +30,7 @@ MonoBehaviour:
     ChaseThresholdMinSeconds: 1
     ChaseThresholdMaxSeconds: 2
     AngryFace: {fileID: 21300000, guid: 19b60a0663110664db31c3941164eb66, type: 3}
-    SignatureDishes:
-    - dishIndex: 8
-      displayName: "\u4F5B\u8DF3\u5899"
-      fightRating: 74
+    ProfilePic: {fileID: 21300000, guid: b3f2f597c5af7d84e8642a8f558ba6a3, type: 3}
   - Competitor: 2
     TownShopIndex: 3
     RestaurantName: "\u6625\u534E\u996D\u5E97"
@@ -45,10 +39,7 @@ MonoBehaviour:
     ChaseThresholdMinSeconds: 4
     ChaseThresholdMaxSeconds: 5
     AngryFace: {fileID: 21300000, guid: e3478875bb010e6408b7cace6ddd9a37, type: 3}
-    SignatureDishes:
-    - dishIndex: 0
-      displayName: "\u4E1C\u5761\u8089"
-      fightRating: 75
+    ProfilePic: {fileID: 21300000, guid: c47340c2eb1314442a74b99df4daae7c, type: 3}
   - Competitor: 3
     TownShopIndex: 4
     RestaurantName: "\u7EA2\u59D0\u996D\u5E97"
@@ -57,7 +48,4 @@ MonoBehaviour:
     ChaseThresholdMinSeconds: 10
     ChaseThresholdMaxSeconds: 11
     AngryFace: {fileID: 21300000, guid: 70388f8a7c17d7d4aa7ba8c0b98a247b, type: 3}
-    SignatureDishes:
-    - dishIndex: 7
-      displayName: "\u9EBB\u5A46\u8C46\u8150"
-      fightRating: 81
+    ProfilePic: {fileID: 21300000, guid: f1be6168aecdebf4c8522ee36ecea295, type: 3}

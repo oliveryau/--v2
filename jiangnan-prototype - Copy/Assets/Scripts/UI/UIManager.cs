@@ -67,10 +67,6 @@ public class UIManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI _vipWaitTimerCountdownText;
     [SerializeField] private RectTransform _vipServeDishButtonRoot;
     [SerializeField] private Button _vipServeDishButton;
-    [SerializeField] private RectTransform _vipFeetMassageButtonRoot;
-    [SerializeField] private Button _vipFeetMassageButton;
-    [SerializeField] private RectTransform _vipServeTeaButtonRoot;
-    [SerializeField] private Button _vipServeTeaButton;
     [SerializeField] private RectTransform _vipCallLadyButtonRoot;
     [SerializeField] private Button _vipCallLadyButton;
     [SerializeField] private RectTransform _vipGeTaiButtonRoot;
@@ -103,16 +99,6 @@ public class UIManager : MonoBehaviour
     [SerializeField] private string[] _vipDialogueRequestServeDish =
     {
         "上菜! 本尊饿了!"
-    };
-    [Tooltip("VIP wants 泡脚 (button appears).")]
-    [SerializeField] private string[] _vipDialogueRequestFeetMassage =
-    {
-        "给本尊好好泡脚!"
-    };
-    [Tooltip("VIP wants 上茶 (button appears).")]
-    [SerializeField] private string[] _vipDialogueRequestServeTea =
-    {
-        "上茶! 要上等的!"
     };
     [Tooltip("VIP wants 叫美女 (button appears).")]
     [SerializeField] private string[] _vipDialogueRequestCallLady =
@@ -259,6 +245,8 @@ public class UIManager : MonoBehaviour
 
     [Header("Town Competitor Shop Name UI")]
     [SerializeField] private CompetitorShopNameUiBinding[] _competitorShopNameUiBindings;
+    [SerializeField] private Color _competitorShopOnlineStatusColor = new Color(0.2f, 0.85f, 0.35f, 1f);
+    [SerializeField] private Color _competitorShopOfflineStatusColor = new Color(0.94509804f, 0.3882353f, 0.3882353f, 1f);
 
     [Header("Competitor Catalog")]
     [SerializeField] private VipCompetitorCatalog _competitorCatalog;
@@ -283,6 +271,7 @@ public class UIManager : MonoBehaviour
     [Header("Scene Navigation")]
     [SerializeField] private Button _townButton;
     [SerializeField] private Button _townPopupButton;
+    [SerializeField] private Button _futureHomeButton;
     [SerializeField] private float _townPopupPulseMinScale = 0.92f;
     [SerializeField] private float _townPopupPulseMaxScale = 1.08f;
     [SerializeField] private float _townPopupPulseSpeed = 8f;
@@ -426,8 +415,6 @@ public class UIManager : MonoBehaviour
     private const string VipWaitTimerFillName = "Energy Bar";
     private const string VipWaitTimerCountdownName = "Countdown";
     private const string VipServeDishButtonName = "VIP ServeDish Button";
-    private const string VipFeetMassageButtonName = "VIP Feetmassage Button";
-    private const string VipServeTeaButtonName = "VIP ServeTea Button";
     private const string VipCallLadyButtonName = "VIP CallLady Button";
     private const string VipGeTaiButtonName = "VIP GeTai Button";
     private const string VipDialogueTextName = "VIP Text";
@@ -478,6 +465,9 @@ public class UIManager : MonoBehaviour
 
     private const string OpponentShopNamePrefix = "Opponent Shop (";
     private const string CompetitorShopNamePrefix = "CompetitorShopName (";
+    private const string CompetitorShopStatusName = "Status";
+    private const string CompetitorShopOnlineStatusLabel = "Online";
+    private const string CompetitorShopOfflineStatusLabel = "Offline";
     private const string OwnerShopObjectName = "Owner Shop";
     private const string OwnShopNameUiName = "OwnShopName";
     private const string OwnRatingUiName = "OwnRating";
@@ -576,6 +566,7 @@ public class UIManager : MonoBehaviour
         InitializeTownRatingUi();
         InitializeSceneNavigationUi();
         InitializeMainButtonsUi();
+        InitializeFutureHomeButtonUi();
         InitializeMissionUi();
         SyncOpenBusinessUiVisibility();
         if (RestaurantSceneMode.IsCompetitorScene)
@@ -696,6 +687,7 @@ public class UIManager : MonoBehaviour
         UnsubscribeEnterShopUi();
         UnsubscribeEnterCompetitorShopUi();
         UnsubscribeSceneNavigationUi();
+        UnsubscribeFutureHomeButtonUi();
 
         if (_goldPlusAnimation != null)
             StopCoroutine(_goldPlusAnimation);
@@ -807,8 +799,6 @@ public class UIManager : MonoBehaviour
         SetVipDialogue(eventType switch
         {
             VipEventType.ServeDish => VipDialogueState.RequestServeDish,
-            VipEventType.FeetMassage => VipDialogueState.RequestFeetMassage,
-            VipEventType.ServeTea => VipDialogueState.RequestServeTea,
             VipEventType.CallLady => VipDialogueState.RequestCallLady,
             VipEventType.WatchStage => VipDialogueState.RequestWatchStage,
             _ => VipDialogueState.Discontent
@@ -856,8 +846,6 @@ public class UIManager : MonoBehaviour
             VipDialogueState.UnhappyLeave => _vipDialogueUnhappyLeave,
             VipDialogueState.SuccessLeave => _vipDialogueSuccessLeave,
             VipDialogueState.RequestServeDish => _vipDialogueRequestServeDish,
-            VipDialogueState.RequestFeetMassage => _vipDialogueRequestFeetMassage,
-            VipDialogueState.RequestServeTea => _vipDialogueRequestServeTea,
             VipDialogueState.RequestCallLady => _vipDialogueRequestCallLady,
             VipDialogueState.RequestWatchStage => _vipDialogueRequestWatchStage,
             VipDialogueState.Discontent => _vipDialogueDiscontent,
@@ -992,8 +980,6 @@ public class UIManager : MonoBehaviour
             return;
 
         SetVipEventButtonActive(_vipServeDishButtonRoot, eventType == VipEventType.ServeDish);
-        SetVipEventButtonActive(_vipFeetMassageButtonRoot, eventType == VipEventType.FeetMassage);
-        SetVipEventButtonActive(_vipServeTeaButtonRoot, eventType == VipEventType.ServeTea);
         SetVipEventButtonActive(_vipCallLadyButtonRoot, eventType == VipEventType.CallLady);
         SetVipEventButtonActive(_vipGeTaiButtonRoot, eventType == VipEventType.WatchStage);
 
@@ -1020,8 +1006,6 @@ public class UIManager : MonoBehaviour
     public void HideAllVipEventButtons()
     {
         SetVipEventButtonActive(_vipServeDishButtonRoot, false);
-        SetVipEventButtonActive(_vipFeetMassageButtonRoot, false);
-        SetVipEventButtonActive(_vipServeTeaButtonRoot, false);
         SetVipEventButtonActive(_vipCallLadyButtonRoot, false);
         SetVipEventButtonActive(_vipGeTaiButtonRoot, false);
 
@@ -1548,18 +1532,6 @@ public class UIManager : MonoBehaviour
             VipEventType.ServeDish);
 
         CacheVipEventButton(
-            ref _vipFeetMassageButtonRoot,
-            ref _vipFeetMassageButton,
-            VipFeetMassageButtonName,
-            VipEventType.FeetMassage);
-
-        CacheVipEventButton(
-            ref _vipServeTeaButtonRoot,
-            ref _vipServeTeaButton,
-            VipServeTeaButtonName,
-            VipEventType.ServeTea);
-
-        CacheVipEventButton(
             ref _vipCallLadyButtonRoot,
             ref _vipCallLadyButton,
             VipCallLadyButtonName,
@@ -1577,15 +1549,11 @@ public class UIManager : MonoBehaviour
         if (!_vipEventButtonsWired)
         {
             WireVipEventButton(_vipServeDishButton, VipEventType.ServeDish);
-            WireVipEventButton(_vipFeetMassageButton, VipEventType.FeetMassage);
-            WireVipEventButton(_vipServeTeaButton, VipEventType.ServeTea);
             WireVipEventButton(_vipCallLadyButton, VipEventType.CallLady);
             WireVipEventButton(_vipGeTaiButton, VipEventType.WatchStage);
             _vipEventButtonsWired = true;
 
             SetVipEventButtonActive(_vipServeDishButtonRoot, false);
-            SetVipEventButtonActive(_vipFeetMassageButtonRoot, false);
-            SetVipEventButtonActive(_vipServeTeaButtonRoot, false);
             SetVipEventButtonActive(_vipCallLadyButtonRoot, false);
             SetVipEventButtonActive(_vipGeTaiButtonRoot, false);
             _activeVipEventButton = null;
@@ -1631,8 +1599,6 @@ public class UIManager : MonoBehaviour
         return eventType switch
         {
             VipEventType.ServeDish => _vipServeDishButtonRoot,
-            VipEventType.FeetMassage => _vipFeetMassageButtonRoot,
-            VipEventType.ServeTea => _vipServeTeaButtonRoot,
             VipEventType.CallLady => _vipCallLadyButtonRoot,
             VipEventType.WatchStage => _vipGeTaiButtonRoot,
             _ => null
@@ -4611,6 +4577,45 @@ public class UIManager : MonoBehaviour
         PlayCoinTrail(worldStart, useVipCount: true, durationOverride: _vipCoinTrailDuration);
     }
 
+    /// <summary>
+    /// Coin trail from a UI element (e.g. shop Buy button) into the gold amount UI.
+    /// </summary>
+    public void PlayCoinTrailFromUi(RectTransform startUi)
+    {
+        if (startUi == null)
+            return;
+
+        if (_coinVfxRoot == null || (_coinTrailPool.Count == 0 && _coinTrailTemplate == null))
+            CacheCoinTrailUi();
+
+        if (_coinVfxRoot == null)
+            return;
+
+        if (_coinTrailPool.Count == 0 && _coinTrailTemplate == null)
+            return;
+
+        if (!_coinVfxRoot.gameObject.activeSelf)
+            _coinVfxRoot.gameObject.SetActive(true);
+
+        if (!TryGetUiLocalPointInRect(_coinVfxRoot, startUi, out Vector2 startLocal))
+            return;
+
+        RectTransform target = ResolveCoinTrailTarget();
+        if (target == null || !TryGetUiLocalPointInRect(_coinVfxRoot, target, out Vector2 endLocal))
+            return;
+
+        int coinCount = Mathf.Max(1, _coinTrailCount);
+        EnsureCoinTrailPoolCapacity(GetBusyCoinTrailCount() + coinCount);
+
+        float duration = Mathf.Max(0.01f, _coinTrailDuration);
+        Vector2 controlPoint = (startLocal + endLocal) * 0.5f + Vector2.up * _coinTrailArcHeight;
+
+        int sequenceId = ++_nextCoinTrailSequenceId;
+        Coroutine sequence = StartCoroutine(
+            PlayCoinTrailSequence(sequenceId, startLocal, endLocal, controlPoint, coinCount, duration));
+        _coinTrailSequences[sequenceId] = sequence;
+    }
+
     private void PlayCoinTrail(Transform worldStart, bool useVipCount = false, float? durationOverride = null)
     {
         if (_coinVfxRoot == null || worldStart == null)
@@ -4894,7 +4899,12 @@ public class UIManager : MonoBehaviour
         CharacterPanelController panel = CharacterPanelController.Instance;
 
         if (panel != null)
+        {
             panel.RefreshPlayerName();
+            panel.RefreshBagUi();
+        }
+
+        GameEvents.RaiseBagInventoryChanged();
 
         return true;
     }
@@ -5711,6 +5721,7 @@ public class UIManager : MonoBehaviour
 
         CacheTownOpponentShopsIfNeeded();
         SyncCompetitorShopNameLabels();
+        SyncCompetitorShopStatusTexts();
         SyncTownCompetitorShopVisibility();
     }
 
@@ -5743,6 +5754,28 @@ public class UIManager : MonoBehaviour
 
             if (label != null)
                 label.text = profile.RestaurantName;
+        }
+    }
+
+    private void SyncCompetitorShopStatusTexts()
+    {
+        if (!IsActiveTownScene() || _competitorShopNameUiBindings == null)
+            return;
+
+        for (int i = 0; i < _competitorShopNameUiBindings.Length; i++)
+        {
+            CompetitorShopNameUiBinding binding = _competitorShopNameUiBindings[i];
+            if (binding?.UiRoot == null)
+                continue;
+
+            int shopIndex = ResolveCompetitorShopNameIndex(binding, i + 1);
+            TextMeshProUGUI statusText = FindChildText(binding.UiRoot, CompetitorShopStatusName);
+            if (statusText == null)
+                continue;
+
+            bool isOnline = CompetitorSceneSelection.IsTownShopOnline(shopIndex);
+            statusText.text = isOnline ? CompetitorShopOnlineStatusLabel : CompetitorShopOfflineStatusLabel;
+            statusText.color = isOnline ? _competitorShopOnlineStatusColor : _competitorShopOfflineStatusColor;
         }
     }
 
@@ -5827,6 +5860,7 @@ public class UIManager : MonoBehaviour
         }
 
         SyncEnterCompetitorShopUiVisibility(PlayerProfileStorage.IsPostVipLullActiveForCurrentPlayer());
+        SyncCompetitorShopStatusTexts();
         SyncTownRatingVisibility();
     }
 
@@ -6090,6 +6124,36 @@ public class UIManager : MonoBehaviour
     private void HandleTownButtonClicked()
     {
         SceneManager.LoadScene(TownSceneName);
+    }
+
+    private void InitializeFutureHomeButtonUi()
+    {
+        if (!RestaurantSceneMode.IsFutureScene)
+            return;
+
+        if (_futureHomeButton == null)
+        {
+            GameObject homeButtonObject = FindSceneUiObject("Home Button");
+            if (homeButtonObject != null)
+                _futureHomeButton = homeButtonObject.GetComponent<Button>();
+        }
+
+        if (_futureHomeButton == null)
+            return;
+
+        _futureHomeButton.onClick.RemoveListener(HandleFutureHomeButtonClicked);
+        _futureHomeButton.onClick.AddListener(HandleFutureHomeButtonClicked);
+    }
+
+    private void UnsubscribeFutureHomeButtonUi()
+    {
+        if (_futureHomeButton != null)
+            _futureHomeButton.onClick.RemoveListener(HandleFutureHomeButtonClicked);
+    }
+
+    private void HandleFutureHomeButtonClicked()
+    {
+        SceneManager.LoadScene(RestaurantSceneMode.MainSceneName);
     }
 
     private void InitializeMainButtonsUi()

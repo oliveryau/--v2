@@ -4,9 +4,7 @@ public enum VipDialogueState
     UnhappyLeave = 1,
     SuccessLeave = 2,
     RequestServeDish = 3,
-    RequestFeetMassage = 4,
-    RequestServeTea = 5,
-    RequestCallLady = 6,
-    RequestWatchStage = 7,
-    Discontent = 8
+    RequestCallLady = 4,
+    RequestWatchStage = 5,
+    Discontent = 6
 }

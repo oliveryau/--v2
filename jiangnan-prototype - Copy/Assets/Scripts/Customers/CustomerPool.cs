@@ -18,6 +18,7 @@ public class CustomerPool : MonoBehaviour
 
     private void Awake()
     {
+        HideSceneTemplateCustomers();
         Prewarm(_prefab, _prewarmCount);
 
         if (_vipPrefabs == null)
@@ -25,6 +26,21 @@ public class CustomerPool : MonoBehaviour
 
         for (int i = 0; i < _vipPrefabs.Length; i++)
             Prewarm(_vipPrefabs[i], _vipPrewarmCount);
+    }
+
+    private void HideSceneTemplateCustomers()
+    {
+        // Scene templates under this pool are Instantiation sources only — keep them inactive.
+        for (int i = 0; i < transform.childCount; i++)
+        {
+            Transform child = transform.GetChild(i);
+            if (child != null)
+                child.gameObject.SetActive(false);
+        }
+
+        // Normal customer prefab may be a scene object (not a project asset).
+        if (_prefab != null && _prefab.gameObject.scene.IsValid())
+            _prefab.gameObject.SetActive(false);
     }
 
     public Customer Get(Vector3 position)
