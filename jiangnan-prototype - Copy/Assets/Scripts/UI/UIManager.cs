@@ -73,11 +73,24 @@ public class UIManager : MonoBehaviour
     [SerializeField] private Button _vipCallLadyButton;
     [SerializeField] private RectTransform _vipGeTaiButtonRoot;
     [SerializeField] private Button _vipGeTaiButton;
+    [SerializeField] private float _vipButtonPulseMinScale = 0.96f;
+    [SerializeField] private float _vipButtonPulseMaxScale = 1.04f;
+    [SerializeField] private float _vipButtonPulseSpeed = 5f;
+    [Tooltip("How many pixels of intro / 上菜 / 叫美女 / 表演 stay visible when edge-clamped.")]
+    [SerializeField] private float _vipButtonEdgeClampPeekPixels = 22f;
+    [Header("Stair Floor Buttons")]
+    [SerializeField] private RectTransform _stairFloorButtonsRoot;
+    [SerializeField] private RectTransform _stairFirstFloorButtonRoot;
+    [SerializeField] private Button _stairFirstFloorButton;
+    [SerializeField] private RectTransform _stairSecondFloorButtonRoot;
+    [SerializeField] private Button _stairSecondFloorButton;
+    [SerializeField] private Transform _firstFloorUiPoint;
+    [SerializeField] private Transform _secondFloorUiPoint;
+    [Tooltip("How many pixels of FirstFloor / SecondFloor buttons stay visible when edge-clamped.")]
+    [SerializeField] private float _stairFloorButtonEdgeClampPeekPixels = 22f;
     [Header("VIP Main Icon")]
     [SerializeField] private RectTransform _vipMainIconRoot;
     [SerializeField] private Button _vipMainIconButton;
-    [Tooltip("VIP icon pulses while the wait timer has this many seconds (or fewer) remaining.")]
-    [SerializeField] private float _vipIconPulseRemainingThreshold = 15f;
     [SerializeField] private float _vipIconPulseMinScale = 0.92f;
     [SerializeField] private float _vipIconPulseMaxScale = 1.08f;
     [SerializeField] private float _vipIconPulseSpeed = 8f;
@@ -126,6 +139,11 @@ public class UIManager : MonoBehaviour
     [SerializeField] private ItemCatalog _itemCatalog;
     [SerializeField] private float _vipTasteDialogueDuration = 3f;
     [SerializeField] private string _vipTasteSoldDialogue = "\u592a\u7f8e\u5473\u4e86\uff01\u91d1\u5e01\u62ff\u53bb\uff01";
+    [SerializeField] private RectTransform _vipItemTipsRoot;
+    [SerializeField] private TextMeshProUGUI _vipItemTipsText;
+    [SerializeField] private float _vipItemTipsFloatDistance = 48f;
+    [SerializeField] private float _vipItemTipsFloatDuration = 0.65f;
+    [SerializeField] private float _vipItemTipsFadeOutDuration = 0.3f;
 
     [Header("Table Status UI")]
     [SerializeField] private RectTransform _tableStatusUiRoot;
@@ -318,6 +336,10 @@ public class UIManager : MonoBehaviour
     private int _nextCoinTrailSequenceId;
     private RectTransform _coinTrailTemplate;
     private Coroutine _vipDialogueHideRoutine;
+    private Coroutine _vipItemTipsRoutine;
+    private Vector2 _vipItemTipsRestPosition;
+    private Color _vipItemTipsTargetColor = Color.white;
+    private bool _hasVipItemTipsRestPosition;
     private Color _vipDialogueDefaultColor = Color.white;
     private bool _hasVipDialogueDefaultColor;
     private Graphic[] _vipFireworksGraphics;
@@ -337,6 +359,7 @@ public class UIManager : MonoBehaviour
     private float _vipWaitTimerDuration;
     private bool _vipIntroButtonWired;
     private bool _vipEventButtonsWired;
+    private bool _stairFloorButtonsWired;
     private RectTransform _pranksterDialogueRootRuntime;
     private RectTransform _pranksterDialogueIconRoot;
     private Graphic[] _pranksterDialogueGraphics;
@@ -437,6 +460,12 @@ public class UIManager : MonoBehaviour
     private const string VipGeTaiButtonName = "VIP GeTai Button";
     private const string VipDialogueTextName = "VIP Text";
     private const string VipTasteButtonName = "Taste Button";
+    private const string VipItemTipsName = "Item Tips";
+    private const string StairFloorButtonsRootName = "Floor Buttons";
+    private const string StairFirstFloorButtonName = "FirstFloor Button";
+    private const string StairSecondFloorButtonName = "SecondFloor Button";
+    private const string FirstFloorUiPointName = "1st Floor UI (Upstairs)";
+    private const string SecondFloorUiPointName = "2nd Floor UI (Downstairs)";
     private const string ChasePranksterUiName = "Chase Prankster";
     private const string PranksterNameUiName = "Prankster Name";
     private const string PranksterDialogueRootName = "Prankster Dialogue";
@@ -536,6 +565,7 @@ public class UIManager : MonoBehaviour
         CacheVipWaitTimerUi();
         CacheVipEventButtonsUi();
         CacheVipTasteButtonUi();
+        CacheStairFloorButtonUi();
 
         InitializeOpenBusinessUi();
 
@@ -570,6 +600,7 @@ public class UIManager : MonoBehaviour
         HideVipIntroButton();
         HideVipWaitTimer();
         HideAllVipEventButtons();
+        HideStairFloorButtons();
         HideBusinessTimer();
         HideOpenBusiness();
         HideTableBuildInfoUi();
@@ -706,6 +737,8 @@ public class UIManager : MonoBehaviour
         if (_vipMainIconButton != null && _vipMainIconButtonWired)
             _vipMainIconButton.onClick.RemoveListener(HandleVipMainIconClicked);
 
+        UnsubscribeStairFloorButtons();
+
         if (_pranksterDialogueIconButton != null && _pranksterDialogueIconButtonWired)
             _pranksterDialogueIconButton.onClick.RemoveListener(HandlePranksterDialogueIconClicked);
 
@@ -790,6 +823,7 @@ public class UIManager : MonoBehaviour
     {
         StopVipFireworksRoutine();
         StopVipDialogueHideRoutine();
+        StopVipItemTips();
 
         if (_vipFireworksRoot != null)
             _vipFireworksRoot.gameObject.SetActive(false);
@@ -846,6 +880,7 @@ public class UIManager : MonoBehaviour
     public void HideVipDialogue()
     {
         StopVipDialogueHideRoutine();
+        StopVipItemTips();
         CacheVipDialogueText();
 
         if (_vipDialogueText == null)
@@ -915,6 +950,131 @@ public class UIManager : MonoBehaviour
             _vipUiRoot.gameObject.SetActive(true);
 
         _vipDialogueHideRoutine = StartCoroutine(RestoreVipDialogueAfterTasteDelay(_vipTasteDialogueDuration));
+    }
+
+    private void CacheVipItemTipsUi()
+    {
+        if (_vipItemTipsRoot != null && _vipItemTipsText != null)
+            return;
+
+        EnsureScreenUiCaches();
+        if (_vipUiRoot == null)
+            CacheVipUi();
+
+        if (_vipItemTipsRoot == null && _vipUiRoot != null)
+        {
+            Transform tips = FindChildTransform(_vipUiRoot, VipItemTipsName);
+            if (tips != null)
+                _vipItemTipsRoot = tips as RectTransform;
+        }
+
+        if (_vipItemTipsRoot == null)
+            return;
+
+        if (_vipItemTipsText == null)
+            _vipItemTipsText = _vipItemTipsRoot.GetComponent<TextMeshProUGUI>()
+                ?? _vipItemTipsRoot.GetComponentInChildren<TextMeshProUGUI>(true);
+
+        if (_vipItemTipsText != null)
+        {
+            _vipItemTipsText.raycastTarget = false;
+            if (!_hasVipItemTipsRestPosition)
+                _vipItemTipsTargetColor = _vipItemTipsText.color;
+        }
+
+        if (!_hasVipItemTipsRestPosition)
+        {
+            _vipItemTipsRestPosition = _vipItemTipsRoot.anchoredPosition;
+            _hasVipItemTipsRestPosition = true;
+        }
+
+        _vipItemTipsRoot.gameObject.SetActive(false);
+    }
+
+    private void ShowVipItemTips(int amount)
+    {
+        CacheVipItemTipsUi();
+        if (_vipItemTipsRoot == null)
+            return;
+
+        if (_vipItemTipsText != null)
+            _vipItemTipsText.text = $"+{Mathf.Max(0, amount)}";
+
+        StopVipItemTips();
+        _vipItemTipsRoutine = StartCoroutine(PlayVipItemTipsCoroutine());
+    }
+
+    private void StopVipItemTips()
+    {
+        if (_vipItemTipsRoutine != null)
+        {
+            StopCoroutine(_vipItemTipsRoutine);
+            _vipItemTipsRoutine = null;
+        }
+
+        ResetVipItemTipsVisual();
+    }
+
+    private void ResetVipItemTipsVisual()
+    {
+        if (_vipItemTipsRoot == null)
+            return;
+
+        _vipItemTipsRoot.anchoredPosition = _vipItemTipsRestPosition;
+        _vipItemTipsRoot.gameObject.SetActive(false);
+
+        if (_vipItemTipsText != null)
+            _vipItemTipsText.color = _vipItemTipsTargetColor;
+    }
+
+    private IEnumerator PlayVipItemTipsCoroutine()
+    {
+        if (_vipItemTipsRoot == null)
+        {
+            _vipItemTipsRoutine = null;
+            yield break;
+        }
+
+        _vipItemTipsRoot.gameObject.SetActive(true);
+        _vipItemTipsRoot.anchoredPosition = _vipItemTipsRestPosition;
+
+        if (_vipItemTipsText != null)
+            _vipItemTipsText.color = _vipItemTipsTargetColor;
+
+        Vector2 endPosition = _vipItemTipsRestPosition + Vector2.up * Mathf.Max(0f, _vipItemTipsFloatDistance);
+        float floatDuration = Mathf.Max(0.01f, _vipItemTipsFloatDuration);
+        float elapsed = 0f;
+
+        while (elapsed < floatDuration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / floatDuration);
+            float smoothed = t * t * (3f - 2f * t);
+            _vipItemTipsRoot.anchoredPosition = Vector2.Lerp(_vipItemTipsRestPosition, endPosition, smoothed);
+            yield return null;
+        }
+
+        _vipItemTipsRoot.anchoredPosition = endPosition;
+
+        float fadeDuration = Mathf.Max(0f, _vipItemTipsFadeOutDuration);
+        if (_vipItemTipsText != null && fadeDuration > 0f)
+        {
+            Color startColor = _vipItemTipsText.color;
+            Color endColor = startColor;
+            endColor.a = 0f;
+            elapsed = 0f;
+
+            while (elapsed < fadeDuration)
+            {
+                elapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(elapsed / fadeDuration);
+                _vipItemTipsText.color = Color.Lerp(startColor, endColor, t);
+                yield return null;
+            }
+        }
+
+        _vipItemTipsRoutine = null;
+        ResetVipItemTipsVisual();
     }
 
     private string[] ResolveVipDialogueLines(VipDialogueState state)
@@ -1001,7 +1161,10 @@ public class UIManager : MonoBehaviour
         _vipIntroCustomer = null;
 
         if (_vipIntroButtonRoot != null)
+        {
+            _vipIntroButtonRoot.localScale = Vector3.one;
             _vipIntroButtonRoot.gameObject.SetActive(false);
+        }
     }
 
     public void ShowVipWaitTimer(Customer vip, float duration)
@@ -1074,7 +1237,10 @@ public class UIManager : MonoBehaviour
     {
         RectTransform root = GetVipEventButtonRoot(eventType);
         if (root != null)
+        {
+            root.localScale = Vector3.one;
             root.gameObject.SetActive(false);
+        }
 
         if (_activeVipEventButton.HasValue && _activeVipEventButton.Value == eventType)
         {
@@ -1546,6 +1712,7 @@ public class UIManager : MonoBehaviour
 
         DisableChildRaycastTargets(_vipUiRoot);
         CacheVipDialogueText();
+        CacheVipItemTipsUi();
         CacheVipMainIconUi();
         CacheVipTasteButtonUi();
         _vipUiRoot.gameObject.SetActive(false);
@@ -1716,6 +1883,7 @@ public class UIManager : MonoBehaviour
         }
 
         ShowVipTasteSoldDialogue();
+        ShowVipItemTips(payout);
     }
 
     private void CacheVipIntroButtonUi()
@@ -1871,8 +2039,143 @@ public class UIManager : MonoBehaviour
 
     private static void SetVipEventButtonActive(RectTransform root, bool active)
     {
-        if (root != null)
-            root.gameObject.SetActive(active);
+        if (root == null)
+            return;
+
+        if (!active)
+            root.localScale = Vector3.one;
+
+        root.gameObject.SetActive(active);
+    }
+
+    private void CacheStairFloorButtonUi()
+    {
+        EnsureScreenUiCaches();
+
+        if (_stairFloorButtonsRoot == null && _screenCanvas != null)
+            _stairFloorButtonsRoot = FindRectTransformByName(_screenCanvas.transform, StairFloorButtonsRootName);
+
+        if (_stairFirstFloorButtonRoot == null)
+        {
+            if (_stairFloorButtonsRoot != null)
+                _stairFirstFloorButtonRoot = FindRectTransformByName(_stairFloorButtonsRoot, StairFirstFloorButtonName);
+            else if (_screenCanvas != null)
+                _stairFirstFloorButtonRoot = FindRectTransformByName(_screenCanvas.transform, StairFirstFloorButtonName);
+        }
+
+        if (_stairSecondFloorButtonRoot == null)
+        {
+            if (_stairFloorButtonsRoot != null)
+                _stairSecondFloorButtonRoot = FindRectTransformByName(_stairFloorButtonsRoot, StairSecondFloorButtonName);
+            else if (_screenCanvas != null)
+                _stairSecondFloorButtonRoot = FindRectTransformByName(_screenCanvas.transform, StairSecondFloorButtonName);
+        }
+
+        if (_stairFirstFloorButton == null && _stairFirstFloorButtonRoot != null)
+            _stairFirstFloorButton = EnsureButtonOnObject(_stairFirstFloorButtonRoot.gameObject);
+
+        if (_stairSecondFloorButton == null && _stairSecondFloorButtonRoot != null)
+            _stairSecondFloorButton = EnsureButtonOnObject(_stairSecondFloorButtonRoot.gameObject);
+
+        if (_firstFloorUiPoint == null)
+            _firstFloorUiPoint = FindSceneTransformByName(FirstFloorUiPointName);
+
+        if (_secondFloorUiPoint == null)
+            _secondFloorUiPoint = FindSceneTransformByName(SecondFloorUiPointName);
+
+        WireStairFloorButtons();
+    }
+
+    private void WireStairFloorButtons()
+    {
+        if (_stairFloorButtonsWired)
+            return;
+
+        if (_stairFirstFloorButton != null)
+            _stairFirstFloorButton.onClick.AddListener(HandleStairFirstFloorButtonClicked);
+
+        if (_stairSecondFloorButton != null)
+            _stairSecondFloorButton.onClick.AddListener(HandleStairSecondFloorButtonClicked);
+
+        _stairFloorButtonsWired = _stairFirstFloorButton != null || _stairSecondFloorButton != null;
+    }
+
+    private void UnsubscribeStairFloorButtons()
+    {
+        if (!_stairFloorButtonsWired)
+            return;
+
+        if (_stairFirstFloorButton != null)
+            _stairFirstFloorButton.onClick.RemoveListener(HandleStairFirstFloorButtonClicked);
+
+        if (_stairSecondFloorButton != null)
+            _stairSecondFloorButton.onClick.RemoveListener(HandleStairSecondFloorButtonClicked);
+
+        _stairFloorButtonsWired = false;
+    }
+
+    private void HandleStairFirstFloorButtonClicked()
+    {
+        CharacterPanelController.Instance?.GoToFirstFloor();
+    }
+
+    private void HandleStairSecondFloorButtonClicked()
+    {
+        CharacterPanelController.Instance?.GoToSecondFloor();
+    }
+
+    private void HideStairFloorButtons()
+    {
+        SetStairFloorButtonVisible(_stairFirstFloorButtonRoot, false, null);
+        SetStairFloorButtonVisible(_stairSecondFloorButtonRoot, false, null);
+    }
+
+    private void UpdateStairFloorButtons()
+    {
+        if (!RestaurantSceneMode.IsMainScene)
+        {
+            HideStairFloorButtons();
+            return;
+        }
+
+        CacheStairFloorButtonUi();
+
+        bool unlocked = RestaurantFloorUtil.IsUnlockedForCurrentPlayer();
+        int currentFloor = CharacterPanelController.Instance != null
+            ? CharacterPanelController.Instance.CurrentFloor
+            : 1;
+
+        bool showFirstFloorButton = unlocked && currentFloor == 2;
+        bool showSecondFloorButton = unlocked && currentFloor == 1;
+
+        SetStairFloorButtonVisible(_stairFirstFloorButtonRoot, showFirstFloorButton, _firstFloorUiPoint);
+        SetStairFloorButtonVisible(_stairSecondFloorButtonRoot, showSecondFloorButton, _secondFloorUiPoint);
+    }
+
+    private void SetStairFloorButtonVisible(RectTransform root, bool visible, Transform worldPoint)
+    {
+        if (root == null)
+            return;
+
+        if (!visible || worldPoint == null)
+        {
+            if (root.gameObject.activeSelf)
+                root.gameObject.SetActive(false);
+            return;
+        }
+
+        if (!TryGetEdgeClampedScreenUiLocalPoint(
+                worldPoint.position,
+                root,
+                Vector2.zero,
+                _stairFloorButtonEdgeClampPeekPixels,
+                out Vector2 localPoint))
+            return;
+
+        if (!root.gameObject.activeSelf)
+            root.gameObject.SetActive(true);
+
+        root.anchoredPosition = localPoint;
     }
 
     private void HandleVipIntroButtonClicked()
@@ -1894,8 +2197,14 @@ public class UIManager : MonoBehaviour
         if (anchor == null)
             return;
 
-        // Keep the button active while intro is pending — only refresh position when projection works.
-        TryUpdateScreenUiPosition(_vipIntroButtonRoot, anchor.position);
+        // Keep the button active while intro is pending — peek-clamp like build/hire spots.
+        if (TryGetEdgeClampedScreenUiLocalPoint(
+                anchor.position,
+                _vipIntroButtonRoot,
+                Vector2.zero,
+                _vipButtonEdgeClampPeekPixels,
+                out Vector2 localPoint))
+            _vipIntroButtonRoot.anchoredPosition = localPoint;
     }
 
     private void UpdateVipEventButtonPosition()
@@ -1933,7 +2242,12 @@ public class UIManager : MonoBehaviour
         if (anchor == null)
             return;
 
-        if (!TryGetEdgeClampedVipButtonLocalPoint(anchor.position, root, out Vector2 localPoint))
+        if (!TryGetEdgeClampedScreenUiLocalPoint(
+                anchor.position,
+                root,
+                Vector2.zero,
+                _vipButtonEdgeClampPeekPixels,
+                out Vector2 localPoint))
             return;
 
         if (!root.gameObject.activeSelf)
@@ -1962,66 +2276,27 @@ public class UIManager : MonoBehaviour
         EnsureScreenUiCaches();
 
         Transform stage = CustomerManager.Instance != null
-            ? CustomerManager.Instance.VipPerformStagePoint
+            ? CustomerManager.Instance.VipPerformStageUiPoint
             : null;
 
         if (stage == null)
-        {
-            stage = FindSceneTransformByName("Stage Position")
-                ?? FindSceneTransformByName("Placeholder Stage");
-        }
+            stage = FindSceneTransformByName("Stage UI Position");
 
         if (stage == null)
             return;
 
-        if (!TryGetEdgeClampedVipButtonLocalPoint(stage.position, root, out Vector2 localPoint))
+        if (!TryGetEdgeClampedScreenUiLocalPoint(
+                stage.position,
+                root,
+                Vector2.zero,
+                _vipButtonEdgeClampPeekPixels,
+                out Vector2 localPoint))
             return;
 
         if (!root.gameObject.activeSelf)
             root.gameObject.SetActive(true);
 
         root.anchoredPosition = localPoint;
-    }
-
-    private bool TryGetEdgeClampedVipButtonLocalPoint(
-        Vector3 worldAnchorPosition,
-        RectTransform root,
-        out Vector2 localPoint)
-    {
-        localPoint = default;
-
-        EnsureScreenUiCaches();
-
-        if (_worldCamera == null || _canvasRect == null || _screenCanvas == null)
-            return false;
-
-        Vector3 screenPoint = _worldCamera.WorldToScreenPoint(worldAnchorPosition);
-        if (screenPoint.z <= 0f)
-        {
-            // Behind camera — pin to nearest horizontal edge using viewport direction.
-            Vector3 viewport = _worldCamera.WorldToViewportPoint(worldAnchorPosition);
-            screenPoint.x = viewport.x < 0.5f ? 0f : Screen.width;
-            screenPoint.y = Mathf.Clamp(Screen.height * 0.5f, 0f, Screen.height);
-            screenPoint.z = 1f;
-        }
-
-        float halfW = Mathf.Max(40f, root != null ? root.rect.width * 0.5f : 40f);
-        float halfH = Mathf.Max(40f, root != null ? root.rect.height * 0.5f : 40f);
-        float pad = 24f;
-
-        // Persistent on floor 2: clamp to screen edges when the anchor is off-screen.
-        screenPoint.x = Mathf.Clamp(screenPoint.x, pad + halfW, Screen.width - pad - halfW);
-        screenPoint.y = Mathf.Clamp(screenPoint.y, pad + halfH, Screen.height - pad - halfH);
-
-        Camera canvasCamera = _screenCanvas.renderMode == RenderMode.ScreenSpaceOverlay
-            ? null
-            : _screenCanvas.worldCamera;
-
-        return RectTransformUtility.ScreenPointToLocalPointInRectangle(
-            _canvasRect,
-            screenPoint,
-            canvasCamera,
-            out localPoint);
     }
 
     private static Transform FindSceneTransformByName(string objectName)
@@ -2045,6 +2320,28 @@ public class UIManager : MonoBehaviour
         UpdateVipIntroButtonPosition();
         UpdateVipEventButtonPosition();
         UpdateVipMainIconPulse();
+        UpdateVipActionButtonPulses();
+    }
+
+    private void UpdateVipActionButtonPulses()
+    {
+        float pulseScale = GetPulseScale(
+            _vipButtonPulseMinScale,
+            _vipButtonPulseMaxScale,
+            _vipButtonPulseSpeed);
+
+        PulseVipActionButton(_vipIntroButtonRoot, pulseScale);
+        PulseVipActionButton(_vipServeDishButtonRoot, pulseScale);
+        PulseVipActionButton(_vipCallLadyButtonRoot, pulseScale);
+        PulseVipActionButton(_vipGeTaiButtonRoot, pulseScale);
+    }
+
+    private static void PulseVipActionButton(RectTransform root, float pulseScale)
+    {
+        if (root == null || !root.gameObject.activeSelf)
+            return;
+
+        root.localScale = Vector3.one * pulseScale;
     }
 
     private void UpdateVipMainIconPulse()
@@ -2057,8 +2354,7 @@ public class UIManager : MonoBehaviour
         bool shouldPulse = _vipWaitTimerCustomer != null
             && _vipWaitTimerRoot != null
             && _vipWaitTimerRoot.gameObject.activeInHierarchy
-            && _vipWaitTimerRemaining > 0f
-            && _vipWaitTimerRemaining <= _vipIconPulseRemainingThreshold;
+            && _vipWaitTimerRemaining > 0f;
 
         if (shouldPulse)
         {
@@ -2631,6 +2927,7 @@ public class UIManager : MonoBehaviour
         SyncWorkerEnergyUiForCurrentFloor();
         SyncSeatPaymentUiForCurrentFloor();
         UpdateVipEventButtonPosition();
+        UpdateStairFloorButtons();
     }
 
     private void HandleSecondFloorUnlockedForUi()
@@ -2640,6 +2937,7 @@ public class UIManager : MonoBehaviour
         SyncAllTableStatusUiForCurrentFloor();
         SyncWorkerEnergyUiForCurrentFloor();
         SyncSeatPaymentUiForCurrentFloor();
+        UpdateStairFloorButtons();
     }
 
     private void HandleHiringCompleted()
@@ -3350,7 +3648,9 @@ public class UIManager : MonoBehaviour
     private bool TryGetEdgeClampedScreenPoint(
         Vector3 worldAnchorPosition,
         RectTransform root,
-        out Vector3 screenPoint)
+        out Vector3 screenPoint,
+        Vector2 screenOffset = default,
+        float peekPixels = -1f)
     {
         screenPoint = default;
 
@@ -3368,10 +3668,13 @@ public class UIManager : MonoBehaviour
             screenPoint.z = 1f;
         }
 
+        screenPoint.x += screenOffset.x;
+        screenPoint.y += screenOffset.y;
+
         GetEdgeClampScreenHalfExtents(root, out float halfW, out float halfH);
 
         // Keep only a thin peek on-screen (center may sit past the edge).
-        float peek = Mathf.Max(0f, _edgeClampPeekPixels);
+        float peek = Mathf.Max(0f, peekPixels >= 0f ? peekPixels : _edgeClampPeekPixels);
         screenPoint.x = Mathf.Clamp(screenPoint.x, peek - halfW, Screen.width - peek + halfW);
         screenPoint.y = Mathf.Clamp(screenPoint.y, peek - halfH, Screen.height - peek + halfH);
         return true;
@@ -3432,9 +3735,28 @@ public class UIManager : MonoBehaviour
         halfH = Mathf.Max(4f, root.rect.height * 0.5f * scale);
     }
 
-    private bool TryGetEdgeClampedScreenUiLocalPoint(
+    public bool TryGetEdgeClampedScreenUiLocalPoint(
         Vector3 worldAnchorPosition,
         RectTransform root,
+        out Vector2 localPoint)
+    {
+        return TryGetEdgeClampedScreenUiLocalPoint(worldAnchorPosition, root, Vector2.zero, -1f, out localPoint);
+    }
+
+    public bool TryGetEdgeClampedScreenUiLocalPoint(
+        Vector3 worldAnchorPosition,
+        RectTransform root,
+        Vector2 screenOffset,
+        out Vector2 localPoint)
+    {
+        return TryGetEdgeClampedScreenUiLocalPoint(worldAnchorPosition, root, screenOffset, -1f, out localPoint);
+    }
+
+    public bool TryGetEdgeClampedScreenUiLocalPoint(
+        Vector3 worldAnchorPosition,
+        RectTransform root,
+        Vector2 screenOffset,
+        float peekPixels,
         out Vector2 localPoint)
     {
         localPoint = default;
@@ -3444,7 +3766,7 @@ public class UIManager : MonoBehaviour
         if (_canvasRect == null || _screenCanvas == null)
             return false;
 
-        if (!TryGetEdgeClampedScreenPoint(worldAnchorPosition, root, out Vector3 screenPoint))
+        if (!TryGetEdgeClampedScreenPoint(worldAnchorPosition, root, out Vector3 screenPoint, screenOffset, peekPixels))
             return false;
 
         Camera canvasCamera = _screenCanvas.renderMode == RenderMode.ScreenSpaceOverlay
@@ -4371,6 +4693,7 @@ public class UIManager : MonoBehaviour
         UpdateWorkerEnergyUis();
         SyncAllHireSpotUi();
         UpdateVipReceptionUi();
+        UpdateStairFloorButtons();
     }
 
     private void UpdateWorkerEnergyUis()

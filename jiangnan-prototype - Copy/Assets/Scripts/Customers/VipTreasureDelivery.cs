@@ -16,7 +16,7 @@ public class VipTreasureDelivery : MonoBehaviour
     [SerializeField] private Animator _treasureAnimator;
     [Tooltip("Animator trigger played when the carrier reaches the waypoint. Leave empty if unused.")]
     [SerializeField] private string _openTrigger = "Open";
-    [SerializeField] private float _deliveryDuration = 2.5f;
+    [SerializeField] private float _deliveryDuration = 2f;
     [Tooltip("How long the opened treasure stays visible before despawning.")]
     [SerializeField] private float _openHoldDuration = 4f;
     [Tooltip("If true, coin trail waits for OnTreasureBoxOpened() (AnimationEvent). If false, trail starts when open is triggered.")]

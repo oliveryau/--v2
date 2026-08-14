@@ -36,10 +36,9 @@ public class CharacterPanelController : MonoBehaviour
     [SerializeField] private Vector3 _firstFloorCameraPosition = Vector3.zero;
     [SerializeField] private Vector3 _secondFloorCameraPosition = new Vector3(-5f, 5f, 0f);
     [SerializeField] private float _floorTransitionDuration = 0.75f;
-    [SerializeField] private float _floorsUnlockPulseDuration = 3f;
-    [SerializeField] private float _floorsUnlockPulseMinScale = 0.98f;
-    [SerializeField] private float _floorsUnlockPulseMaxScale = 1.02f;
-    [SerializeField] private float _floorsUnlockPulseSpeed = 8f;
+    [SerializeField] private float _bagCountPulseDuration = 0.28f;
+    [SerializeField] private float _bagCountPulseMinScale = 0.95f;
+    [SerializeField] private float _bagCountPulseMaxScale = 1.05f;
 
     private Transform _cameraRig;
     private Camera _floorCamera;
@@ -54,7 +53,10 @@ public class CharacterPanelController : MonoBehaviour
     private bool _bagInventoryVisible;
     private bool _secondFloorViewVisible = true;
     private Coroutine _floorTransitionRoutine;
-    private Coroutine _floorsUnlockPulseRoutine;
+    private Coroutine _bagCountPulseRoutine;
+    private int _displayedBagCount;
+    private bool _hasDisplayedBagCount;
+    private Vector3 _bagCountRestScale = Vector3.one;
 
     public TextMeshProUGUI GoldAmountText => _goldAmountText;
     public RectTransform GoldUiRoot => _goldUiRoot;
@@ -107,7 +109,7 @@ public class CharacterPanelController : MonoBehaviour
             _floorTransitionRoutine = null;
         }
 
-        StopFloorsUnlockPulse(resetScale: true);
+        StopBagCountPulse(resetScale: true);
     }
 
     private void HandleSecondFloorUnlocked()
@@ -116,7 +118,6 @@ public class CharacterPanelController : MonoBehaviour
             return;
 
         SyncFloorButtonInteractable(_currentFloor == 2);
-        StartFloorsUnlockPulse();
     }
 
     private void OnDestroy()
@@ -171,7 +172,12 @@ public class CharacterPanelController : MonoBehaviour
 
     private void HandleBagInventoryChanged()
     {
+        int previousCount = _displayedBagCount;
+        bool hadPreviousCount = _hasDisplayedBagCount;
         RefreshBagUi();
+
+        if (hadPreviousCount && _displayedBagCount != previousCount)
+            StartBagCountPulse();
     }
 
     private void ReparentToSceneCanvas()
@@ -198,11 +204,7 @@ public class CharacterPanelController : MonoBehaviour
         if (_floorsRoot == null)
             return;
 
-        bool showFloors = RestaurantSceneMode.IsMainScene;
-        if (!showFloors)
-            StopFloorsUnlockPulse(resetScale: true);
-
-        _floorsRoot.SetActive(showFloors);
+        _floorsRoot.SetActive(true);
     }
 
     private static bool ShouldShowBagUi()
@@ -221,7 +223,10 @@ public class CharacterPanelController : MonoBehaviour
         _bagRoot.SetActive(showBag);
 
         if (!showBag)
+        {
+            StopBagCountPulse(resetScale: true);
             SetBagInventoryVisible(false);
+        }
     }
 
     private void SyncFloorSwitching()
@@ -689,60 +694,6 @@ public class CharacterPanelController : MonoBehaviour
             _secondFloorButton.interactable = secondFloorUnlocked && !onSecondFloor;
     }
 
-    private void StartFloorsUnlockPulse()
-    {
-        CacheFloorUiReferences();
-
-        if (_floorsRoot == null || !RestaurantSceneMode.IsMainScene)
-            return;
-
-        if (!_floorsRoot.activeSelf)
-            _floorsRoot.SetActive(true);
-
-        StopFloorsUnlockPulse(resetScale: false);
-        _floorsUnlockPulseRoutine = StartCoroutine(PulseFloorsUnlockCoroutine());
-    }
-
-    private void StopFloorsUnlockPulse(bool resetScale)
-    {
-        if (_floorsUnlockPulseRoutine != null)
-        {
-            StopCoroutine(_floorsUnlockPulseRoutine);
-            _floorsUnlockPulseRoutine = null;
-        }
-
-        if (resetScale && _floorsRoot != null)
-            _floorsRoot.transform.localScale = Vector3.one;
-    }
-
-    private IEnumerator PulseFloorsUnlockCoroutine()
-    {
-        Transform floors = _floorsRoot != null ? _floorsRoot.transform : null;
-        if (floors == null)
-        {
-            _floorsUnlockPulseRoutine = null;
-            yield break;
-        }
-
-        float duration = Mathf.Max(0.01f, _floorsUnlockPulseDuration);
-        float minScale = _floorsUnlockPulseMinScale;
-        float maxScale = _floorsUnlockPulseMaxScale;
-        float speed = Mathf.Max(0.01f, _floorsUnlockPulseSpeed);
-        float elapsed = 0f;
-
-        while (elapsed < duration)
-        {
-            elapsed += Time.deltaTime;
-            float pulseT = (Mathf.Sin(elapsed * speed) + 1f) * 0.5f;
-            float scale = Mathf.Lerp(minScale, maxScale, pulseT);
-            floors.localScale = Vector3.one * scale;
-            yield return null;
-        }
-
-        floors.localScale = Vector3.one;
-        _floorsUnlockPulseRoutine = null;
-    }
-
     private void SetFloorButtonsInteractable(bool interactable)
     {
         if (!interactable)
@@ -934,6 +885,9 @@ public class CharacterPanelController : MonoBehaviour
         if (_bagCountText != null)
             _bagCountText.text = $"x{totalCount}";
 
+        _displayedBagCount = totalCount;
+        _hasDisplayedBagCount = true;
+
         for (int i = 0; i < _bagInventoryItemTexts.Count; i++)
         {
             TextMeshProUGUI itemText = _bagInventoryItemTexts[i];
@@ -952,6 +906,76 @@ public class CharacterPanelController : MonoBehaviour
                 itemText.gameObject.SetActive(false);
             }
         }
+    }
+
+    private void StartBagCountPulse()
+    {
+        if (_bagCountText == null)
+            return;
+
+        Transform countTransform = _bagCountText.transform;
+        if (_bagCountPulseRoutine == null)
+            _bagCountRestScale = countTransform.localScale;
+
+        StopBagCountPulse(resetScale: false);
+        _bagCountPulseRoutine = StartCoroutine(PulseBagCountCoroutine());
+    }
+
+    private void StopBagCountPulse(bool resetScale)
+    {
+        if (_bagCountPulseRoutine != null)
+        {
+            StopCoroutine(_bagCountPulseRoutine);
+            _bagCountPulseRoutine = null;
+        }
+
+        if (resetScale && _bagCountText != null)
+            _bagCountText.transform.localScale = _bagCountRestScale;
+    }
+
+    private IEnumerator PulseBagCountCoroutine()
+    {
+        Transform countTransform = _bagCountText != null ? _bagCountText.transform : null;
+        if (countTransform == null)
+        {
+            _bagCountPulseRoutine = null;
+            yield break;
+        }
+
+        float duration = Mathf.Max(0.01f, _bagCountPulseDuration);
+        float minScale = _bagCountPulseMinScale;
+        float maxScale = _bagCountPulseMaxScale;
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            float scale = EvaluateBagCountPulseScale(t, minScale, maxScale);
+            countTransform.localScale = _bagCountRestScale * scale;
+            yield return null;
+        }
+
+        countTransform.localScale = _bagCountRestScale;
+        _bagCountPulseRoutine = null;
+    }
+
+    private static float EvaluateBagCountPulseScale(float t, float minScale, float maxScale)
+    {
+        // Squash, stretch, then settle back to 1.
+        if (t < 1f / 3f)
+            return Mathf.Lerp(1f, minScale, SmoothStep01(t * 3f));
+
+        if (t < 2f / 3f)
+            return Mathf.Lerp(minScale, maxScale, SmoothStep01((t - 1f / 3f) * 3f));
+
+        return Mathf.Lerp(maxScale, 1f, SmoothStep01((t - 2f / 3f) * 3f));
+    }
+
+    private static float SmoothStep01(float t)
+    {
+        t = Mathf.Clamp01(t);
+        return t * t * (3f - 2f * t);
     }
 
     private static Light FindMainDirectionalLight()

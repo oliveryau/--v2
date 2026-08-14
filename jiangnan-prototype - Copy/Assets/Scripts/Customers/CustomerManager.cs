@@ -52,14 +52,20 @@ public class CustomerManager : MonoBehaviour
     [SerializeField] private float _vipEventGapDelay = 1.5f;
     [SerializeField] private int _vipEventBonusPerRequest = 1000;
     [SerializeField] private float _vipCallLadyLeaveDelay = 2.5f;
+    [Tooltip("Minimum seconds a call lady stays on Idle or CleanTable at a lackey point.")]
+    [SerializeField] private float _callLadyPostAnimMinDuration = 2f;
+    [Tooltip("Maximum seconds a call lady stays on Idle or CleanTable before picking again.")]
+    [SerializeField] private float _callLadyPostAnimMaxDuration = 5f;
     [SerializeField] private Worker[] _vipCallLadyWorkers;
     [SerializeField] private Transform[] _vipLackeyPoints;
     [SerializeField] private Transform[] _vipCallLadyWaypoints;
     [SerializeField] private Worker _vipPerformer;
     [Tooltip("Optional GeTai prop reference.")]
     [SerializeField] private Transform _vipStagePoint;
-    [Tooltip("Performer stand point and 表演 button world anchor.")]
+    [Tooltip("Where the GeTai performer stands.")]
     [SerializeField] private Transform _vipPerformStagePoint;
+    [Tooltip("World anchor for the 表演 button.")]
+    [SerializeField] private Transform _vipPerformStageUiPoint;
     [SerializeField] private Transform _vipPerformerWaypoint;
 
     private readonly Dictionary<Customer, Coroutine> _activeFlows = new();
@@ -69,6 +75,7 @@ public class CustomerManager : MonoBehaviour
     private readonly List<TableSeat> _registeredSeats = new();
     private Coroutine _spawnRoutine;
     private Coroutine _callLadyDismissRoutine;
+    private readonly Dictionary<Worker, Coroutine> _callLadyPostAnimRoutines = new();
     private Coroutine _performerReturnRoutine;
     private int _spawnCount;
     private bool _awaitingVipAfterPrankster;
@@ -97,7 +104,17 @@ public class CustomerManager : MonoBehaviour
         }
     }
 
-    /// <summary>Performer stand point and 表演 button world anchor.</summary>
+    /// <summary>World anchor for the 表演 button (not the performer stand).</summary>
+    public Transform VipPerformStageUiPoint
+    {
+        get
+        {
+            CacheVipPerformerReferences();
+            return _vipPerformStageUiPoint;
+        }
+    }
+
+    /// <summary>Where the GeTai performer stands.</summary>
     public Transform VipPerformStagePoint
     {
         get
@@ -198,6 +215,8 @@ public class CustomerManager : MonoBehaviour
         if (AreCallLadiesAlreadyStationed())
             return;
 
+        StopAllCallLadyPostAnims(returnToIdle: true);
+
         for (int i = 0; i < _vipCallLadyWorkers.Length; i++)
         {
             Worker worker = _vipCallLadyWorkers[i];
@@ -234,12 +253,15 @@ public class CustomerManager : MonoBehaviour
         if (_vipStagePoint == null)
             _vipStagePoint = FindTransformByName("GeTai");
 
-        // Performer stand + 表演 button. Never fall back to GeTai.
+        // Performer stand. Never fall back to GeTai.
         if (_vipPerformStagePoint == null)
         {
             _vipPerformStagePoint = FindTransformByName("Stage Position")
                 ?? FindTransformByName("Placeholder Stage");
         }
+
+        if (_vipPerformStageUiPoint == null)
+            _vipPerformStageUiPoint = FindTransformByName("Stage UI Position");
 
         if (_vipPerformerWaypoint == null)
             _vipPerformerWaypoint = FindTransformByName("Performer Waypoint");
@@ -425,6 +447,7 @@ public class CustomerManager : MonoBehaviour
         _completedPayments.Clear();
         _awaitingPaymentCounts.Clear();
         _vipAwaitingPaymentCounts.Clear();
+        StopAllCallLadyPostAnims(returnToIdle: false);
     }
 
     public void NotifyPranksterVisitEndedForAlternation()
@@ -1858,7 +1881,10 @@ public class CustomerManager : MonoBehaviour
 
         // Already at the VIP — stay put for this request.
         if (_callLadiesActive)
+        {
+            RestartCallLadyPostAnims();
             yield break;
+        }
 
         int walksPending = 0;
 
@@ -1921,9 +1947,93 @@ public class CustomerManager : MonoBehaviour
         {
             worker.Locomotion?.EnterStationary();
             FaceWorkerToward(worker, vip != null ? vip.transform : null);
+            StartCallLadyPostAnim(worker);
         }
 
         onArrived?.Invoke();
+    }
+
+    private void RestartCallLadyPostAnims()
+    {
+        if (_vipCallLadyWorkers == null)
+            return;
+
+        for (int i = 0; i < _vipCallLadyWorkers.Length; i++)
+        {
+            Worker worker = _vipCallLadyWorkers[i];
+            if (worker == null || !worker.gameObject.activeInHierarchy)
+                continue;
+
+            StartCallLadyPostAnim(worker);
+        }
+    }
+
+    private void StartCallLadyPostAnim(Worker worker)
+    {
+        StopCallLadyPostAnim(worker, returnToIdle: false);
+        if (worker == null || !worker.gameObject.activeInHierarchy)
+            return;
+
+        _callLadyPostAnimRoutines[worker] = StartCoroutine(CallLadyPostAnimRoutine(worker));
+    }
+
+    private void StopCallLadyPostAnim(Worker worker, bool returnToIdle)
+    {
+        if (worker != null && _callLadyPostAnimRoutines.TryGetValue(worker, out Coroutine routine))
+        {
+            if (routine != null)
+                StopCoroutine(routine);
+
+            _callLadyPostAnimRoutines.Remove(worker);
+        }
+
+        if (returnToIdle)
+            SetCallLadyCleaning(worker, false);
+    }
+
+    private void StopAllCallLadyPostAnims(bool returnToIdle)
+    {
+        if (_callLadyPostAnimRoutines.Count == 0)
+        {
+            if (!returnToIdle)
+                return;
+
+            if (_vipCallLadyWorkers == null)
+                return;
+
+            for (int i = 0; i < _vipCallLadyWorkers.Length; i++)
+                SetCallLadyCleaning(_vipCallLadyWorkers[i], false);
+
+            return;
+        }
+
+        List<Worker> workers = new List<Worker>(_callLadyPostAnimRoutines.Keys);
+        for (int i = 0; i < workers.Count; i++)
+            StopCallLadyPostAnim(workers[i], returnToIdle);
+    }
+
+    private IEnumerator CallLadyPostAnimRoutine(Worker worker)
+    {
+        float minDuration = Mathf.Max(0.01f, _callLadyPostAnimMinDuration);
+        float maxDuration = Mathf.Max(minDuration, _callLadyPostAnimMaxDuration);
+
+        while (worker != null && worker.gameObject.activeInHierarchy)
+        {
+            SetCallLadyCleaning(worker, Random.value >= 0.5f);
+            yield return new WaitForSeconds(Random.Range(minDuration, maxDuration));
+        }
+
+        if (worker != null)
+            _callLadyPostAnimRoutines.Remove(worker);
+    }
+
+    private static void SetCallLadyCleaning(Worker worker, bool isCleaning)
+    {
+        if (worker == null)
+            return;
+
+        WorkerCharacterAnimator animator = worker.GetComponent<WorkerCharacterAnimator>();
+        animator?.SetCleaning(isCleaning);
     }
 
     private static void FaceWorkerToward(Worker worker, Transform target)
@@ -1961,6 +2071,8 @@ public class CustomerManager : MonoBehaviour
 
     private IEnumerator DismissVipCallLadiesRoutine()
     {
+        StopAllCallLadyPostAnims(returnToIdle: true);
+
         float delay = Mathf.Max(0f, _vipCallLadyLeaveDelay);
         if (delay > 0f)
             yield return new WaitForSeconds(delay);

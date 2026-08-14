@@ -36,6 +36,8 @@ public class PortalUiController : MonoBehaviour
     [SerializeField] private Vector2 _initialStartSizeRange = new Vector2(0.9f, 1f);
     [SerializeField] private Vector2 _expandedStartSizeRange = new Vector2(1.9f, 2f);
     [SerializeField] private float _growDurationSeconds = 1.25f;
+    [Tooltip("Wait after lull start before showing the portal and Check button.")]
+    [SerializeField] private float _appearDelaySeconds = 1f;
     [Tooltip("Extra wait after the grow finishes before showing Enter Portal.")]
     [SerializeField] private float _enterButtonDelayAfterGrowSeconds = 1f;
     [Tooltip("Camera position used when the portal lull presentation starts (ground floor view).")]
@@ -47,15 +49,15 @@ public class PortalUiController : MonoBehaviour
     [SerializeField] private Canvas _screenCanvas;
     [SerializeField] private Camera _worldCamera;
 
-    private RectTransform _rect;
     private RectTransform _screenCanvasRect;
-    private BuildSpot _counterSpot;
     private Button _enterPortalButtonComponent;
     private Button _checkPortalButtonComponent;
     private PresentationPhase _phase = PresentationPhase.Hidden;
     private bool _enterButtonWired;
     private bool _checkButtonWired;
     private Coroutine _growRoutine;
+    private static Coroutine _delayedPresentRoutine;
+    private static MonoBehaviour _delayedPresentHost;
 
     public static void PresentForLull()
     {
@@ -66,14 +68,30 @@ public class PortalUiController : MonoBehaviour
         if (controller == null)
             return;
 
-        if (!controller.gameObject.activeSelf)
-            controller.gameObject.SetActive(true);
+        StopDelayedPresent();
 
-        controller.PresentPresentation();
+        // Keep the portal object fully inactive during the countdown so play-on-awake
+        // particles cannot appear before Check Portal Button.
+        if (controller.gameObject.activeSelf)
+            controller.HidePresentation();
+
+        MonoBehaviour host = ResolvePresentHost();
+        float delay = Mathf.Max(0f, controller._appearDelaySeconds);
+
+        if (host == null || delay <= 0f)
+        {
+            ShowPresentationImmediate(controller);
+            return;
+        }
+
+        _delayedPresentHost = host;
+        _delayedPresentRoutine = host.StartCoroutine(DelayedPresentCoroutine(controller, delay));
     }
 
     public static void EnsureHidden()
     {
+        StopDelayedPresent();
+
         PortalUiController controller = FindControllerIncludingInactive();
         if (controller == null)
             return;
@@ -98,7 +116,6 @@ public class PortalUiController : MonoBehaviour
 
     private void Awake()
     {
-        _rect = transform as RectTransform;
         ResolveAll();
         WireButtons();
 
@@ -113,9 +130,14 @@ public class PortalUiController : MonoBehaviour
         SyncWorldPortalPosition();
 
         if (_phase == PresentationPhase.Hidden)
+        {
             HidePresentationUiOnly();
+            StopPortalParticle();
+        }
         else
+        {
             SyncActiveButtons();
+        }
     }
 
     private void OnDisable()
@@ -134,7 +156,52 @@ public class PortalUiController : MonoBehaviour
         SyncActiveButtons();
     }
 
-    private void PresentPresentation()
+    private static IEnumerator DelayedPresentCoroutine(PortalUiController controller, float delay)
+    {
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
+
+        _delayedPresentRoutine = null;
+        _delayedPresentHost = null;
+
+        if (controller == null)
+            yield break;
+
+        ShowPresentationImmediate(controller);
+    }
+
+    private static void ShowPresentationImmediate(PortalUiController controller)
+    {
+        if (controller == null)
+            return;
+
+        if (!controller.gameObject.activeSelf)
+            controller.gameObject.SetActive(true);
+
+        controller.PresentPresentationVisible();
+    }
+
+    private static MonoBehaviour ResolvePresentHost()
+    {
+        if (CustomerManager.Instance != null && CustomerManager.Instance.isActiveAndEnabled)
+            return CustomerManager.Instance;
+
+        if (UIManager.Instance != null && UIManager.Instance.isActiveAndEnabled)
+            return UIManager.Instance;
+
+        return null;
+    }
+
+    private static void StopDelayedPresent()
+    {
+        if (_delayedPresentHost != null && _delayedPresentRoutine != null)
+            _delayedPresentHost.StopCoroutine(_delayedPresentRoutine);
+
+        _delayedPresentRoutine = null;
+        _delayedPresentHost = null;
+    }
+
+    private void PresentPresentationVisible()
     {
         StopGrowRoutine();
         ResolveAll();
@@ -257,6 +324,15 @@ public class PortalUiController : MonoBehaviour
         _growRoutine = null;
     }
 
+    private void StopPortalParticle()
+    {
+        ResolvePortalParticle();
+        if (_portalParticle == null)
+            return;
+
+        _portalParticle.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+    }
+
     private void ApplyParticleStartSizeRange(float minSize, float maxSize, bool restart)
     {
         ResolvePortalParticle();
@@ -295,9 +371,6 @@ public class PortalUiController : MonoBehaviour
             if (portalPoint != null)
                 _anchor = portalPoint.transform;
         }
-
-        if (_counterSpot == null && _anchor != null)
-            _counterSpot = _anchor.GetComponent<BuildSpot>();
     }
 
     private void ResolveEnterPortalButton()
@@ -380,25 +453,23 @@ public class PortalUiController : MonoBehaviour
 
     private Transform ResolveWorldTarget()
     {
-        if (_counterSpot != null && _counterSpot.BuildEffectAnchor != null)
-            return _counterSpot.BuildEffectAnchor;
-
         if (_anchor != null)
             return _anchor;
 
-        return transform;
+        return null;
     }
 
     private void SyncWorldPortalPosition()
     {
-        if (_rect == null)
-            return;
-
         Transform target = ResolveWorldTarget();
         if (target == null)
             return;
 
-        _rect.position = target.position + _worldOffset;
+        ResolvePortalParticle();
+        if (_portalParticle == null)
+            return;
+
+        _portalParticle.transform.position = target.position + _worldOffset;
     }
 
     private void SyncActiveButtons()
@@ -441,6 +512,23 @@ public class PortalUiController : MonoBehaviour
 
         button.localScale = Vector3.one * GetPortalButtonPulseScale();
 
+        Transform target = ResolveWorldTarget();
+        if (target == null)
+            return;
+
+        Vector3 worldPosition = target.position + _worldOffset;
+
+        if (UIManager.Instance != null
+            && UIManager.Instance.TryGetEdgeClampedScreenUiLocalPoint(
+                worldPosition,
+                button,
+                _portalButtonScreenOffset,
+                out Vector2 clampedLocalPoint))
+        {
+            button.anchoredPosition = clampedLocalPoint;
+            return;
+        }
+
         if (_worldCamera == null)
             ResolveWorldCamera();
 
@@ -450,11 +538,6 @@ public class PortalUiController : MonoBehaviour
         if (_worldCamera == null || _screenCanvasRect == null)
             return;
 
-        Transform target = ResolveWorldTarget();
-        if (target == null)
-            return;
-
-        Vector3 worldPosition = target.position + _worldOffset;
         Vector3 screenPoint = _worldCamera.WorldToScreenPoint(worldPosition);
 
         if (screenPoint.z <= 0f)
