@@ -140,6 +140,7 @@ public static class CompetitorSceneSelection
         _pendingBusinessResumeAfterSteal = true;
         PlayerProfileStorage.SetMainSceneServedVipCountForCurrentPlayer(0);
         PlayerProfileStorage.SetCompetitorVipStealAttemptedForCurrentPlayer();
+        MissionUiController.NotifyStealRequirementMet();
     }
 
     public static bool HasMetBusinessResumeStealRequirement()

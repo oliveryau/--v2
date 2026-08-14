@@ -37,6 +37,7 @@ public class BuildSpot : MonoBehaviour
     public int Cost => _cost;
     public RestaurantFloor Floor => RestaurantFloorUtil.ResolveFloor(transform, _floor);
     public Transform CostUiAnchor => _costUiAnchor != null ? _costUiAnchor : transform;
+    public GameObject CostUiRoot => _costUiRoot;
     public Transform BuildEffectAnchor => _builtObject != null ? _builtObject.transform : transform;
     public GameObject BuiltObject => _builtObject;
     public bool IsBuilt => _state == BuildSpotState.Built;

@@ -120,6 +120,10 @@ public class PranksterManager : MonoBehaviour
         if (!IsBusinessActive() || _visitActive || _prankster == null)
             return;
 
+        // Early business (before VIP table / stage / 2F staff): normals only — no pranksters yet.
+        if (!IsVipPhaseContentUnlocked())
+            return;
+
         if (CountBrokenTables() >= BrokenTableSpawnBlockThreshold)
             return;
 
@@ -160,6 +164,9 @@ public class PranksterManager : MonoBehaviour
         if (!IsVipPranksterAlternationEnabled())
             return;
 
+        if (!IsVipPhaseContentUnlocked())
+            return;
+
         if (_visitActive || _awaitingPranksterSpawn || !IsBusinessActive() || _prankster == null)
             return;
 
@@ -173,6 +180,11 @@ public class PranksterManager : MonoBehaviour
         CustomerManager.Instance?.NotifyVipLeftForAlternation();
         _customersSinceVipLeft = 0;
         _awaitingPranksterSpawn = true;
+    }
+
+    private static bool IsVipPhaseContentUnlocked()
+    {
+        return CustomerManager.Instance != null && CustomerManager.Instance.CanStartVipPhaseContent();
     }
 
     private bool IsVipPranksterAlternationEnabled()

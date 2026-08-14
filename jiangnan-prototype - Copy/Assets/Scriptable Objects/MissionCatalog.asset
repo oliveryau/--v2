@@ -44,7 +44,7 @@ MonoBehaviour:
   - title: "\u5F00\u684C"
     tasks:
     - taskKind: 0
-      description: "\u5EFA\u90202\u684C\u5B50"
+      description: "\u5EFA\u90202\u5F20\u684C\u5B50"
       requiredType: 2
       requiredWorkerType: 0
       requiredCount: 2
@@ -74,6 +74,42 @@ MonoBehaviour:
     - taskKind: 0
       description: "\u5EFA\u9020\u6B4C\u53F0"
       requiredType: 5
+      requiredWorkerType: 0
+      requiredCount: 1
+    revealSecondFloorWhenComplete: 0
+    startHiringWhenComplete: 0
+  - title: "\u63A5\u5F85VIP"
+    tasks:
+    - taskKind: 3
+      description: "\u670D\u52A11\u4F4DVIP"
+      requiredType: 0
+      requiredWorkerType: 0
+      requiredCount: 1
+    revealSecondFloorWhenComplete: 0
+    startHiringWhenComplete: 0
+  - title: "\u6210\u529F\u62A2\u5BA2"
+    tasks:
+    - taskKind: 4
+      description: "\u6210\u529F\u62A2\u66F4\u591A\u5BA2\u4EBA"
+      requiredType: 0
+      requiredWorkerType: 0
+      requiredCount: 1
+    revealSecondFloorWhenComplete: 0
+    startHiringWhenComplete: 0
+  - title: "\u8D2D\u4E70\u73B0\u4EE3\u83DC\u54C1"
+    tasks:
+    - taskKind: 5
+      description: "\u8D2D\u4E701\u9053\u83DC\u54C1"
+      requiredType: 0
+      requiredWorkerType: 0
+      requiredCount: 1
+    revealSecondFloorWhenComplete: 0
+    startHiringWhenComplete: 0
+  - title: "\u51FA\u552E\u83DC\u54C1"
+    tasks:
+    - taskKind: 6
+      description: "\u5411VIP\u51FA\u552E1\u9053\u83DC\u54C1"
+      requiredType: 0
       requiredWorkerType: 0
       requiredCount: 1
     revealSecondFloorWhenComplete: 0

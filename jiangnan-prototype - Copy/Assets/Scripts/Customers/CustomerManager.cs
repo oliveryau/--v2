@@ -20,8 +20,8 @@ public class CustomerManager : MonoBehaviour
     [SerializeField] private int _maxCustomersPerAdditionalTable = 4;
     [SerializeField] private int _vipSpawnInterval;
     [SerializeField] private int _maxActiveVips;
-    [Tooltip("After this many VIPs have fully left (happy or discontent), stop spawning more VIPs. Lull starts once none remain. 0 = unlimited.")]
-    [SerializeField] private int _servedVipSpawnStopCount = 2;
+    [Tooltip("After this many VIPs have fully left (happy or discontent), stop spawning more VIPs. Lull starts after the following prankster visit. 0 = unlimited.")]
+    [SerializeField] private int _servedVipSpawnStopCount = 1;
     [Tooltip("Max active customers during the post-VIP lull.")]
     [SerializeField] private int _postVipServeMaxCustomers = 4;
     [Tooltip("Spawn interval during the post-VIP lull.")]
@@ -76,8 +76,8 @@ public class CustomerManager : MonoBehaviour
     private int _servedVipCount;
     private int _runtimeVipSpawnStopCount;
     private bool _appliedCurrentLullSideEffects;
+    private bool _pendingLullAfterPrankster;
     private bool _callLadiesActive;
-    private bool _callLadiesStationed;
     private bool _performerOnStage;
     private Customer _vipAwaitingIntro;
     private bool _vipIntroAcknowledged;
@@ -145,8 +145,6 @@ public class CustomerManager : MonoBehaviour
         // HireSequence restores after our Awake; sync stationed call ladies / performer once that finishes.
         CacheVipCallLadyReferences();
         CacheVipPerformerReferences();
-        if (AreCallLadiesAlreadyStationed())
-            _callLadiesStationed = true;
     }
 
     private void CacheVipCallLadyReferences()
@@ -198,10 +196,7 @@ public class CustomerManager : MonoBehaviour
 
         // Hire restore (later Awake) may already have stationed them — leave those active.
         if (AreCallLadiesAlreadyStationed())
-        {
-            _callLadiesStationed = true;
             return;
-        }
 
         for (int i = 0; i < _vipCallLadyWorkers.Length; i++)
         {
@@ -216,7 +211,6 @@ public class CustomerManager : MonoBehaviour
         }
 
         _callLadiesActive = false;
-        _callLadiesStationed = false;
     }
 
     private bool AreCallLadiesAlreadyStationed()
@@ -439,6 +433,16 @@ public class CustomerManager : MonoBehaviour
             return;
 
         _customersSincePranksterLeft = 0;
+
+        // Final VIP already left: finish with this prankster, then open the lull (portal).
+        if (_pendingLullAfterPrankster)
+        {
+            _pendingLullAfterPrankster = false;
+            _awaitingVipAfterPrankster = false;
+            TryUnlockPostVipLull(offerPortalPresentation: true);
+            return;
+        }
+
         _awaitingVipAfterPrankster = true;
     }
 
@@ -731,14 +735,17 @@ public class CustomerManager : MonoBehaviour
             ResetAlternationSpawnTracking();
             _appliedCurrentLullSideEffects = false;
 
-            // Base limit (usually 2) + one VIP per distinct competitor shop stolen from this outing.
+            // Base limit (usually 1) + one VIP per distinct competitor shop stolen from this outing.
             int baseStopCount = Mathf.Max(1, _servedVipSpawnStopCount);
             _runtimeVipSpawnStopCount = baseStopCount + Mathf.Max(0, stolenShopCount);
             PlayerProfileStorage.SetMainSceneVipSpawnStopCountOverrideForCurrentPlayer(_runtimeVipSpawnStopCount);
+            _pendingLullAfterPrankster = false;
         }
 
         // Resume / migrate: if enough VIPs already left and none are active, unlock lull now.
-        TryUnlockPostVipLull();
+        // Do not present the portal when returning to an already-active lull.
+        TryUnlockPostVipLull(offerPortalPresentation: false);
+        PortalUiController.EnsureHidden();
 
         _spawnCount = 0;
 
@@ -843,10 +850,14 @@ public class CustomerManager : MonoBehaviour
         if (!RestaurantSceneMode.IsMainScene)
             return false;
 
+        // Last VIP left, but the follow-up prankster has not finished yet.
+        if (_pendingLullAfterPrankster)
+            return false;
+
         return HasReachedVipVisitLimit() && GetActiveVipCount() <= 0;
     }
 
-    private void TryUnlockPostVipLull()
+    private void TryUnlockPostVipLull(bool offerPortalPresentation = false)
     {
         if (!IsPostVipLullActive())
         {
@@ -865,6 +876,9 @@ public class CustomerManager : MonoBehaviour
         _runtimeVipSpawnStopCount = 0;
         PlayerProfileStorage.ClearMainSceneVipSpawnStopCountOverrideForCurrentPlayer();
         CompetitorSceneSelection.ClearBlockedTownShops();
+
+        if (offerPortalPresentation)
+            PortalUiController.PresentForLull();
     }
 
     /// <summary>
@@ -1218,14 +1232,15 @@ public class CustomerManager : MonoBehaviour
         return spawnCount % _vipSpawnInterval == 0;
     }
 
-    private bool MeetsVipSpawnRequirements()
+    /// <summary>
+    /// True once VIP late-game content is unlocked (mission 5 + 2F staff + stage + VIP table built).
+    /// Does not require a free VIP seat — used to gate pranksters during early business.
+    /// </summary>
+    public bool CanStartVipPhaseContent()
     {
-        // Competitor shops: VIPs may queue at the VIP waypoint even when the seat is taken
-        // (up to _maxActiveVips). Seat availability is handled in the VIP flow.
-        if (RestaurantSceneMode.IsCompetitorScene)
+        if (!RestaurantSceneMode.IsMainScene)
             return true;
 
-        // VIP only after mission 5 (VIP table + 2F staff + stage) is fully complete.
         if (!HasCompletedVipPrepMission())
             return false;
 
@@ -1235,7 +1250,43 @@ public class CustomerManager : MonoBehaviour
         if (!HasVipStageBuilt())
             return false;
 
+        return HasVipTableBuilt();
+    }
+
+    private bool MeetsVipSpawnRequirements()
+    {
+        // Competitor shops: VIPs may queue at the VIP waypoint even when the seat is taken
+        // (up to _maxActiveVips). Seat availability is handled in the VIP flow.
+        if (RestaurantSceneMode.IsCompetitorScene)
+            return true;
+
+        if (!CanStartVipPhaseContent())
+            return false;
+
         return HasAvailableVipSeat();
+    }
+
+    private static bool HasVipTableBuilt()
+    {
+        DiningTable[] tables = FindObjectsByType<DiningTable>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        for (int i = 0; i < tables.Length; i++)
+        {
+            DiningTable table = tables[i];
+            if (table != null && table.IsVipTable && table.gameObject.activeInHierarchy && !table.IsBroken)
+                return true;
+        }
+
+        // Fall back to build spots in case the VIP table object is still activating.
+        BuildSpot[] spots = FindObjectsByType<BuildSpot>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < spots.Length; i++)
+        {
+            BuildSpot spot = spots[i];
+            if (spot != null && spot.IsBuilt && spot.PlaceableType == PlaceableType.VipTable)
+                return true;
+        }
+
+        return false;
     }
 
     private static bool HasCompletedVipPrepMission()
@@ -1349,6 +1400,28 @@ public class CustomerManager : MonoBehaviour
         }
 
         return vipCount;
+    }
+
+    /// <summary>First active VIP in the restaurant, if any.</summary>
+    public bool TryGetActiveVip(out Customer vip)
+    {
+        vip = null;
+
+        if (_customerPool == null)
+            return false;
+
+        IReadOnlyList<Customer> customers = _customerPool.ActiveCustomers;
+        for (int i = 0; i < customers.Count; i++)
+        {
+            Customer customer = customers[i];
+            if (customer == null || !customer.IsVip || !customer.gameObject.activeInHierarchy)
+                continue;
+
+            vip = customer;
+            return true;
+        }
+
+        return false;
     }
 
     private IEnumerator RunCustomerFlow(Customer customer)
@@ -1531,6 +1604,7 @@ public class CustomerManager : MonoBehaviour
             yield break;
         }
 
+        UIManager.Instance?.NotifyVipSeatedForTaste(customer);
         yield return RunVipSeatedEvents(customer, assignedSeat);
     }
 
@@ -1813,7 +1887,6 @@ public class CustomerManager : MonoBehaviour
             yield return null;
 
         _callLadiesActive = walksPending == 0 && HasAnyActiveCallLady();
-        _callLadiesStationed = true;
     }
 
     private bool HasAnyActiveCallLady()
@@ -1918,7 +1991,6 @@ public class CustomerManager : MonoBehaviour
         }
 
         _callLadiesActive = false;
-        _callLadiesStationed = true;
         _callLadyDismissRoutine = null;
     }
 
@@ -2133,10 +2205,24 @@ public class CustomerManager : MonoBehaviour
         {
             RegisterVipServed();
 
+            if (RestaurantSceneMode.IsMainScene)
+                MissionUiController.NotifyServeVipFinished();
+
             if (GetActiveVipCount() <= 0)
             {
                 UIManager.Instance?.HideVipUi();
-                TryUnlockPostVipLull();
+
+                // Last VIP of this cycle: let the follow-up prankster finish, then open lull.
+                if (HasReachedVipVisitLimit()
+                    && IsVipPranksterAlternationEnabled()
+                    && CanStartVipPhaseContent())
+                {
+                    _pendingLullAfterPrankster = true;
+                }
+                else
+                {
+                    TryUnlockPostVipLull(offerPortalPresentation: true);
+                }
             }
         }
     }

@@ -5,7 +5,11 @@ public enum MissionTaskKind
 {
     Build = 0,
     Hire = 1,
-    OpenBusiness = 2
+    OpenBusiness = 2,
+    ServeVip = 3,
+    StealCustomers = 4,
+    PurchaseModernDish = 5,
+    SellDishToVip = 6
 }
 
 [Serializable]
@@ -38,6 +42,10 @@ public class MissionCatalog : ScriptableObject
     public const int TableBuildMissionPartIndex = 2;
     public const int OpenBusinessMissionPartIndex = 3; // Stairs mission — unlocks auto-open after tables.
     public const int VipPrepMissionPartIndex = 4; // VIP table + 2F staff + stage.
+    public const int ServeVipMissionPartIndex = 5;
+    public const int StealCustomersMissionPartIndex = 6;
+    public const int PurchaseModernDishMissionPartIndex = 7;
+    public const int SellDishToVipMissionPartIndex = 8;
 
     [SerializeField] private MissionPartDefinition[] _parts = CreateDefaultParts();
 
@@ -197,6 +205,66 @@ public class MissionCatalog : ScriptableObject
                         taskKind = MissionTaskKind.Build,
                         description = "建造歌台",
                         requiredType = PlaceableType.VipStage,
+                        requiredCount = 1
+                    }
+                }
+            },
+            new MissionPartDefinition
+            {
+                title = "招待VIP",
+                revealSecondFloorWhenComplete = false,
+                startHiringWhenComplete = false,
+                tasks = new[]
+                {
+                    new MissionTaskDefinition
+                    {
+                        taskKind = MissionTaskKind.ServeVip,
+                        description = "服务一位VIP",
+                        requiredCount = 1
+                    }
+                }
+            },
+            new MissionPartDefinition
+            {
+                title = "成功偷客",
+                revealSecondFloorWhenComplete = false,
+                startHiringWhenComplete = false,
+                tasks = new[]
+                {
+                    new MissionTaskDefinition
+                    {
+                        taskKind = MissionTaskKind.StealCustomers,
+                        description = "偷走至少3位普通顾客或1位VIP",
+                        requiredCount = 1
+                    }
+                }
+            },
+            new MissionPartDefinition
+            {
+                title = "购买现代菜品",
+                revealSecondFloorWhenComplete = false,
+                startHiringWhenComplete = false,
+                tasks = new[]
+                {
+                    new MissionTaskDefinition
+                    {
+                        taskKind = MissionTaskKind.PurchaseModernDish,
+                        description = "购买任意一道菜品",
+                        requiredCount = 1
+                    }
+                }
+            },
+            new MissionPartDefinition
+            {
+                title = "向VIP售卖",
+                revealSecondFloorWhenComplete = false,
+                startHiringWhenComplete = false,
+                tasks = new[]
+                {
+                    new MissionTaskDefinition
+                    {
+                        taskKind = MissionTaskKind.SellDishToVip,
+                        description = "向VIP出售一道菜品",
                         requiredCount = 1
                     }
                 }

@@ -658,7 +658,8 @@ public class CompetitorVisitController : MonoBehaviour
         }
 
         uiRoot.gameObject.SetActive(true);
-        uiRoot.SetAsLastSibling();
+        // Keep steal prompts behind HUD / chased / timer UI.
+        uiRoot.SetAsFirstSibling();
         DisableChildRaycastTargets(uiRoot);
 
         StealUiEntry entry = new StealUiEntry

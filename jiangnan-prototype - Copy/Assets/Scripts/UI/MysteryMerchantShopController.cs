@@ -7,19 +7,25 @@ using UnityEngine.UI;
 public class MysteryMerchantShopController : MonoBehaviour
 {
     private const string ShopUiName = "Shop UI";
+    private const string MerchantUiName = "Merchant UI";
+    private const string DialogueName = "Dialogue";
     private const string ItemListName = "Item List";
     private const string ItemTitleName = "Item Title";
     private const string ItemImageName = "Item Image";
     private const string BuyUiName = "Buy UI";
     private const string CostName = "Cost";
+    private const string WelcomeDialogue = "欢迎！来尝尝菜品吧！";
+    private const string ThanksDialogue = "感谢！下次再来！";
     private const int MinShopItemCount = 2;
     private const int MaxShopItemCount = 4;
 
     [SerializeField] private ItemCatalog _itemCatalog;
     [SerializeField] private Transform _itemListRoot;
+    [SerializeField] private TextMeshProUGUI _merchantDialogueText;
 
     private readonly List<ShopSlotUi> _slots = new();
     private readonly List<int> _catalogIndexScratch = new();
+    private bool _purchasedThisVisit;
 
     private sealed class ShopSlotUi
     {
@@ -37,6 +43,10 @@ public class MysteryMerchantShopController : MonoBehaviour
     {
         EnsureCatalog();
         CacheSlots();
+        EnsureDialogue();
+        // Each Future scene visit starts with the welcome line; thanks only after a buy this visit.
+        _purchasedThisVisit = false;
+        SetMerchantDialogue(WelcomeDialogue);
         RefreshRandomStock();
     }
 
@@ -58,6 +68,26 @@ public class MysteryMerchantShopController : MonoBehaviour
             return;
 
         _itemCatalog = ItemCatalog.LoadOrCreateDefault();
+    }
+
+    private void EnsureDialogue()
+    {
+        if (_merchantDialogueText != null)
+            return;
+
+        GameObject merchantUi = GameObject.Find(MerchantUiName);
+        if (merchantUi == null)
+            return;
+
+        Transform dialogue = FindChildTransform(merchantUi.transform, DialogueName);
+        if (dialogue != null)
+            _merchantDialogueText = dialogue.GetComponent<TextMeshProUGUI>();
+    }
+
+    private void SetMerchantDialogue(string text)
+    {
+        if (_merchantDialogueText != null)
+            _merchantDialogueText.text = text ?? string.Empty;
     }
 
     private void CacheSlots()
@@ -257,9 +287,16 @@ public class MysteryMerchantShopController : MonoBehaviour
         UIManager.Instance?.PlayCoinTrailFromUi(slot.BuyUiRoot != null ? slot.BuyUiRoot : slot.Root.transform as RectTransform);
 
         PlayerProfileStorage.AddBagItemForCurrentPlayer(slot.OfferedItem, 1);
+        MissionUiController.NotifyFutureItemPurchased();
 
         // Purchased stock leaves the shelf until the next visit re-rolls offers.
         SetSlotActive(slot, false);
+
+        if (!_purchasedThisVisit)
+        {
+            _purchasedThisVisit = true;
+            SetMerchantDialogue(ThanksDialogue);
+        }
     }
 
     private static void Shuffle(List<int> values)

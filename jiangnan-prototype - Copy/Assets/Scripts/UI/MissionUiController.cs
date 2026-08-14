@@ -32,12 +32,14 @@ public class MissionUiController : MonoBehaviour
     private readonly int[] _hiredCounts = new int[Enum.GetValues(typeof(WorkerType)).Length];
     private int _openBusinessCompletions;
     private int _currentPartIndex;
+    private int _displayedPartIndex = -1;
     private Coroutine _advancePartRoutine;
     private bool _isAdvancingPart;
     private bool _initialized;
     private bool _isPanelOpen;
     private bool _buttonsWired;
 
+    /// <summary>Linear watermark used by build/hire gating (missions 1-5 progress).</summary>
     public int CurrentPartIndex => _currentPartIndex;
 
     private void Awake()
@@ -57,7 +59,10 @@ public class MissionUiController : MonoBehaviour
         WirePanelButtons();
 
         if (_initialized)
+        {
+            ApplySceneMissionUnlocks();
             return;
+        }
 
         _currentPartIndex = PlayerProfileStorage.GetMainSceneMissionPartIndexForCurrentPlayer();
         ClampCurrentPartIndex();
@@ -68,9 +73,15 @@ public class MissionUiController : MonoBehaviour
             _openBusinessCompletions = 1;
         }
 
+        ApplySceneMissionUnlocks();
+
         // Default: mission panel starts closed.
         SetPanelOpen(false);
         _initialized = true;
+
+        // Competitor/Future rely on this path (UIManager only used to skip Main-only init before).
+        RefreshUi();
+        SyncMissionRootVisibility(GameManager.Instance != null ? GameManager.Instance.State : GameState.Building);
     }
 
     public void Initialize(MissionCatalog catalog = null)
@@ -81,11 +92,12 @@ public class MissionUiController : MonoBehaviour
 
     private void OnEnable()
     {
-        if (!RestaurantSceneMode.IsMainScene)
-            return;
-
         GameEvents.StateChanged += HandleStateChanged;
         WirePanelButtons();
+        ApplySceneMissionUnlocks();
+        if (_initialized)
+            RefreshUi();
+        SyncMissionRootVisibility(GameManager.Instance != null ? GameManager.Instance.State : GameState.Building);
     }
 
     private void OnDisable()
@@ -98,10 +110,126 @@ public class MissionUiController : MonoBehaviour
             StopCoroutine(_advancePartRoutine);
             _advancePartRoutine = null;
 
-            while (IsCurrentPartComplete() && TryAdvancePart())
+            while (IsDisplayedPartComplete() && TryAdvanceDisplayedPart())
             {
             }
         }
+    }
+
+    private void ApplySceneMissionUnlocks()
+    {
+        bool changed = false;
+
+        if (RestaurantSceneMode.IsCompetitorScene
+            && !PlayerProfileStorage.IsMissionStealUnlockedForCurrentPlayer())
+        {
+            PlayerProfileStorage.SetMissionStealUnlockedForCurrentPlayer();
+            changed = true;
+        }
+
+        if (RestaurantSceneMode.IsFutureScene
+            && !PlayerProfileStorage.IsMissionFutureUnlockedForCurrentPlayer())
+        {
+            PlayerProfileStorage.SetMissionFutureUnlockedForCurrentPlayer();
+            changed = true;
+        }
+
+        // Older saves already cleared the steal gate via this flag.
+        if (PlayerProfileStorage.HasCompetitorVipStealAttemptedForCurrentPlayer()
+            && !PlayerProfileStorage.IsMissionStealCompletedForCurrentPlayer())
+        {
+            PlayerProfileStorage.SetMissionStealCompletedForCurrentPlayer();
+            changed = true;
+        }
+
+        if (changed && _initialized)
+            RefreshAfterExternalCompletion();
+    }
+
+    public static void NotifyServeVipFinished()
+    {
+        if (PlayerProfileStorage.IsMissionServeVipCompletedForCurrentPlayer())
+            return;
+
+        PlayerProfileStorage.SetMissionServeVipCompletedForCurrentPlayer();
+
+        MissionUiController controller = FindActiveController();
+        if (controller == null)
+            return;
+
+        controller.EnsureInitialized();
+        if (controller._currentPartIndex < MissionCatalog.ServeVipMissionPartIndex + 1)
+        {
+            controller._currentPartIndex = MissionCatalog.ServeVipMissionPartIndex + 1;
+            PlayerProfileStorage.SetMainSceneMissionPartIndexForCurrentPlayer(controller._currentPartIndex);
+        }
+
+        GameEvents.RaiseMissionPartCompleted(MissionCatalog.ServeVipMissionPartIndex);
+        GameEvents.RaiseMissionPartChanged(controller._currentPartIndex);
+        controller.RefreshAfterExternalCompletion();
+    }
+
+    public static void NotifyStealRequirementMet()
+    {
+        if (PlayerProfileStorage.IsMissionStealCompletedForCurrentPlayer())
+            return;
+
+        PlayerProfileStorage.SetMissionStealCompletedForCurrentPlayer();
+
+        MissionUiController controller = FindActiveController();
+        if (controller == null)
+            return;
+
+        controller.EnsureInitialized();
+        GameEvents.RaiseMissionPartCompleted(MissionCatalog.StealCustomersMissionPartIndex);
+        GameEvents.RaiseMissionPartChanged(controller._currentPartIndex);
+        controller.RefreshAfterExternalCompletion();
+    }
+
+    public static void NotifyFutureItemPurchased()
+    {
+        bool alreadyComplete = PlayerProfileStorage.IsMissionFuturePurchaseCompletedForCurrentPlayer();
+        PlayerProfileStorage.SetMissionFuturePurchaseCompletedForCurrentPlayer();
+
+        if (alreadyComplete)
+            return;
+
+        MissionUiController controller = FindActiveController();
+        if (controller == null)
+            return;
+
+        controller.EnsureInitialized();
+        GameEvents.RaiseMissionPartCompleted(MissionCatalog.PurchaseModernDishMissionPartIndex);
+        GameEvents.RaiseMissionPartChanged(controller._currentPartIndex);
+        controller.RefreshAfterExternalCompletion();
+    }
+
+    public static void NotifyDishSoldToVip()
+    {
+        if (PlayerProfileStorage.IsMissionSellToVipCompletedForCurrentPlayer())
+            return;
+
+        PlayerProfileStorage.SetMissionSellToVipCompletedForCurrentPlayer();
+
+        MissionUiController controller = FindActiveController();
+        if (controller == null)
+            return;
+
+        controller.EnsureInitialized();
+        GameEvents.RaiseMissionPartCompleted(MissionCatalog.SellDishToVipMissionPartIndex);
+        GameEvents.RaiseMissionPartChanged(controller._currentPartIndex);
+        controller.RefreshAfterExternalCompletion();
+    }
+
+    private void RefreshAfterExternalCompletion()
+    {
+        RefreshUi();
+        SyncMissionRootVisibility(GameManager.Instance != null ? GameManager.Instance.State : GameState.Building);
+    }
+
+    private static MissionUiController FindActiveController()
+    {
+        return FindFirstObjectByType<MissionUiController>();
     }
 
     public void NotifyPlaceableBuilt(PlaceableType type)
@@ -161,7 +289,7 @@ public class MissionUiController : MonoBehaviour
         // Show ticked/green state first so the player can see task completion.
         RefreshUi();
 
-        if (!IsCurrentPartComplete())
+        if (!IsDisplayedPartComplete())
         {
             if (_advancePartRoutine != null)
             {
@@ -169,6 +297,7 @@ public class MissionUiController : MonoBehaviour
                 _advancePartRoutine = null;
             }
 
+            SyncMissionRootVisibility(GameManager.Instance != null ? GameManager.Instance.State : GameState.Building);
             return;
         }
 
@@ -180,7 +309,7 @@ public class MissionUiController : MonoBehaviour
                 _advancePartRoutine = null;
             }
 
-            while (IsCurrentPartComplete() && TryAdvancePart())
+            while (IsDisplayedPartComplete() && TryAdvanceDisplayedPart())
             {
             }
 
@@ -202,7 +331,7 @@ public class MissionUiController : MonoBehaviour
 
         _advancePartRoutine = null;
 
-        while (IsCurrentPartComplete() && TryAdvancePart())
+        while (IsDisplayedPartComplete() && TryAdvanceDisplayedPart())
         {
         }
 
@@ -217,13 +346,19 @@ public class MissionUiController : MonoBehaviour
         if (_missionCatalog == null)
             return;
 
-        if (!_missionCatalog.TryGetPart(_currentPartIndex, out MissionPartDefinition part))
+        BindOpenedTextRefs();
+
+        if (!TryResolveDisplayedPart(out int partIndex, out MissionPartDefinition part))
         {
+            _displayedPartIndex = -1;
+
             if (_missionRoot != null)
                 _missionRoot.SetActive(false);
 
             return;
         }
+
+        _displayedPartIndex = partIndex;
 
         if (_titleText != null)
             _titleText.text = string.IsNullOrEmpty(part.title) ? "任务" : part.title;
@@ -261,12 +396,16 @@ public class MissionUiController : MonoBehaviour
         if (_missionRoot == null)
             return;
 
-        bool hasActivePart = _missionCatalog != null
-            && _missionCatalog.TryGetPart(_currentPartIndex, out _);
-        bool shouldShow = RestaurantSceneMode.IsMainScene
-            && hasActivePart
-            && !AreAllMissionsComplete()
-            && (state == GameState.Building || state == GameState.Business);
+        bool hasDisplayedMission = TryResolveDisplayedPart(out _, out _);
+        bool sceneAllowsMissionUi = RestaurantSceneMode.IsMainScene
+            || RestaurantSceneMode.IsCompetitorScene
+            || RestaurantSceneMode.IsFutureScene;
+
+        bool stateAllowsMissionUi = RestaurantSceneMode.IsFutureScene
+            || state == GameState.Building
+            || state == GameState.Business;
+
+        bool shouldShow = sceneAllowsMissionUi && stateAllowsMissionUi && hasDisplayedMission;
 
         bool wasActive = _missionRoot.activeSelf;
         _missionRoot.SetActive(shouldShow);
@@ -279,6 +418,74 @@ public class MissionUiController : MonoBehaviour
             SetPanelOpen(false);
         else
             ApplyPanelVisibility();
+    }
+
+    /// <summary>
+    /// Picks which mission card to show for the active scene.
+    /// Competitor: only mission 7 (steal). Future: only mission 8 (purchase).
+    /// Main: linear 1-6, then mission 9 (sell). Missions 7/8 never appear on Main.
+    /// </summary>
+    private bool TryResolveDisplayedPart(out int partIndex, out MissionPartDefinition part)
+    {
+        partIndex = -1;
+        part = null;
+
+        if (_missionCatalog == null)
+            return false;
+
+        // Mission 8 — Future scene only.
+        if (RestaurantSceneMode.IsFutureScene)
+        {
+            if (PlayerProfileStorage.IsMissionFutureUnlockedForCurrentPlayer()
+                && !PlayerProfileStorage.IsMissionFuturePurchaseCompletedForCurrentPlayer())
+            {
+                partIndex = MissionCatalog.PurchaseModernDishMissionPartIndex;
+                return _missionCatalog.TryGetPart(partIndex, out part);
+            }
+
+            return false;
+        }
+
+        // Mission 7 — Competitor scene only (no other missions in this scene).
+        if (RestaurantSceneMode.IsCompetitorScene)
+        {
+            if (PlayerProfileStorage.IsMissionStealUnlockedForCurrentPlayer()
+                && !PlayerProfileStorage.IsMissionStealCompletedForCurrentPlayer())
+            {
+                partIndex = MissionCatalog.StealCustomersMissionPartIndex;
+                return _missionCatalog.TryGetPart(partIndex, out part);
+            }
+
+            return false;
+        }
+
+        // Main scene (and any non-Future/Competitor): never show missions 7 or 8.
+        if (!RestaurantSceneMode.IsMainScene)
+            return false;
+
+        // Early linear missions (1-5 / indices 0-4).
+        if (_currentPartIndex < MissionCatalog.ServeVipMissionPartIndex)
+        {
+            partIndex = _currentPartIndex;
+            return _missionCatalog.TryGetPart(partIndex, out part);
+        }
+
+        // Mission 6 — serve VIP (Main only).
+        if (!PlayerProfileStorage.IsMissionServeVipCompletedForCurrentPlayer())
+        {
+            partIndex = MissionCatalog.ServeVipMissionPartIndex;
+            return _missionCatalog.TryGetPart(partIndex, out part);
+        }
+
+        // Mission 9 — sell to VIP (Main only; after Future purchase).
+        if (PlayerProfileStorage.IsMissionFuturePurchaseCompletedForCurrentPlayer()
+            && !PlayerProfileStorage.IsMissionSellToVipCompletedForCurrentPlayer())
+        {
+            partIndex = MissionCatalog.SellDishToVipMissionPartIndex;
+            return _missionCatalog.TryGetPart(partIndex, out part);
+        }
+
+        return false;
     }
 
     private void WirePanelButtons()
@@ -311,6 +518,8 @@ public class MissionUiController : MonoBehaviour
 
     private void HandleOpenButtonClicked()
     {
+        BindOpenedTextRefs();
+        RefreshUi();
         SetPanelOpen(true);
     }
 
@@ -340,26 +549,26 @@ public class MissionUiController : MonoBehaviour
             _openButton.transform.localScale = Vector3.one;
     }
 
-    private bool AreAllMissionsComplete()
-    {
-        return _missionCatalog != null
-            && _missionCatalog.PartCount > 0
-            && _currentPartIndex >= _missionCatalog.PartCount;
-    }
-
     private void ClampCurrentPartIndex()
     {
         if (_missionCatalog == null || _missionCatalog.PartCount <= 0)
             return;
 
-        // PartCount is the sentinel for "all missions finished".
-        int maxIndex = _missionCatalog.PartCount;
+        // Cap at ServeVip + 1 so late conditional missions do not use linear watermark alone.
+        int maxIndex = MissionCatalog.ServeVipMissionPartIndex + 1;
         int clamped = _currentPartIndex;
 
         if (clamped < 0)
             clamped = 0;
         else if (clamped > maxIndex)
             clamped = maxIndex;
+
+        // If VIP prep already finished in an older save, keep watermark past prep.
+        if (PlayerProfileStorage.IsMissionServeVipCompletedForCurrentPlayer()
+            && clamped < MissionCatalog.ServeVipMissionPartIndex + 1)
+        {
+            clamped = MissionCatalog.ServeVipMissionPartIndex + 1;
+        }
 
         if (clamped == _currentPartIndex)
             return;
@@ -368,20 +577,17 @@ public class MissionUiController : MonoBehaviour
         PlayerProfileStorage.SetMainSceneMissionPartIndexForCurrentPlayer(_currentPartIndex);
     }
 
-    private bool TryAdvancePart()
+    private bool TryAdvanceDisplayedPart()
     {
         EnsureInitialized();
 
         if (_missionCatalog == null || _isAdvancingPart)
             return false;
 
-        if (AreAllMissionsComplete())
+        if (!TryResolveDisplayedPart(out int displayedIndex, out MissionPartDefinition completedPart))
             return false;
 
-        int completedIndex = _currentPartIndex;
-        int nextIndex = completedIndex + 1;
-
-        if (!_missionCatalog.TryGetPart(completedIndex, out MissionPartDefinition completedPart))
+        if (!IsDisplayedPartComplete())
             return false;
 
         _isAdvancingPart = true;
@@ -391,23 +597,43 @@ public class MissionUiController : MonoBehaviour
             if (completedPart.revealSecondFloorWhenComplete)
                 GameEvents.RaiseMainSceneSecondFloorRevealRequested();
 
-            bool hasNextPart = _missionCatalog.TryGetPart(nextIndex, out _);
-
-            if (hasNextPart)
+            // Early linear missions still advance the watermark one-by-one.
+            if (displayedIndex < MissionCatalog.ServeVipMissionPartIndex)
             {
-                _currentPartIndex = nextIndex;
-            }
-            else
-            {
-                // Move past the last part so the mission UI can hide.
-                _currentPartIndex = _missionCatalog.PartCount;
+                int nextIndex = displayedIndex + 1;
+                bool hasNextPart = _missionCatalog.TryGetPart(nextIndex, out _);
+                _currentPartIndex = hasNextPart ? nextIndex : MissionCatalog.ServeVipMissionPartIndex;
+                PlayerProfileStorage.SetMainSceneMissionPartIndexForCurrentPlayer(_currentPartIndex);
+                GameEvents.RaiseMissionPartChanged(_currentPartIndex);
+                GameEvents.RaiseMissionPartCompleted(displayedIndex);
+                return true;
             }
 
-            PlayerProfileStorage.SetMainSceneMissionPartIndexForCurrentPlayer(_currentPartIndex);
+            // Late missions are completed via Notify* flags; advancing just refreshes display.
+            if (displayedIndex == MissionCatalog.ServeVipMissionPartIndex)
+            {
+                PlayerProfileStorage.SetMissionServeVipCompletedForCurrentPlayer();
+                _currentPartIndex = MissionCatalog.ServeVipMissionPartIndex + 1;
+                PlayerProfileStorage.SetMainSceneMissionPartIndexForCurrentPlayer(_currentPartIndex);
+            }
+            else if (displayedIndex == MissionCatalog.StealCustomersMissionPartIndex)
+            {
+                PlayerProfileStorage.SetMissionStealCompletedForCurrentPlayer();
+            }
+            else if (displayedIndex == MissionCatalog.PurchaseModernDishMissionPartIndex)
+            {
+                PlayerProfileStorage.SetMissionFuturePurchaseCompletedForCurrentPlayer();
+            }
+            else if (displayedIndex == MissionCatalog.SellDishToVipMissionPartIndex)
+            {
+                PlayerProfileStorage.SetMissionSellToVipCompletedForCurrentPlayer();
+            }
+
+            GameEvents.RaiseMissionPartCompleted(displayedIndex);
             GameEvents.RaiseMissionPartChanged(_currentPartIndex);
-            GameEvents.RaiseMissionPartCompleted(completedIndex);
 
-            return hasNextPart;
+            // Return true only if another mission is immediately available to show.
+            return TryResolveDisplayedPart(out _, out _);
         }
         finally
         {
@@ -415,14 +641,11 @@ public class MissionUiController : MonoBehaviour
         }
     }
 
-    private bool IsCurrentPartComplete()
+    private bool IsDisplayedPartComplete()
     {
         EnsureInitialized();
 
-        if (AreAllMissionsComplete())
-            return false;
-
-        if (_missionCatalog == null || !_missionCatalog.TryGetPart(_currentPartIndex, out MissionPartDefinition part))
+        if (!TryResolveDisplayedPart(out _, out MissionPartDefinition part))
             return false;
 
         MissionTaskDefinition[] tasks = part.tasks;
@@ -452,6 +675,14 @@ public class MissionUiController : MonoBehaviour
                 return GetHiredCount(task.requiredWorkerType) >= required;
             case MissionTaskKind.OpenBusiness:
                 return _openBusinessCompletions >= required;
+            case MissionTaskKind.ServeVip:
+                return PlayerProfileStorage.IsMissionServeVipCompletedForCurrentPlayer();
+            case MissionTaskKind.StealCustomers:
+                return PlayerProfileStorage.IsMissionStealCompletedForCurrentPlayer();
+            case MissionTaskKind.PurchaseModernDish:
+                return PlayerProfileStorage.IsMissionFuturePurchaseCompletedForCurrentPlayer();
+            case MissionTaskKind.SellDishToVip:
+                return PlayerProfileStorage.IsMissionSellToVipCompletedForCurrentPlayer();
             default:
                 return GetPlacedCount(task.requiredType) >= required;
         }
@@ -519,26 +750,8 @@ public class MissionUiController : MonoBehaviour
             _openedUiRoot = opened != null ? opened.gameObject : null;
         }
 
-        Transform contentRoot = _openedUiRoot != null ? _openedUiRoot.transform : missionTransform;
-
-        if (_titleText == null)
-        {
-            Transform title = FindChildRecursive(contentRoot, TitleName);
-            _titleText = title != null ? title.GetComponent<TextMeshProUGUI>() : null;
-        }
-
-        EnsureTaskTextArray();
-
-        for (int i = 0; i < MissionCatalog.MaxTasksPerPart; i++)
-        {
-            if (_taskTexts[i] != null)
-                continue;
-
-            Transform taskTransform = FindChildRecursive(contentRoot, $"Task ({i + 1})");
-
-            if (taskTransform != null)
-                _taskTexts[i] = taskTransform.GetComponent<TextMeshProUGUI>();
-        }
+        // Always bind Title / Task texts from Opened so scene copies stay correct.
+        BindOpenedTextRefs();
 
         if (_openButton == null)
             _openButton = ResolveOpenButton(missionTransform);
@@ -551,6 +764,32 @@ public class MissionUiController : MonoBehaviour
             _closeButton = closeButtonTransform != null
                 ? closeButtonTransform.GetComponent<Button>()
                 : null;
+        }
+    }
+
+    private void BindOpenedTextRefs()
+    {
+        Transform contentRoot = _openedUiRoot != null
+            ? _openedUiRoot.transform
+            : (_missionRoot != null ? _missionRoot.transform : null);
+
+        if (contentRoot == null)
+            return;
+
+        Transform title = FindChildRecursive(contentRoot, TitleName);
+        if (title != null)
+            _titleText = title.GetComponent<TextMeshProUGUI>();
+
+        EnsureTaskTextArray();
+
+        for (int i = 0; i < MissionCatalog.MaxTasksPerPart; i++)
+        {
+            Transform taskTransform = FindChildRecursive(contentRoot, $"Task ({i + 1})");
+            if (taskTransform == null && i == 0)
+                taskTransform = FindChildRecursive(contentRoot, "Task");
+
+            if (taskTransform != null)
+                _taskTexts[i] = taskTransform.GetComponent<TextMeshProUGUI>();
         }
     }
 

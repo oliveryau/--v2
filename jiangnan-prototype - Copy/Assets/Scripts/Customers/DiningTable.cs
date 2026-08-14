@@ -134,6 +134,7 @@ public class DiningTable : MonoBehaviour
 
         RestoreVisualLevel(_level);
         RefreshRuntimeReferences();
+        GameEvents.RaiseTableStatusChanged(this);
     }
 
     private void OnDestroy()

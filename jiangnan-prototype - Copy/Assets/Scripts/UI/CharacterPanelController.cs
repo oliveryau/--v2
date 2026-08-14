@@ -36,6 +36,10 @@ public class CharacterPanelController : MonoBehaviour
     [SerializeField] private Vector3 _firstFloorCameraPosition = Vector3.zero;
     [SerializeField] private Vector3 _secondFloorCameraPosition = new Vector3(-5f, 5f, 0f);
     [SerializeField] private float _floorTransitionDuration = 0.75f;
+    [SerializeField] private float _floorsUnlockPulseDuration = 3f;
+    [SerializeField] private float _floorsUnlockPulseMinScale = 0.98f;
+    [SerializeField] private float _floorsUnlockPulseMaxScale = 1.02f;
+    [SerializeField] private float _floorsUnlockPulseSpeed = 8f;
 
     private Transform _cameraRig;
     private Camera _floorCamera;
@@ -50,6 +54,7 @@ public class CharacterPanelController : MonoBehaviour
     private bool _bagInventoryVisible;
     private bool _secondFloorViewVisible = true;
     private Coroutine _floorTransitionRoutine;
+    private Coroutine _floorsUnlockPulseRoutine;
 
     public TextMeshProUGUI GoldAmountText => _goldAmountText;
     public RectTransform GoldUiRoot => _goldUiRoot;
@@ -101,6 +106,8 @@ public class CharacterPanelController : MonoBehaviour
             StopCoroutine(_floorTransitionRoutine);
             _floorTransitionRoutine = null;
         }
+
+        StopFloorsUnlockPulse(resetScale: true);
     }
 
     private void HandleSecondFloorUnlocked()
@@ -109,6 +116,7 @@ public class CharacterPanelController : MonoBehaviour
             return;
 
         SyncFloorButtonInteractable(_currentFloor == 2);
+        StartFloorsUnlockPulse();
     }
 
     private void OnDestroy()
@@ -190,7 +198,11 @@ public class CharacterPanelController : MonoBehaviour
         if (_floorsRoot == null)
             return;
 
-        _floorsRoot.SetActive(RestaurantSceneMode.IsMainScene);
+        bool showFloors = RestaurantSceneMode.IsMainScene;
+        if (!showFloors)
+            StopFloorsUnlockPulse(resetScale: true);
+
+        _floorsRoot.SetActive(showFloors);
     }
 
     private static bool ShouldShowBagUi()
@@ -380,6 +392,94 @@ public class CharacterPanelController : MonoBehaviour
     public void GoToFirstFloor(bool force = false)
     {
         SetFloor(1, force);
+    }
+
+    /// <summary>Switch the restaurant view to floor 2 (camera + floor UI visibility).</summary>
+    public void GoToSecondFloor(bool force = false)
+    {
+        SetFloor(2, force);
+    }
+
+    /// <summary>
+    /// Jump to the authored camera for a floor. Recenters even when already viewing that floor.
+    /// </summary>
+    public void FocusDefaultFloorCamera(int floor)
+    {
+        if (floor == 2 && !RestaurantFloorUtil.IsUnlockedForCurrentPlayer())
+            floor = 1;
+
+        Vector3 cameraPosition = floor == 2 ? _secondFloorCameraPosition : _firstFloorCameraPosition;
+
+        if (_currentFloor != floor)
+        {
+            SetFloor(floor);
+            return;
+        }
+
+        FocusCameraAt(cameraPosition, ensureGroundFloor: floor == 1);
+    }
+
+    /// <summary>
+    /// Ensure ground-floor view, then move the camera to an authored presentation position
+    /// (used by portal lull framing — not the default first-floor camera).
+    /// </summary>
+    public void FocusCameraAt(Vector3 cameraPosition, bool ensureGroundFloor = true)
+    {
+        if (ensureGroundFloor && _currentFloor != 1)
+        {
+            if (_floorTransitionRoutine != null)
+            {
+                StopCoroutine(_floorTransitionRoutine);
+                _floorTransitionRoutine = null;
+            }
+
+            _currentFloor = 1;
+            ApplySecondFloorViewVisible(false);
+            SyncFloorButtonInteractable(false);
+            GameEvents.RaiseRestaurantFloorChanged(_currentFloor);
+        }
+
+        if (_floorTransitionRoutine != null)
+        {
+            StopCoroutine(_floorTransitionRoutine);
+            _floorTransitionRoutine = null;
+        }
+
+        if (_floorTransitionDuration <= 0f)
+        {
+            ApplyCameraFloorPosition(cameraPosition, updateGroundPlane: true);
+            return;
+        }
+
+        _floorTransitionRoutine = StartCoroutine(AnimateCameraToPosition(cameraPosition));
+    }
+
+    private IEnumerator AnimateCameraToPosition(Vector3 targetPosition)
+    {
+        Transform cameraTarget = ResolveCameraMoveTarget();
+        Vector3 startPosition = cameraTarget != null ? cameraTarget.position : targetPosition;
+        Vector3 endPosition = targetPosition;
+        if (Mathf.Approximately(targetPosition.z, 0f))
+            endPosition.z = startPosition.z;
+
+        float duration = Mathf.Max(0.01f, _floorTransitionDuration);
+        float elapsed = 0f;
+
+        InputManager inputManager = FindFirstObjectByType<InputManager>();
+        inputManager?.SetGroundHeight(endPosition.y);
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            float smoothed = t * t * (3f - 2f * t);
+            Vector3 position = Vector3.Lerp(startPosition, endPosition, smoothed);
+            ApplyCameraFloorPosition(position, updateGroundPlane: false);
+            yield return null;
+        }
+
+        ApplyCameraFloorPosition(endPosition, updateGroundPlane: true);
+        _floorTransitionRoutine = null;
     }
 
     private void SetFloor(int floor, bool force = false)
@@ -587,6 +687,60 @@ public class CharacterPanelController : MonoBehaviour
 
         if (_secondFloorButton != null)
             _secondFloorButton.interactable = secondFloorUnlocked && !onSecondFloor;
+    }
+
+    private void StartFloorsUnlockPulse()
+    {
+        CacheFloorUiReferences();
+
+        if (_floorsRoot == null || !RestaurantSceneMode.IsMainScene)
+            return;
+
+        if (!_floorsRoot.activeSelf)
+            _floorsRoot.SetActive(true);
+
+        StopFloorsUnlockPulse(resetScale: false);
+        _floorsUnlockPulseRoutine = StartCoroutine(PulseFloorsUnlockCoroutine());
+    }
+
+    private void StopFloorsUnlockPulse(bool resetScale)
+    {
+        if (_floorsUnlockPulseRoutine != null)
+        {
+            StopCoroutine(_floorsUnlockPulseRoutine);
+            _floorsUnlockPulseRoutine = null;
+        }
+
+        if (resetScale && _floorsRoot != null)
+            _floorsRoot.transform.localScale = Vector3.one;
+    }
+
+    private IEnumerator PulseFloorsUnlockCoroutine()
+    {
+        Transform floors = _floorsRoot != null ? _floorsRoot.transform : null;
+        if (floors == null)
+        {
+            _floorsUnlockPulseRoutine = null;
+            yield break;
+        }
+
+        float duration = Mathf.Max(0.01f, _floorsUnlockPulseDuration);
+        float minScale = _floorsUnlockPulseMinScale;
+        float maxScale = _floorsUnlockPulseMaxScale;
+        float speed = Mathf.Max(0.01f, _floorsUnlockPulseSpeed);
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float pulseT = (Mathf.Sin(elapsed * speed) + 1f) * 0.5f;
+            float scale = Mathf.Lerp(minScale, maxScale, pulseT);
+            floors.localScale = Vector3.one * scale;
+            yield return null;
+        }
+
+        floors.localScale = Vector3.one;
+        _floorsUnlockPulseRoutine = null;
     }
 
     private void SetFloorButtonsInteractable(bool interactable)

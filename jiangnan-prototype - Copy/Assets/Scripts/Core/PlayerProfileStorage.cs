@@ -36,6 +36,12 @@ public class PlayerProfileData
     public bool hasReceivedFirstVipCustomer;
     public bool hasOpenedMenu;
     public bool hasDismissedMenuSignaturePrompts;
+    public bool missionServeVipCompleted;
+    public bool missionStealUnlocked;
+    public bool missionStealCompleted;
+    public bool missionFutureUnlocked;
+    public bool missionFuturePurchaseCompleted;
+    public bool missionSellToVipCompleted;
     public int restaurantRatingSampleCount;
     public float restaurantRatingSampleSum;
     public bool hasSavedRestaurantRating;
@@ -283,6 +289,83 @@ public static class PlayerProfileStorage
         GameEvents.RaiseBagInventoryChanged();
     }
 
+    /// <summary>
+    /// Sells a single bag item (one count from the first stack). Returns false if the bag is empty.
+    /// </summary>
+    public static bool TrySellOneBagItemForCurrentPlayer(ItemCatalog catalog, out int payout)
+    {
+        payout = 0;
+
+        BagInventoryEntry[] items = GetBagItemsForCurrentPlayer();
+        if (items.Length == 0)
+            return false;
+
+        BagInventoryEntry entry = items[0];
+        if (entry == null || entry.count <= 0)
+            return false;
+
+        int unitWorth = Mathf.Max(0, entry.worth);
+        if (unitWorth <= 0 && catalog != null)
+            unitWorth = ResolveCatalogWorth(catalog, entry.itemName);
+
+        payout = unitWorth;
+
+        List<BagInventoryEntry> updated = new List<BagInventoryEntry>(items.Length);
+        for (int i = 0; i < items.Length; i++)
+        {
+            BagInventoryEntry current = items[i];
+            if (current == null || string.IsNullOrWhiteSpace(current.itemName) || current.count <= 0)
+                continue;
+
+            if (i == 0)
+            {
+                int remaining = current.count - 1;
+                if (remaining > 0)
+                {
+                    updated.Add(new BagInventoryEntry
+                    {
+                        itemName = current.itemName,
+                        count = remaining,
+                        cost = Mathf.Max(0, current.cost),
+                        worth = Mathf.Max(0, current.worth)
+                    });
+                }
+
+                continue;
+            }
+
+            updated.Add(new BagInventoryEntry
+            {
+                itemName = current.itemName,
+                count = current.count,
+                cost = Mathf.Max(0, current.cost),
+                worth = Mathf.Max(0, current.worth)
+            });
+        }
+
+        SaveBagItemsForCurrentPlayer(updated.ToArray());
+        return true;
+    }
+
+    private static int ResolveCatalogWorth(ItemCatalog catalog, string itemName)
+    {
+        if (catalog == null || catalog.Items == null || string.IsNullOrWhiteSpace(itemName))
+            return 0;
+
+        ShopItemDefinition[] definitions = catalog.Items;
+        for (int i = 0; i < definitions.Length; i++)
+        {
+            ShopItemDefinition definition = definitions[i];
+            if (definition == null || string.IsNullOrWhiteSpace(definition.Name))
+                continue;
+
+            if (string.Equals(definition.Name.Trim(), itemName.Trim(), StringComparison.Ordinal))
+                return Mathf.Max(0, definition.Worth);
+        }
+
+        return 0;
+    }
+
     private static List<BagInventoryEntry> CopyBagItems(BagInventoryEntry[] source)
     {
         List<BagInventoryEntry> items = new List<BagInventoryEntry>();
@@ -369,6 +452,72 @@ public static class PlayerProfileStorage
     public static void SetMainSceneMissionPartIndexForCurrentPlayer(int partIndex) =>
         ModifyCurrentProfile(profile => profile.mainSceneMissionPartIndex = Mathf.Max(0, partIndex));
 
+    public static bool IsMissionServeVipCompletedForCurrentPlayer() =>
+        TryGetCurrentProfile(out PlayerProfileData profile) && profile.missionServeVipCompleted;
+
+    public static void SetMissionServeVipCompletedForCurrentPlayer()
+    {
+        if (IsMissionServeVipCompletedForCurrentPlayer())
+            return;
+
+        ModifyCurrentProfile(profile => profile.missionServeVipCompleted = true);
+    }
+
+    public static bool IsMissionStealUnlockedForCurrentPlayer() =>
+        TryGetCurrentProfile(out PlayerProfileData profile) && profile.missionStealUnlocked;
+
+    public static void SetMissionStealUnlockedForCurrentPlayer()
+    {
+        if (IsMissionStealUnlockedForCurrentPlayer())
+            return;
+
+        ModifyCurrentProfile(profile => profile.missionStealUnlocked = true);
+    }
+
+    public static bool IsMissionStealCompletedForCurrentPlayer() =>
+        TryGetCurrentProfile(out PlayerProfileData profile) && profile.missionStealCompleted;
+
+    public static void SetMissionStealCompletedForCurrentPlayer()
+    {
+        if (IsMissionStealCompletedForCurrentPlayer())
+            return;
+
+        ModifyCurrentProfile(profile => profile.missionStealCompleted = true);
+    }
+
+    public static bool IsMissionFutureUnlockedForCurrentPlayer() =>
+        TryGetCurrentProfile(out PlayerProfileData profile) && profile.missionFutureUnlocked;
+
+    public static void SetMissionFutureUnlockedForCurrentPlayer()
+    {
+        if (IsMissionFutureUnlockedForCurrentPlayer())
+            return;
+
+        ModifyCurrentProfile(profile => profile.missionFutureUnlocked = true);
+    }
+
+    public static bool IsMissionFuturePurchaseCompletedForCurrentPlayer() =>
+        TryGetCurrentProfile(out PlayerProfileData profile) && profile.missionFuturePurchaseCompleted;
+
+    public static void SetMissionFuturePurchaseCompletedForCurrentPlayer()
+    {
+        if (IsMissionFuturePurchaseCompletedForCurrentPlayer())
+            return;
+
+        ModifyCurrentProfile(profile => profile.missionFuturePurchaseCompleted = true);
+    }
+
+    public static bool IsMissionSellToVipCompletedForCurrentPlayer() =>
+        TryGetCurrentProfile(out PlayerProfileData profile) && profile.missionSellToVipCompleted;
+
+    public static void SetMissionSellToVipCompletedForCurrentPlayer()
+    {
+        if (IsMissionSellToVipCompletedForCurrentPlayer())
+            return;
+
+        ModifyCurrentProfile(profile => profile.missionSellToVipCompleted = true);
+    }
+
     public static bool HasMainSceneSecondFloorRevealedForCurrentPlayer() =>
         TryGetCurrentProfile(out PlayerProfileData profile) && profile.mainSceneSecondFloorRevealed;
 
@@ -399,9 +548,9 @@ public static class PlayerProfileStorage
         ModifyCurrentProfile(profile => profile.mainSceneServedVipCount = Mathf.Max(0, servedVipCount));
 
     /// <summary>
-    /// Post-VIP lull unlock threshold: this many VIP visits (arrivals), then lull after they leave.
+    /// Post-VIP lull unlock threshold: this many VIP visits leave, then lull after the following prankster.
     /// </summary>
-    public const int PostVipLullServedVipThreshold = 2;
+    public const int PostVipLullServedVipThreshold = 1;
 
     public static void SetPostVipLullUnlockedForCurrentPlayer()
     {
