@@ -16,7 +16,7 @@ public class MysteryMerchantShopController : MonoBehaviour
     private const string CostName = "Cost";
     private const string WelcomeDialogue = "欢迎！来尝尝菜品吧！";
     private const string ThanksDialogue = "感谢！下次再来！";
-    private const int MinShopItemCount = 1;
+    private const int MinShopItemCount = 2;
     private const int MaxShopItemCount = 3;
 
     [SerializeField] private ItemCatalog _itemCatalog;
@@ -283,8 +283,8 @@ public class MysteryMerchantShopController : MonoBehaviour
         if (slot.BuyButton != null)
             slot.BuyButton.interactable = false;
 
+        // No coin trail here — buying spends gold instead of earning it.
         AudioManager.Play(SfxId.GoldCollect);
-        UIManager.Instance?.PlayCoinTrailFromUi(slot.BuyUiRoot != null ? slot.BuyUiRoot : slot.Root.transform as RectTransform);
 
         PlayerProfileStorage.AddBagItemForCurrentPlayer(slot.OfferedItem, 1);
         MissionUiController.NotifyFutureItemPurchased();

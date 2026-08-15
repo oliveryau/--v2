@@ -36,6 +36,11 @@ public class DiningTable : MonoBehaviour
     [SerializeField] private TableLevelVisualSet _level1Visuals;
     [SerializeField] private TableLevelVisualSet _level2Visuals;
     [SerializeField] private TableLevelVisualSet _level3Visuals;
+    [Header("Level Table Placement Offsets")]
+    [Tooltip("Local position offset applied to the level 2 table when it is placed.")]
+    [SerializeField] private Vector3 _level2TableLocalOffset = new Vector3(0f, 0.22f, 0f);
+    [Tooltip("Local position offset applied to the level 3 table when it is placed.")]
+    [SerializeField] private Vector3 _level3TableLocalOffset = Vector3.zero;
 
     private bool _isUpgrading;
     private bool _isRepairing;
@@ -659,10 +664,12 @@ public class DiningTable : MonoBehaviour
 
         if (nextTable != null && tableAnchor != null)
         {
+            // Anchor is the previous level's table, so only the delta between the two offsets applies.
             SnapToAnchor(
                 nextTable.transform,
                 tableAnchor,
-                GetAuthoredTableScale(level, nextTable));
+                GetAuthoredTableScale(level, nextTable),
+                GetTableLocalOffset(level) - GetTableLocalOffset(previousLevel));
         }
 
         if (nextSeats != null && seatsAnchor != null)
@@ -720,6 +727,15 @@ public class DiningTable : MonoBehaviour
 
     private static void SnapToAnchor(Transform target, Transform anchor, Vector3 localScale)
     {
+        SnapToAnchor(target, anchor, localScale, Vector3.zero);
+    }
+
+    private static void SnapToAnchor(
+        Transform target,
+        Transform anchor,
+        Vector3 localScale,
+        Vector3 localPositionOffset)
+    {
         if (target == null || anchor == null)
             return;
 
@@ -727,7 +743,7 @@ public class DiningTable : MonoBehaviour
 
         Transform parent = anchor.parent;
         target.SetParent(parent, false);
-        target.localPosition = anchor.localPosition;
+        target.localPosition = anchor.localPosition + localPositionOffset;
         target.localRotation = anchor.localRotation;
         target.localScale = localScale;
         target.SetSiblingIndex(anchor.GetSiblingIndex());
@@ -1035,6 +1051,16 @@ public class DiningTable : MonoBehaviour
         }
 
         return ReadLocalScale(fallback);
+    }
+
+    private Vector3 GetTableLocalOffset(int level)
+    {
+        return level switch
+        {
+            2 => _level2TableLocalOffset,
+            3 => _level3TableLocalOffset,
+            _ => Vector3.zero
+        };
     }
 
     private static Vector3 ReadLocalScale(GameObject source)

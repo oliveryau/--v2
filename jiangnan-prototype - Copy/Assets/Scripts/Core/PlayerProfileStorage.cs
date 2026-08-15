@@ -348,6 +348,95 @@ public static class PlayerProfileStorage
         return true;
     }
 
+    /// <summary>
+    /// Removes one count of a named bag item and reports its cost / worth (catalog values win).
+    /// </summary>
+    public static bool TryGiveBagItemForCurrentPlayer(
+        string itemName,
+        ItemCatalog catalog,
+        out int cost,
+        out int worth)
+    {
+        cost = 0;
+        worth = 0;
+
+        if (string.IsNullOrWhiteSpace(itemName))
+            return false;
+
+        string normalizedName = itemName.Trim();
+        BagInventoryEntry[] items = GetBagItemsForCurrentPlayer();
+        int matchIndex = -1;
+
+        for (int i = 0; i < items.Length; i++)
+        {
+            BagInventoryEntry entry = items[i];
+            if (entry == null || entry.count <= 0 || string.IsNullOrWhiteSpace(entry.itemName))
+                continue;
+
+            if (string.Equals(entry.itemName.Trim(), normalizedName, StringComparison.Ordinal))
+            {
+                matchIndex = i;
+                break;
+            }
+        }
+
+        if (matchIndex < 0)
+            return false;
+
+        BagInventoryEntry match = items[matchIndex];
+        cost = Mathf.Max(0, match.cost);
+        worth = Mathf.Max(0, match.worth);
+
+        ShopItemDefinition definition = ResolveCatalogItem(catalog, normalizedName);
+        if (definition != null)
+        {
+            cost = Mathf.Max(0, definition.Cost);
+            worth = Mathf.Max(0, definition.Worth);
+        }
+
+        List<BagInventoryEntry> updated = new List<BagInventoryEntry>(items.Length);
+        for (int i = 0; i < items.Length; i++)
+        {
+            BagInventoryEntry current = items[i];
+            if (current == null || string.IsNullOrWhiteSpace(current.itemName) || current.count <= 0)
+                continue;
+
+            int remaining = i == matchIndex ? current.count - 1 : current.count;
+            if (remaining <= 0)
+                continue;
+
+            updated.Add(new BagInventoryEntry
+            {
+                itemName = current.itemName,
+                count = remaining,
+                cost = Mathf.Max(0, current.cost),
+                worth = Mathf.Max(0, current.worth)
+            });
+        }
+
+        SaveBagItemsForCurrentPlayer(updated.ToArray());
+        return true;
+    }
+
+    public static ShopItemDefinition ResolveCatalogItem(ItemCatalog catalog, string itemName)
+    {
+        if (catalog == null || catalog.Items == null || string.IsNullOrWhiteSpace(itemName))
+            return null;
+
+        ShopItemDefinition[] definitions = catalog.Items;
+        for (int i = 0; i < definitions.Length; i++)
+        {
+            ShopItemDefinition definition = definitions[i];
+            if (definition == null || string.IsNullOrWhiteSpace(definition.Name))
+                continue;
+
+            if (string.Equals(definition.Name.Trim(), itemName.Trim(), StringComparison.Ordinal))
+                return definition;
+        }
+
+        return null;
+    }
+
     private static int ResolveCatalogWorth(ItemCatalog catalog, string itemName)
     {
         if (catalog == null || catalog.Items == null || string.IsNullOrWhiteSpace(itemName))

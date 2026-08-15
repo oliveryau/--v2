@@ -105,10 +105,10 @@ MonoBehaviour:
       requiredCount: 1
     revealSecondFloorWhenComplete: 0
     startHiringWhenComplete: 0
-  - title: "\u51FA\u552E\u83DC\u54C1"
+  - title: "\u8BA9VIP\u5C1D\u65B0\u83DC"
     tasks:
     - taskKind: 6
-      description: "\u5411VIP\u51FA\u552E1\u9053\u83DC\u54C1"
+      description: "\u7ED9VIP1\u9053\u83DC\u54C1"
       requiredType: 0
       requiredWorkerType: 0
       requiredCount: 1

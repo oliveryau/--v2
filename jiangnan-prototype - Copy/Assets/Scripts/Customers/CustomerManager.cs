@@ -67,6 +67,8 @@ public class CustomerManager : MonoBehaviour
     [Tooltip("World anchor for the 表演 button.")]
     [SerializeField] private Transform _vipPerformStageUiPoint;
     [SerializeField] private Transform _vipPerformerWaypoint;
+    [Tooltip("Looping music notes under GeTai. Plays while the performer is on stage.")]
+    [SerializeField] private ParticleSystem _vipStageMusicParticles;
 
     private readonly Dictionary<Customer, Coroutine> _activeFlows = new();
     private readonly HashSet<Customer> _completedPayments = new();
@@ -86,6 +88,7 @@ public class CustomerManager : MonoBehaviour
     private bool _pendingLullAfterPrankster;
     private bool _callLadiesActive;
     private bool _performerOnStage;
+    private bool _vipStageMusicParticlesInitialized;
     private Customer _vipAwaitingIntro;
     private bool _vipIntroAcknowledged;
     private VipEventType? _pendingVipEvent;
@@ -93,6 +96,8 @@ public class CustomerManager : MonoBehaviour
     private bool _vipEventAcknowledged;
 
     private PranksterManager _pranksterManager;
+    private CompetitorVisitorManager _competitorVisitorManager;
+    private const string VipStageMusicParticlesName = "Music Particles";
 
     /// <summary>Optional GeTai prop reference.</summary>
     public Transform VipStagePoint
@@ -266,6 +271,8 @@ public class CustomerManager : MonoBehaviour
         if (_vipPerformerWaypoint == null)
             _vipPerformerWaypoint = FindTransformByName("Performer Waypoint");
 
+        CacheVipStageMusicParticles();
+
         if (_vipPerformer != null)
             return;
 
@@ -296,6 +303,7 @@ public class CustomerManager : MonoBehaviour
 
         _vipPerformer.gameObject.SetActive(false);
         _performerOnStage = false;
+        StopVipStageMusicParticles();
     }
 
     private static bool IsWorkerOwnedByHiredOrHiringSpot(Worker worker)
@@ -325,6 +333,8 @@ public class CustomerManager : MonoBehaviour
 
     private void OnDestroy()
     {
+        StopVipStageMusicParticles();
+
         if (Instance == this)
             Instance = null;
     }
@@ -416,7 +426,7 @@ public class CustomerManager : MonoBehaviour
             return;
 
         ClearPendingVipEvent();
-        UIManager.Instance?.HideAllVipEventButtons();
+        UIManager.Instance?.HideAllVipEventButtons(restoreCravingDialogue: false);
     }
 
     private void ReleaseCustomerToPool(Customer customer)
@@ -457,7 +467,24 @@ public class CustomerManager : MonoBehaviour
 
         _customersSincePranksterLeft = 0;
 
-        // Final VIP already left: finish with this prankster, then open the lull (portal).
+        // Rival owner only drops by after the last prankster, right before the lull opens.
+        if (_pendingLullAfterPrankster && TryScheduleCompetitorVisitorVisit())
+            return;
+
+        FinishAlternationTurn();
+    }
+
+    public void NotifyCompetitorVisitorEndedForAlternation()
+    {
+        if (!IsVipPranksterAlternationEnabled())
+            return;
+
+        FinishAlternationTurn();
+    }
+
+    private void FinishAlternationTurn()
+    {
+        // Final VIP already left: finish this turn, then open the lull (portal).
         if (_pendingLullAfterPrankster)
         {
             _pendingLullAfterPrankster = false;
@@ -467,6 +494,14 @@ public class CustomerManager : MonoBehaviour
         }
 
         _awaitingVipAfterPrankster = true;
+    }
+
+    private bool TryScheduleCompetitorVisitorVisit()
+    {
+        if (_competitorVisitorManager == null)
+            _competitorVisitorManager = FindFirstObjectByType<CompetitorVisitorManager>();
+
+        return _competitorVisitorManager != null && _competitorVisitorManager.TryScheduleVisit();
     }
 
     public void NotifyVipLeftForAlternation()
@@ -1229,6 +1264,16 @@ public class CustomerManager : MonoBehaviour
             {
                 return false;
             }
+
+            if (_competitorVisitorManager == null)
+                _competitorVisitorManager = FindFirstObjectByType<CompetitorVisitorManager>();
+
+            // The rival owner takes the turn after the last prankster — no VIP during it.
+            if (_competitorVisitorManager != null
+                && (_competitorVisitorManager.IsVisitActive || _competitorVisitorManager.IsAwaitingSpawn))
+            {
+                return false;
+            }
         }
 
         return IsVipSpawnCadenceDue(_spawnCount);
@@ -1647,7 +1692,7 @@ public class CustomerManager : MonoBehaviour
 
             if (events[i] == VipEventType.ServeDish && !fulfilled)
             {
-                UIManager.Instance?.HideAllVipEventButtons();
+                UIManager.Instance?.HideAllVipEventButtons(restoreCravingDialogue: false);
                 UIManager.Instance?.HideVipWaitTimer(customer);
                 UIManager.Instance?.SetVipDialogue(VipDialogueState.UnhappyLeave);
                 WorkerManager.Instance?.CancelOrder(vipOrder);
@@ -1851,6 +1896,7 @@ public class CustomerManager : MonoBehaviour
         FaceWorkerToward(performer, faceTarget);
         performer.Locomotion?.EnterStationary();
         _performerOnStage = true;
+        PlayVipStageMusicParticles();
     }
 
     private IEnumerator SpawnVipCallLadies(Customer vip)
@@ -2095,6 +2141,8 @@ public class CustomerManager : MonoBehaviour
 
     private void BeginReturnVipPerformer()
     {
+        StopVipStageMusicParticles();
+
         if (!_performerOnStage)
             return;
 
@@ -2403,6 +2451,29 @@ public class CustomerManager : MonoBehaviour
         GameEvents.RaiseTableStatusChanged(table);
     }
 
+    /// <summary>Rival raid: every non-VIP customer walks out at once, without paying.</summary>
+    public void ExpelAllNonVipCustomers()
+    {
+        if (_customerPool == null)
+            return;
+
+        List<Customer> customersToExpel = new();
+        IReadOnlyList<Customer> activeCustomers = _customerPool.ActiveCustomers;
+
+        for (int i = 0; i < activeCustomers.Count; i++)
+        {
+            Customer customer = activeCustomers[i];
+
+            if (customer == null || customer.IsVip || customer.State == CustomerState.Leaving)
+                continue;
+
+            customersToExpel.Add(customer);
+        }
+
+        for (int i = 0; i < customersToExpel.Count; i++)
+            ExpelCustomerImmediately(customersToExpel[i]);
+    }
+
     private List<Customer> CollectNonVipCustomersAtTable(DiningTable table)
     {
         List<Customer> customersToExpel = new();
@@ -2604,5 +2675,82 @@ public class CustomerManager : MonoBehaviour
         _vipIntroAcknowledged = false;
         UIManager.Instance?.HideVipIntroButton();
         UIManager.Instance?.HideVipWaitTimer();
+        StopVipStageMusicParticles();
+    }
+
+    private void CacheVipStageMusicParticles()
+    {
+        if (_vipStageMusicParticles == null)
+        {
+            Transform geTai = _vipStagePoint != null
+                ? _vipStagePoint
+                : FindTransformByName("GeTai");
+            Transform found = FindChildTransformByName(geTai, VipStageMusicParticlesName);
+
+            if (found == null)
+                found = FindTransformByName(VipStageMusicParticlesName);
+
+            if (found != null)
+            {
+                _vipStageMusicParticles = found.GetComponent<ParticleSystem>()
+                    ?? found.GetComponentInChildren<ParticleSystem>(true);
+            }
+        }
+
+        if (_vipStageMusicParticles == null)
+            return;
+
+        ParticleSystem.MainModule main = _vipStageMusicParticles.main;
+        main.loop = true;
+        main.playOnAwake = false;
+
+        if (_vipStageMusicParticlesInitialized)
+            return;
+
+        _vipStageMusicParticlesInitialized = true;
+        StopVipStageMusicParticles();
+    }
+
+    private void PlayVipStageMusicParticles()
+    {
+        CacheVipStageMusicParticles();
+
+        if (_vipStageMusicParticles == null)
+            return;
+
+        if (!_vipStageMusicParticles.gameObject.activeSelf)
+            _vipStageMusicParticles.gameObject.SetActive(true);
+
+        ParticleSystem.MainModule main = _vipStageMusicParticles.main;
+        main.loop = true;
+        main.playOnAwake = false;
+        _vipStageMusicParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        _vipStageMusicParticles.Play(true);
+    }
+
+    private void StopVipStageMusicParticles()
+    {
+        if (_vipStageMusicParticles == null)
+            return;
+
+        _vipStageMusicParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+    }
+
+    private static Transform FindChildTransformByName(Transform root, string objectName)
+    {
+        if (root == null || string.IsNullOrEmpty(objectName))
+            return null;
+
+        if (string.Equals(root.name, objectName, System.StringComparison.OrdinalIgnoreCase))
+            return root;
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform nested = FindChildTransformByName(root.GetChild(i), objectName);
+            if (nested != null)
+                return nested;
+        }
+
+        return null;
     }
 }

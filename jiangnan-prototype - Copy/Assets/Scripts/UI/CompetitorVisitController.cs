@@ -40,6 +40,10 @@ public class CompetitorVisitController : MonoBehaviour
     [SerializeField] private float _stayTimerPulseMinScale = 0.95f;
     [SerializeField] private float _stayTimerPulseMaxScale = 1.05f;
     [SerializeField] private float _stayTimerPulseSpeed = 2f;
+    [Tooltip("Profile pic pulse while the competitor status reads Online.")]
+    [SerializeField] private float _profilePicPulseMinScale = 0.95f;
+    [SerializeField] private float _profilePicPulseMaxScale = 1.05f;
+    [SerializeField] private float _profilePicPulseSpeed = 6f;
     [SerializeField] private Color _onlineStatusColor = new Color(0.2f, 0.85f, 0.35f, 1f);
     [SerializeField] private Color _offlineStatusColor = new Color(0.94509804f, 0.3882353f, 0.3882353f, 1f);
     [SerializeField] private Color _stealResultSuccessColor = new Color(0.2f, 0.85f, 0.35f, 1f);
@@ -65,6 +69,8 @@ public class CompetitorVisitController : MonoBehaviour
     private TextMeshProUGUI _stealResultText;
     private Image _profilePicImage;
     private TextMeshProUGUI _statusText;
+    private bool _competitorOnline;
+    private bool _competitorOnlineLatched;
     private RectTransform _stolenUiRoot;
     private RectTransform _stolenTextTemplate;
     private GameObject _townButtonRoot;
@@ -192,11 +198,13 @@ public class CompetitorVisitController : MonoBehaviour
         if (_chaseSequenceStarted)
         {
             UpdateChasedUiPulse();
+            UpdateProfilePicPulse();
             return;
         }
 
         UpdateStayTimer();
         UpdateStayTimerPulse();
+        UpdateProfilePicPulse();
         SyncStealUisFromActiveCustomers();
         UpdateStealUiPositions();
         UpdateStealUiPulses();
@@ -473,7 +481,7 @@ public class CompetitorVisitController : MonoBehaviour
         _stayTimerRunning = true;
         _stayTimerRoot.gameObject.SetActive(true);
         ApplyStayTimerVisuals();
-        ApplyCompetitorStatusVisuals();
+        ApplyCompetitorStatusVisuals(forceOffline: true);
     }
 
     private void HideTownButtonUi()
@@ -534,7 +542,9 @@ public class CompetitorVisitController : MonoBehaviour
 
         _chaseSequenceStarted = true;
         _stayTimerRunning = false;
-        ApplyCompetitorStatusVisuals(forceOffline: true);
+
+        // He is here chasing the player — stays Online until the next visit starts.
+        ApplyCompetitorStatusVisuals();
 
         if (_stayTimerRoot != null)
             _stayTimerRoot.localScale = Vector3.one;
@@ -589,6 +599,9 @@ public class CompetitorVisitController : MonoBehaviour
 
     private void ApplyCompetitorStatusVisuals(bool forceOffline = false)
     {
+        if (forceOffline)
+            _competitorOnlineLatched = false;
+
         if (_statusText == null)
             CacheUi();
 
@@ -596,13 +609,50 @@ public class CompetitorVisitController : MonoBehaviour
             return;
 
         float onlineRemainingThreshold = 1f + _chaseThresholdMaxSeconds;
-        bool isOnline = !forceOffline
+
+        if (!forceOffline
             && _stayTimerRunning
-            && !_chaseSequenceStarted
-            && _stayRemaining <= onlineRemainingThreshold;
+            && _stayRemaining <= onlineRemainingThreshold)
+        {
+            // Once he notices, he stays online through the chase until the next visit resets it.
+            _competitorOnlineLatched = true;
+        }
+
+        bool isOnline = !forceOffline && _competitorOnlineLatched;
 
         _statusText.text = isOnline ? OnlineStatusLabel : OfflineStatusLabel;
         _statusText.color = isOnline ? _onlineStatusColor : _offlineStatusColor;
+        _competitorOnline = isOnline;
+
+        if (!isOnline)
+            ResetProfilePicScale();
+    }
+
+    private void UpdateProfilePicPulse()
+    {
+        if (_profilePicImage == null)
+            return;
+
+        RectTransform profilePicRect = _profilePicImage.transform as RectTransform;
+        if (profilePicRect == null)
+            return;
+
+        if (!_competitorOnline || !profilePicRect.gameObject.activeInHierarchy)
+        {
+            ResetProfilePicScale();
+            return;
+        }
+
+        profilePicRect.localScale = Vector3.one * GetPulseScale(
+            _profilePicPulseMinScale,
+            _profilePicPulseMaxScale,
+            _profilePicPulseSpeed);
+    }
+
+    private void ResetProfilePicScale()
+    {
+        if (_profilePicImage != null)
+            _profilePicImage.transform.localScale = Vector3.one;
     }
 
     private void ApplyChasedCompetitorFace()

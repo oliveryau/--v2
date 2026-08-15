@@ -433,7 +433,7 @@ public class MissionUiController : MonoBehaviour
         if (_missionCatalog == null)
             return false;
 
-        // Mission 8 — Future scene only.
+        // Mission 8 — Future scene only. Never show 让VIP尝新菜 here.
         if (RestaurantSceneMode.IsFutureScene)
         {
             if (PlayerProfileStorage.IsMissionFutureUnlockedForCurrentPlayer()
@@ -477,7 +477,7 @@ public class MissionUiController : MonoBehaviour
             return _missionCatalog.TryGetPart(partIndex, out part);
         }
 
-        // Mission 9 — sell to VIP (Main only; after Future purchase).
+        // Last mission 让VIP尝新菜 — Main only, and only after one Future shop purchase.
         if (PlayerProfileStorage.IsMissionFuturePurchaseCompletedForCurrentPlayer()
             && !PlayerProfileStorage.IsMissionSellToVipCompletedForCurrentPlayer())
         {

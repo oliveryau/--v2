@@ -1,4 +1,5 @@
 using System.Collections;
+using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -12,6 +13,8 @@ public class PortalTransitionController : MonoBehaviour
     private const string TransitionInStateName = "Transition In";
     private const string TransitionOutStateName = "Transition Out";
     private const float TransitionClipDuration = 1.75f;
+    private const string MainSceneYearText = "1810\u5e74";
+    private const string FutureSceneYearText = "2026\u5e74";
 
     private static readonly int TransitionInHash = Animator.StringToHash(TransitionInStateName);
     private static readonly int TransitionOutHash = Animator.StringToHash(TransitionOutStateName);
@@ -19,6 +22,8 @@ public class PortalTransitionController : MonoBehaviour
     public static PortalTransitionController Instance { get; private set; }
 
     [SerializeField] private Animator _animator;
+    [Tooltip("Year label on the transition overlay: 1810 in the Main scene, 2026 in the portal scene.")]
+    [SerializeField] private TextMeshProUGUI _yearText;
 
     private GameObject _overlayCanvasObject;
     private bool _isTransitioning;
@@ -104,6 +109,8 @@ public class PortalTransitionController : MonoBehaviour
         if (image != null)
             image.raycastTarget = true;
 
+        ResolveYearText();
+        RefreshYearText();
         EnsurePersistentOverlayCanvas();
 
         if (!_isTransitioning)
@@ -117,6 +124,7 @@ public class PortalTransitionController : MonoBehaviour
 
         _isTransitioning = true;
 
+        RefreshYearText();
         SetOverlayVisible(true);
 
         if (_leaveRoutine != null)
@@ -140,6 +148,9 @@ public class PortalTransitionController : MonoBehaviour
         yield return null;
 
         DestroySceneDuplicates();
+
+        // Screen is fully covered here, so the year flips to the scene we just entered.
+        RefreshYearText();
         SetOverlayVisible(true);
 
         if (_animator != null)
@@ -201,6 +212,25 @@ public class PortalTransitionController : MonoBehaviour
             return Mathf.Max(0.01f, clipInfo[0].clip.length);
 
         return fallbackDuration;
+    }
+
+    private void ResolveYearText()
+    {
+        if (_yearText == null)
+            _yearText = GetComponentInChildren<TextMeshProUGUI>(true);
+    }
+
+    private void RefreshYearText()
+    {
+        ResolveYearText();
+
+        if (_yearText == null)
+            return;
+
+        if (RestaurantSceneMode.IsFutureScene)
+            _yearText.text = FutureSceneYearText;
+        else if (RestaurantSceneMode.IsMainScene)
+            _yearText.text = MainSceneYearText;
     }
 
     private void SetOverlayVisible(bool visible)
