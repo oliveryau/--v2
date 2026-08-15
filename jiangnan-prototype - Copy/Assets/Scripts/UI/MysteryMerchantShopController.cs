@@ -16,8 +16,8 @@ public class MysteryMerchantShopController : MonoBehaviour
     private const string CostName = "Cost";
     private const string WelcomeDialogue = "欢迎！来尝尝菜品吧！";
     private const string ThanksDialogue = "感谢！下次再来！";
-    private const int MinShopItemCount = 2;
-    private const int MaxShopItemCount = 4;
+    private const int MinShopItemCount = 1;
+    private const int MaxShopItemCount = 3;
 
     [SerializeField] private ItemCatalog _itemCatalog;
     [SerializeField] private Transform _itemListRoot;

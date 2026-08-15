@@ -9,10 +9,12 @@ public class VipTreasureDelivery : MonoBehaviour
     private const string CarrierName = "CarrierWorker_Treasure";
     private const string WaypointName = "VIP TreasureChest Waypoint";
     private const string CoinPointName = "Coin Point";
+    private const string CoinBurstVfxName = "Coin Burst VFX";
 
     [SerializeField] private GameObject _carrierWorkerTreasure;
     [SerializeField] private Transform _treasureChestWaypoint;
     [SerializeField] private Transform _coinPoint;
+    [SerializeField] private ParticleSystem _coinBurstVfx;
     [SerializeField] private Animator _treasureAnimator;
     [Tooltip("Animator trigger played when the carrier reaches the waypoint. Leave empty if unused.")]
     [SerializeField] private string _openTrigger = "Open";
@@ -109,6 +111,7 @@ public class VipTreasureDelivery : MonoBehaviour
 
         carrierTransform.SetPositionAndRotation(spawnPosition, spawnRotation);
         _carrierWorkerTreasure.SetActive(true);
+        StopCoinBurstVfx();
         RuntimeMeshVisibility.PrepareHierarchyForRuntimeMove(carrierTransform);
 
         yield return PathMovement.Move(
@@ -203,7 +206,28 @@ public class VipTreasureDelivery : MonoBehaviour
         _coinTrailPlayed = true;
         // Award gold here so the plus-icon feedback lines up with the chest opening.
         GrantPendingGoldAward();
+        PlayCoinBurstVfx();
         UIManager.Instance?.PlayVipTreasureCoinTrail(trailStart);
+    }
+
+    private void PlayCoinBurstVfx()
+    {
+        if (_coinBurstVfx == null)
+            return;
+
+        if (!_coinBurstVfx.gameObject.activeSelf)
+            _coinBurstVfx.gameObject.SetActive(true);
+
+        _coinBurstVfx.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        _coinBurstVfx.Play(true);
+    }
+
+    private void StopCoinBurstVfx()
+    {
+        if (_coinBurstVfx == null)
+            return;
+
+        _coinBurstVfx.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
     }
 
     private void GrantPendingGoldAward()
@@ -237,6 +261,19 @@ public class VipTreasureDelivery : MonoBehaviour
                 _coinPoint = nested;
             else
                 _coinPoint = FindSceneTransformByName(CoinPointName);
+        }
+
+        if (_coinBurstVfx == null && _carrierWorkerTreasure != null)
+        {
+            Transform burst = FindChildTransformByName(_carrierWorkerTreasure.transform, CoinBurstVfxName);
+            if (burst != null)
+                _coinBurstVfx = burst.GetComponent<ParticleSystem>();
+        }
+
+        if (_coinBurstVfx != null)
+        {
+            ParticleSystem.MainModule main = _coinBurstVfx.main;
+            main.playOnAwake = false;
         }
 
         if (_treasureAnimator == null && _carrierWorkerTreasure != null)

@@ -1073,20 +1073,7 @@ public class CustomerManager : MonoBehaviour
         if (remaining > 0f)
             yield return new WaitForSeconds(remaining);
 
-        if (RestaurantSceneMode.IsCompetitorScene)
-        {
-            ReleaseCustomerSeatAndNotify(customer, seat);
-            yield return Leave(customer);
-            yield break;
-        }
-
-        _completedPayments.Remove(customer);
-        BindPendingPayment(customer, ResolveActiveSeat(customer, seat));
-        customer.SetState(CustomerState.Paying);
-
-        CompletePayment(customer);
-        ReleaseCustomerSeatAndNotify(customer, seat);
-        yield return Leave(customer);
+        yield return FinishMealPaymentAndLeave(customer, seat);
     }
 
     private IEnumerator SpawnLoop()
@@ -2255,6 +2242,11 @@ public class CustomerManager : MonoBehaviour
 
         yield return new WaitForSeconds(_eatDuration);
 
+        yield return FinishMealPaymentAndLeave(customer, seat);
+    }
+
+    private IEnumerator FinishMealPaymentAndLeave(Customer customer, TableSeat seat)
+    {
         if (RestaurantSceneMode.IsCompetitorScene)
         {
             ReleaseCustomerSeatAndNotify(customer, seat);
@@ -2270,17 +2262,32 @@ public class CustomerManager : MonoBehaviour
         {
             while (!_completedPayments.Contains(customer))
                 yield return null;
-
-            _completedPayments.Remove(customer);
-            ReleaseCustomerSeatAndNotify(customer, seat);
-            yield return Leave(customer);
-            yield break;
         }
+        else if (RestaurantSceneMode.IsMainScene)
+            yield return WaitForNormalCustomerPayment(customer);
+        else
+            CompletePayment(customer);
 
-        // Normal customers auto-collect; UIManager plays the coin FX on Paying.
-        CompletePayment(customer);
+        _completedPayments.Remove(customer);
         ReleaseCustomerSeatAndNotify(customer, seat);
         yield return Leave(customer);
+    }
+
+    private IEnumerator WaitForNormalCustomerPayment(Customer customer)
+    {
+        float timeout = UIManager.Instance != null
+            ? UIManager.Instance.NormalCoinCollectionHoldSeconds
+            : 3f;
+        float elapsed = 0f;
+
+        while (customer != null && !_completedPayments.Contains(customer) && elapsed < timeout)
+        {
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        if (customer != null && !_completedPayments.Contains(customer))
+            CompletePayment(customer);
     }
 
     private IEnumerator Leave(Customer customer)

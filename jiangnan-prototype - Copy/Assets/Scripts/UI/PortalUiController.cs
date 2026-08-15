@@ -1,4 +1,5 @@
 using System.Collections;
+using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -17,6 +18,8 @@ public class PortalUiController : MonoBehaviour
     private const string WaiterDialogueName = "Waiter Dialogue";
     private const string ScreenCanvasName = "UI Canvas";
     private const string PortalPointName = "Portal Point";
+    private const string EnterPortalUnknownLabel = "? ? ?";
+    private const string EnterPortalKnownLabel = "进去";
 
     private enum PresentationPhase
     {
@@ -52,6 +55,7 @@ public class PortalUiController : MonoBehaviour
     private RectTransform _screenCanvasRect;
     private Button _enterPortalButtonComponent;
     private Button _checkPortalButtonComponent;
+    private TextMeshProUGUI _enterPortalButtonLabel;
     private PresentationPhase _phase = PresentationPhase.Hidden;
     private bool _enterButtonWired;
     private bool _checkButtonWired;
@@ -118,6 +122,7 @@ public class PortalUiController : MonoBehaviour
     {
         ResolveAll();
         WireButtons();
+        PortalTransitionController.EnsureReady();
 
         if (_phase == PresentationPhase.Hidden)
             HidePresentationUiOnly();
@@ -275,8 +280,8 @@ public class PortalUiController : MonoBehaviour
         if (_phase != PresentationPhase.Ready)
             return;
 
-        HidePresentation();
-        SceneManager.LoadScene(RestaurantSceneMode.FutureSceneName);
+        PlayerProfileStorage.SetEnterPortalPressedForCurrentPlayer();
+        PortalTransitionController.PlayLeaveThenLoad(RestaurantSceneMode.FutureSceneName);
     }
 
     private IEnumerator GrowPortalParticleRoutine()
@@ -375,12 +380,27 @@ public class PortalUiController : MonoBehaviour
 
     private void ResolveEnterPortalButton()
     {
-        if (_enterPortalButton != null)
+        if (_enterPortalButton == null)
+        {
+            GameObject buttonObject = FindSceneObjectByNameIncludingInactive(EnterPortalButtonName);
+            if (buttonObject != null)
+                _enterPortalButton = buttonObject.transform as RectTransform;
+        }
+
+        if (_enterPortalButtonLabel == null && _enterPortalButton != null)
+            _enterPortalButtonLabel = _enterPortalButton.GetComponentInChildren<TextMeshProUGUI>(true);
+    }
+
+    private void RefreshEnterPortalButtonLabel()
+    {
+        ResolveEnterPortalButton();
+
+        if (_enterPortalButtonLabel == null)
             return;
 
-        GameObject buttonObject = FindSceneObjectByNameIncludingInactive(EnterPortalButtonName);
-        if (buttonObject != null)
-            _enterPortalButton = buttonObject.transform as RectTransform;
+        _enterPortalButtonLabel.text = PlayerProfileStorage.HasPressedEnterPortalForCurrentPlayer()
+            ? EnterPortalKnownLabel
+            : EnterPortalUnknownLabel;
     }
 
     private void ResolveCheckPortalButton()
@@ -578,7 +598,9 @@ public class PortalUiController : MonoBehaviour
         if (_enterPortalButton.gameObject.activeSelf != active)
             _enterPortalButton.gameObject.SetActive(active);
 
-        if (!active)
+        if (active)
+            RefreshEnterPortalButtonLabel();
+        else
             _enterPortalButton.localScale = Vector3.one;
     }
 

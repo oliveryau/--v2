@@ -13,39 +13,19 @@ MonoBehaviour:
   m_Name: ItemCatalog
   m_EditorClassIdentifier: 
   _items:
-  - Name: "\u4F5B\u8DF3\u5899"
+  - Name: "\u9EBB\u8FA3\u706B\u9505"
     Cost: 3000
     Worth: 6000
     Image: {fileID: 629918724, guid: 0965029339010a249b10404b4d6d6c0a, type: 3}
-  - Name: "\u53EB\u82B1\u9E21"
-    Cost: 2500
-    Worth: 5000
-    Image: {fileID: -980016362, guid: 0965029339010a249b10404b4d6d6c0a, type: 3}
-  - Name: "\u5317\u4EAC\u70E7\u9E2D"
-    Cost: 2400
-    Worth: 4800
-    Image: {fileID: 1198386488, guid: 0965029339010a249b10404b4d6d6c0a, type: 3}
-  - Name: "\u9C7C"
-    Cost: 3100
-    Worth: 6200
-    Image: {fileID: 2144601535, guid: 0965029339010a249b10404b4d6d6c0a, type: 3}
-  - Name: "\u6C64\u9762"
-    Cost: 2000
-    Worth: 4000
-    Image: {fileID: -1731063816, guid: 0965029339010a249b10404b4d6d6c0a, type: 3}
-  - Name: "\u9EBB\u5A46\u8C46\u8150"
-    Cost: 2300
-    Worth: 4600
-    Image: {fileID: -1114437207, guid: 0965029339010a249b10404b4d6d6c0a, type: 3}
-  - Name: "\u5305\u5B50"
+  - Name: "\u5C0F\u7B3C\u5305"
     Cost: 2200
     Worth: 4400
     Image: {fileID: -569884585, guid: 0965029339010a249b10404b4d6d6c0a, type: 3}
-  - Name: "\u7EA2\u70E7\u8089"
+  - Name: "\u4E50\u53EF"
+    Cost: 2500
+    Worth: 5000
+    Image: {fileID: 21300000, guid: baa809368e866b64e848567acbaf84f0, type: 3}
+  - Name: "\u73CD\u73E0\u5976\u8336"
     Cost: 2800
     Worth: 5600
-    Image: {fileID: 367628835, guid: 0965029339010a249b10404b4d6d6c0a, type: 3}
-  - Name: "\u4E1C\u5761\u8089"
-    Cost: 3000
-    Worth: 6000
-    Image: {fileID: -1215721466, guid: 0965029339010a249b10404b4d6d6c0a, type: 3}
+    Image: {fileID: 21300000, guid: 9f0ef725330f9374a9ec64b7cb2a8bac, type: 3}

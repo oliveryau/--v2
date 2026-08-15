@@ -43,6 +43,9 @@ public class DiningTable : MonoBehaviour
     private GameObject _activeBrokenTable;
     private GameObject _level2EquipmentTable;
     private GameObject _level3EquipmentTable;
+    private Vector3 _level2AuthoredTableScale = Vector3.one;
+    private Vector3 _level3AuthoredTableScale = Vector3.one;
+    private bool _authoredTableScalesCached;
 
     private bool _saveIndexResolved;
     private int _cachedSaveIndex = -1;
@@ -99,6 +102,7 @@ public class DiningTable : MonoBehaviour
         if (_isVipTable)
             return;
 
+        CacheAuthoredTableScales();
         ApplySavedTableLevel();
         EnsureBrokenTableReferences();
     }
@@ -654,7 +658,12 @@ public class DiningTable : MonoBehaviour
         GameObject nextSeats = nextVisuals.Seats;
 
         if (nextTable != null && tableAnchor != null)
-            SnapToAnchor(nextTable.transform, tableAnchor);
+        {
+            SnapToAnchor(
+                nextTable.transform,
+                tableAnchor,
+                GetAuthoredTableScale(level, nextTable));
+        }
 
         if (nextSeats != null && seatsAnchor != null)
             SnapToAnchor(nextSeats.transform, seatsAnchor);
@@ -703,17 +712,24 @@ public class DiningTable : MonoBehaviour
 
     private static void SnapToAnchor(Transform target, Transform anchor)
     {
+        if (target == null)
+            return;
+
+        SnapToAnchor(target, anchor, target.localScale);
+    }
+
+    private static void SnapToAnchor(Transform target, Transform anchor, Vector3 localScale)
+    {
         if (target == null || anchor == null)
             return;
 
         RuntimeMeshVisibility.Prepare(target);
 
-        Vector3 authoredLocalScale = target.localScale;
         Transform parent = anchor.parent;
         target.SetParent(parent, false);
         target.localPosition = anchor.localPosition;
         target.localRotation = anchor.localRotation;
-        target.localScale = authoredLocalScale;
+        target.localScale = localScale;
         target.SetSiblingIndex(anchor.GetSiblingIndex());
 
         RuntimeMeshVisibility.Prepare(target);
@@ -940,6 +956,7 @@ public class DiningTable : MonoBehaviour
         installed.name = $"{template.name}_Installed";
         // Template lives under an inactive carrier — Instantiate copies inactive state.
         installed.SetActive(true);
+        installed.transform.localScale = GetAuthoredTableScale(level, template);
         RuntimeMeshVisibility.Prepare(installed.transform);
 
         if (level == 2)
@@ -989,6 +1006,40 @@ public class DiningTable : MonoBehaviour
             3 => _level3Visuals,
             _ => null
         };
+    }
+
+    private void CacheAuthoredTableScales()
+    {
+        if (_authoredTableScalesCached)
+            return;
+
+        _authoredTableScalesCached = true;
+        _level2AuthoredTableScale = ReadLocalScale(_level2Visuals?.Table);
+        _level3AuthoredTableScale = ReadLocalScale(_level3Visuals?.Table);
+    }
+
+    private Vector3 GetAuthoredTableScale(int level, GameObject fallback)
+    {
+        CacheAuthoredTableScales();
+
+        GameObject referenceTable = GetVisualSet(level)?.Table;
+
+        if (referenceTable != null)
+        {
+            return level switch
+            {
+                2 => _level2AuthoredTableScale,
+                3 => _level3AuthoredTableScale,
+                _ => ReadLocalScale(referenceTable)
+            };
+        }
+
+        return ReadLocalScale(fallback);
+    }
+
+    private static Vector3 ReadLocalScale(GameObject source)
+    {
+        return source != null ? source.transform.localScale : Vector3.one;
     }
 
     private Vector3 GetDeliveryTargetPosition()

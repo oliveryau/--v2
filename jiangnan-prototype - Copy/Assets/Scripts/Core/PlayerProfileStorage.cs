@@ -42,6 +42,7 @@ public class PlayerProfileData
     public bool missionFutureUnlocked;
     public bool missionFuturePurchaseCompleted;
     public bool missionSellToVipCompleted;
+    public bool hasPressedEnterPortal;
     public int restaurantRatingSampleCount;
     public float restaurantRatingSampleSum;
     public bool hasSavedRestaurantRating;
@@ -505,6 +506,18 @@ public static class PlayerProfileStorage
             return;
 
         ModifyCurrentProfile(profile => profile.missionFuturePurchaseCompleted = true);
+    }
+
+    public static bool HasPressedEnterPortalForCurrentPlayer() =>
+        TryGetCurrentProfile(out PlayerProfileData profile)
+        && (profile.hasPressedEnterPortal || profile.missionFutureUnlocked);
+
+    public static void SetEnterPortalPressedForCurrentPlayer()
+    {
+        if (HasPressedEnterPortalForCurrentPlayer())
+            return;
+
+        ModifyCurrentProfile(profile => profile.hasPressedEnterPortal = true);
     }
 
     public static bool IsMissionSellToVipCompletedForCurrentPlayer() =>

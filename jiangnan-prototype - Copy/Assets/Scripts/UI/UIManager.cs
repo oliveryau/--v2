@@ -44,6 +44,9 @@ public class UIManager : MonoBehaviour
 
     [Header("Seat Payment UI")]
     [SerializeField] private RectTransform _seatPaymentUiRoot;
+    [SerializeField] private RectTransform _normalCoinCollectionRoot;
+    [Tooltip("Seconds a normal customer waits at the table for a tap before auto-collect.")]
+    [SerializeField] private float _normalCoinCollectionHoldSeconds = 3f;
 
     [Header("Coin Trail UI")]
     [SerializeField] private RectTransform _coinVfxRoot;
@@ -314,6 +317,11 @@ public class UIManager : MonoBehaviour
     private HireSpot _activeHireSpot;
     private DiningTable _selectedUpgradeTable;
     private readonly Dictionary<Transform, SeatPaymentUiEntry> _activeSeatPaymentUis = new();
+    private readonly Dictionary<Customer, NormalCoinCollectionUiEntry> _activeNormalCoinCollections = new();
+    private readonly List<RectTransform> _normalCoinCollectionPool = new();
+    private readonly List<Customer> _normalCoinCollectionTimeoutScratch = new();
+    private RectTransform _normalCoinCollectionTemplate;
+    private bool _normalCoinCollectionPoolReady;
     private readonly Dictionary<DiningTable, TableStatusUiEntry> _activeTableStatusUis = new();
     private readonly Dictionary<DiningTable, RepairTableUiEntry> _activeRepairTableUis = new();
     private readonly Dictionary<Worker, WorkerEnergyUiEntry> _activeWorkerEnergyUis = new();
@@ -393,12 +401,22 @@ public class UIManager : MonoBehaviour
     private Transform _ownerShopRatingAnchor;
 
     public float WorkerEnergyHeadHeightOffset => _workerEnergyHeadHeightOffset;
+    public float NormalCoinCollectionHoldSeconds => Mathf.Max(0.01f, _normalCoinCollectionHoldSeconds);
 
     private struct SeatPaymentUiEntry
     {
         public RectTransform UiRoot;
         public Transform PaymentAnchor;
-        public RectTransform ExtraGlowRoot;
+    }
+
+    private sealed class NormalCoinCollectionUiEntry
+    {
+        public RectTransform UiRoot;
+        public Image TimerFill;
+        public Button Button;
+        public Customer Customer;
+        public float Remaining;
+        public float Duration;
     }
 
     private struct TableStatusUiEntry
@@ -447,7 +465,8 @@ public class UIManager : MonoBehaviour
     }
 
     private const string WorkerEnergyFillImageName = "Image";
-    private const string CoinCollectionExtraGlowName = "Extra Glow";
+    private const string NormalCoinCollectionRootName = "Normal CoinCollection";
+    private const string NormalCoinCollectionTimerName = "Timer";
     private const string VipUiRootName = "VIP Main UI";
     private const string VipFireworksName = "Fireworks";
     private const string VipMainIconName = "VIP Icon";
@@ -536,6 +555,9 @@ public class UIManager : MonoBehaviour
 
         Instance = this;
 
+        if (RestaurantSceneMode.IsMainScene)
+            PortalTransitionController.EnsureReady();
+
         if (_screenCanvas == null)
             _screenCanvas = FindScreenCanvas();
 
@@ -587,6 +609,8 @@ public class UIManager : MonoBehaviour
 
         if (_seatPaymentUiRoot != null)
             _seatPaymentUiRoot.gameObject.SetActive(false);
+
+        EnsureNormalCoinCollectionPool();
 
         CacheNotEnoughMoneyUi();
 
@@ -768,6 +792,7 @@ public class UIManager : MonoBehaviour
         HideVipUi();
         StopAllCoinTrailAnimations();
         ClearSeatPaymentUis();
+        ClearNormalCoinCollectionUis();
         ClearTableStatusUis();
         ClearRepairTableUis();
         ClearPranksterUi();
@@ -793,6 +818,7 @@ public class UIManager : MonoBehaviour
         SyncAllHireSpotUi();
         SyncAllBuildSpotCostUiPositions();
         UpdateSeatPaymentUiPositions();
+        UpdateNormalCoinCollectionUis();
         UpdateTableStatusPositions();
         UpdateNotEnoughMoneyUiPositions();
         UpdatePranksterChaseUi();
@@ -2926,6 +2952,7 @@ public class UIManager : MonoBehaviour
         SyncAllTableStatusUiForCurrentFloor();
         SyncWorkerEnergyUiForCurrentFloor();
         SyncSeatPaymentUiForCurrentFloor();
+        SyncNormalCoinCollectionUiForCurrentFloor();
         UpdateVipEventButtonPosition();
         UpdateStairFloorButtons();
     }
@@ -2937,6 +2964,7 @@ public class UIManager : MonoBehaviour
         SyncAllTableStatusUiForCurrentFloor();
         SyncWorkerEnergyUiForCurrentFloor();
         SyncSeatPaymentUiForCurrentFloor();
+        SyncNormalCoinCollectionUiForCurrentFloor();
         UpdateStairFloorButtons();
     }
 
@@ -3299,13 +3327,20 @@ public class UIManager : MonoBehaviour
         {
             if (customer != null && customer.IsVip)
                 ShowSeatPaymentUi(customer);
+            else if (RestaurantSceneMode.IsMainScene)
+                ShowNormalCoinCollectionUi(customer);
             else
                 PlayNormalCustomerAutoCollectFx(customer);
         }
-        else if (customer.Seat != null)
-            TryHideSeatPaymentUi(customer.Seat.PaymentUiAnchor);
-        else if (customer.PendingPaymentAnchor != null)
-            TryHideSeatPaymentUi(customer.PendingPaymentAnchor);
+        else if (customer != null)
+        {
+            if (customer.Seat != null)
+                TryHideSeatPaymentUi(customer.Seat.PaymentUiAnchor);
+            else if (customer.PendingPaymentAnchor != null)
+                TryHideSeatPaymentUi(customer.PendingPaymentAnchor);
+
+            HideNormalCoinCollectionUi(customer);
+        }
 
         RefreshTableStatusForCustomer(customer);
     }
@@ -3381,6 +3416,7 @@ public class UIManager : MonoBehaviour
         else
         {
             ClearSeatPaymentUis();
+            ClearNormalCoinCollectionUis();
             ClearTableStatusUis();
             ClearWorkerEnergyUis();
         }
@@ -4088,24 +4124,103 @@ public class UIManager : MonoBehaviour
         if (paymentButton != null)
             paymentButton.onClick.AddListener(() => HandleSeatPaymentClicked(paymentAnchor));
 
-        RectTransform extraGlowRoot = FindChildRectTransform(uiRoot, CoinCollectionExtraGlowName);
-
         _activeSeatPaymentUis[paymentAnchor] = new SeatPaymentUiEntry
         {
             UiRoot = uiRoot,
-            PaymentAnchor = paymentAnchor,
-            ExtraGlowRoot = extraGlowRoot
+            PaymentAnchor = paymentAnchor
         };
 
         uiRoot.gameObject.SetActive(IsPaymentAnchorOnCurrentFloor(paymentAnchor));
         uiRoot.localScale = Vector3.one;
-        UpdateSeatPaymentExtraGlow(_activeSeatPaymentUis[paymentAnchor]);
         if (uiRoot.gameObject.activeSelf)
             UpdateScreenUiPosition(uiRoot, paymentAnchor.position);
         ApplyWorldAnchoredUiSiblingOrder();
 
         if (customer.IsVip)
             SetVipDialogue(VipDialogueState.SuccessLeave);
+    }
+
+    private void ShowNormalCoinCollectionUi(Customer customer)
+    {
+        if (customer == null || customer.IsVip || _activeNormalCoinCollections.ContainsKey(customer))
+            return;
+
+        RectTransform uiRoot = RentNormalCoinCollectionUi();
+        if (uiRoot == null)
+            return;
+
+        Button paymentButton = uiRoot.GetComponent<Button>();
+        if (paymentButton == null)
+            paymentButton = uiRoot.GetComponentInChildren<Button>(true);
+
+        if (paymentButton != null)
+        {
+            paymentButton.onClick.RemoveAllListeners();
+            Customer tappedCustomer = customer;
+            paymentButton.onClick.AddListener(() => HandleNormalCoinCollectionClicked(tappedCustomer));
+        }
+
+        Image timerFill = FindChildImage(uiRoot, NormalCoinCollectionTimerName);
+        float duration = NormalCoinCollectionHoldSeconds;
+        if (timerFill != null)
+            timerFill.fillAmount = 1f;
+
+        _activeNormalCoinCollections[customer] = new NormalCoinCollectionUiEntry
+        {
+            UiRoot = uiRoot,
+            TimerFill = timerFill,
+            Button = paymentButton,
+            Customer = customer,
+            Remaining = duration,
+            Duration = duration
+        };
+
+        bool visible = IsPlayerOnGroundFloor();
+        uiRoot.gameObject.SetActive(visible);
+        uiRoot.localScale = Vector3.one;
+        if (visible)
+            UpdateNormalCoinCollectionUiPosition(customer, uiRoot);
+
+        ApplyWorldAnchoredUiSiblingOrder();
+    }
+
+    private void HandleNormalCoinCollectionClicked(Customer customer)
+    {
+        CollectNormalCustomerPayment(customer);
+    }
+
+    private void CollectNormalCustomerPayment(Customer customer)
+    {
+        if (customer == null)
+            return;
+
+        bool wasShowing = _activeNormalCoinCollections.ContainsKey(customer);
+        bool stillAwaiting = CustomerManager.Instance != null
+            && CustomerManager.Instance.IsAwaitingPayment(customer);
+
+        if (stillAwaiting)
+            CustomerManager.Instance.CompletePayment(customer);
+
+        if (wasShowing || stillAwaiting)
+        {
+            Transform collectPoint = customer.ReactPoint != null
+                ? customer.ReactPoint
+                : customer.transform;
+            AudioManager.Play(SfxId.GoldCollect);
+            PlayCoinTrail(collectPoint, useVipCount: false);
+        }
+
+        HideNormalCoinCollectionUi(customer);
+    }
+
+    public void HideNormalCoinCollectionUi(Customer customer)
+    {
+        if (customer == null || !_activeNormalCoinCollections.TryGetValue(customer, out NormalCoinCollectionUiEntry entry))
+            return;
+
+        ReturnNormalCoinCollectionUi(entry);
+        _activeNormalCoinCollections.Remove(customer);
+        ApplyWorldAnchoredUiSiblingOrder();
     }
 
     private void PlayNormalCustomerAutoCollectFx(Customer customer)
@@ -4165,12 +4280,6 @@ public class UIManager : MonoBehaviour
         if (paymentButton != null)
             paymentButton.onClick.RemoveAllListeners();
 
-        if (entry.ExtraGlowRoot != null)
-        {
-            entry.ExtraGlowRoot.gameObject.SetActive(false);
-            entry.ExtraGlowRoot.localScale = Vector3.one;
-        }
-
         if (entry.UiRoot == _seatPaymentUiRoot)
         {
             entry.UiRoot.gameObject.SetActive(false);
@@ -4202,17 +4311,105 @@ public class UIManager : MonoBehaviour
 
         if (_seatPaymentUiRoot != null)
         {
-            Transform extraGlow = FindChildTransform(_seatPaymentUiRoot, CoinCollectionExtraGlowName);
-
-            if (extraGlow != null)
-            {
-                extraGlow.gameObject.SetActive(false);
-                extraGlow.localScale = Vector3.one;
-            }
-
             _seatPaymentUiRoot.gameObject.SetActive(false);
             _seatPaymentUiRoot.localScale = Vector3.one;
         }
+    }
+
+    private void EnsureNormalCoinCollectionPool()
+    {
+        if (_normalCoinCollectionPoolReady)
+            return;
+
+        if (_normalCoinCollectionRoot == null && _screenCanvas != null)
+            _normalCoinCollectionRoot = FindRectTransformByName(_screenCanvas.transform, NormalCoinCollectionRootName);
+
+        if (_normalCoinCollectionRoot == null)
+            return;
+
+        _normalCoinCollectionPool.Clear();
+        _normalCoinCollectionTemplate = null;
+
+        for (int i = 0; i < _normalCoinCollectionRoot.childCount; i++)
+        {
+            RectTransform child = _normalCoinCollectionRoot.GetChild(i) as RectTransform;
+            if (child == null)
+                continue;
+
+            child.gameObject.SetActive(false);
+            child.localScale = Vector3.one;
+            _normalCoinCollectionPool.Add(child);
+
+            if (_normalCoinCollectionTemplate == null)
+                _normalCoinCollectionTemplate = child;
+        }
+
+        _normalCoinCollectionPoolReady = true;
+    }
+
+    private RectTransform RentNormalCoinCollectionUi()
+    {
+        EnsureNormalCoinCollectionPool();
+
+        if (_normalCoinCollectionRoot == null)
+            return null;
+
+        for (int i = 0; i < _normalCoinCollectionPool.Count; i++)
+        {
+            RectTransform pooled = _normalCoinCollectionPool[i];
+            if (pooled != null && !IsNormalCoinCollectionUiInUse(pooled))
+                return pooled;
+        }
+
+        if (_normalCoinCollectionTemplate == null)
+            return null;
+
+        RectTransform spawned = Instantiate(_normalCoinCollectionTemplate, _normalCoinCollectionRoot);
+        spawned.name = _normalCoinCollectionTemplate.name;
+        spawned.gameObject.SetActive(false);
+        spawned.localScale = Vector3.one;
+        _normalCoinCollectionPool.Add(spawned);
+        return spawned;
+    }
+
+    private bool IsNormalCoinCollectionUiInUse(RectTransform uiRoot)
+    {
+        if (uiRoot == null)
+            return true;
+
+        foreach (KeyValuePair<Customer, NormalCoinCollectionUiEntry> entry in _activeNormalCoinCollections)
+        {
+            if (entry.Value.UiRoot == uiRoot)
+                return true;
+        }
+
+        return false;
+    }
+
+    private void ReturnNormalCoinCollectionUi(NormalCoinCollectionUiEntry entry)
+    {
+        if (entry == null)
+            return;
+
+        if (entry.Button != null)
+            entry.Button.onClick.RemoveAllListeners();
+
+        if (entry.TimerFill != null)
+            entry.TimerFill.fillAmount = 1f;
+
+        if (entry.UiRoot != null)
+        {
+            entry.UiRoot.localScale = Vector3.one;
+            entry.UiRoot.gameObject.SetActive(false);
+        }
+    }
+
+    private void ClearNormalCoinCollectionUis()
+    {
+        foreach (KeyValuePair<Customer, NormalCoinCollectionUiEntry> entry in _activeNormalCoinCollections)
+            ReturnNormalCoinCollectionUi(entry.Value);
+
+        _activeNormalCoinCollections.Clear();
     }
 
     private void RegisterTableStatusUis()
@@ -4413,6 +4610,15 @@ public class UIManager : MonoBehaviour
         }
 
         foreach (KeyValuePair<Transform, SeatPaymentUiEntry> entry in _activeSeatPaymentUis)
+        {
+            if (entry.Value.UiRoot == null || !entry.Value.UiRoot.gameObject.activeInHierarchy)
+                continue;
+
+            entry.Value.UiRoot.SetSiblingIndex(siblingIndex);
+            siblingIndex++;
+        }
+
+        foreach (KeyValuePair<Customer, NormalCoinCollectionUiEntry> entry in _activeNormalCoinCollections)
         {
             if (entry.Value.UiRoot == null || !entry.Value.UiRoot.gameObject.activeInHierarchy)
                 continue;
@@ -5096,8 +5302,109 @@ public class UIManager : MonoBehaviour
 
             UpdateScreenUiPosition(entry.Value.UiRoot, entry.Value.PaymentAnchor.position);
             entry.Value.UiRoot.localScale = Vector3.one;
-            UpdateSeatPaymentExtraGlow(entry.Value);
         }
+    }
+
+    private void UpdateNormalCoinCollectionUis()
+    {
+        if (_activeNormalCoinCollections.Count == 0)
+            return;
+
+        bool visibleOnFloor = IsPlayerOnGroundFloor();
+        _normalCoinCollectionTimeoutScratch.Clear();
+
+        foreach (KeyValuePair<Customer, NormalCoinCollectionUiEntry> pair in _activeNormalCoinCollections)
+        {
+            NormalCoinCollectionUiEntry entry = pair.Value;
+            if (entry == null || entry.UiRoot == null)
+                continue;
+
+            entry.Remaining -= Time.deltaTime;
+            float duration = entry.Duration > 0f ? entry.Duration : NormalCoinCollectionHoldSeconds;
+            float normalized = duration > 0f ? Mathf.Clamp01(entry.Remaining / duration) : 0f;
+
+            if (entry.TimerFill != null)
+                entry.TimerFill.fillAmount = normalized;
+
+            if (entry.UiRoot.gameObject.activeSelf != visibleOnFloor)
+                entry.UiRoot.gameObject.SetActive(visibleOnFloor);
+
+            if (visibleOnFloor)
+            {
+                UpdateNormalCoinCollectionUiPosition(pair.Key, entry.UiRoot);
+                entry.UiRoot.localScale = Vector3.one;
+            }
+
+            if (entry.Remaining <= 0f)
+                _normalCoinCollectionTimeoutScratch.Add(pair.Key);
+        }
+
+        for (int i = 0; i < _normalCoinCollectionTimeoutScratch.Count; i++)
+            CollectNormalCustomerPayment(_normalCoinCollectionTimeoutScratch[i]);
+
+        _normalCoinCollectionTimeoutScratch.Clear();
+    }
+
+    private void UpdateNormalCoinCollectionUiPosition(Customer customer, RectTransform uiRoot)
+    {
+        if (uiRoot == null)
+            return;
+
+        Transform anchor = customer != null ? customer.ReactPoint : null;
+        if (anchor == null)
+            return;
+
+        RectTransform parent = uiRoot.parent as RectTransform;
+        if (parent == null)
+        {
+            UpdateScreenUiPosition(uiRoot, anchor.position);
+            return;
+        }
+
+        EnsureScreenUiCaches();
+        if (_worldCamera == null)
+            return;
+
+        Vector3 screenPoint = _worldCamera.WorldToScreenPoint(anchor.position);
+        if (screenPoint.z <= 0f)
+            return;
+
+        Camera canvasCamera = _screenCanvas != null && _screenCanvas.renderMode == RenderMode.ScreenSpaceOverlay
+            ? null
+            : (_screenCanvas != null ? _screenCanvas.worldCamera : null);
+
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                parent,
+                screenPoint,
+                canvasCamera,
+                out Vector2 localPoint))
+        {
+            return;
+        }
+
+        uiRoot.anchoredPosition = localPoint;
+    }
+
+    private void SyncNormalCoinCollectionUiForCurrentFloor()
+    {
+        bool visibleOnFloor = IsPlayerOnGroundFloor();
+
+        foreach (KeyValuePair<Customer, NormalCoinCollectionUiEntry> entry in _activeNormalCoinCollections)
+        {
+            if (entry.Value.UiRoot == null)
+                continue;
+
+            entry.Value.UiRoot.gameObject.SetActive(visibleOnFloor);
+        }
+    }
+
+    private static bool IsPlayerOnGroundFloor()
+    {
+        int currentFloor = CharacterPanelController.Instance != null
+            ? CharacterPanelController.Instance.CurrentFloor
+            : (int)RestaurantFloor.Ground;
+
+        return currentFloor == (int)RestaurantFloor.Ground;
     }
 
     private void SyncSeatPaymentUiForCurrentFloor()
@@ -5126,29 +5433,6 @@ public class UIManager : MonoBehaviour
             : (int)RestaurantFloor.Ground;
 
         return (int)RestaurantFloorUtil.ResolveFloor(paymentAnchor) == currentFloor;
-    }
-
-    private void UpdateSeatPaymentExtraGlow(SeatPaymentUiEntry entry)
-    {
-        if (entry.ExtraGlowRoot == null)
-            return;
-
-        bool showVipGlow = CustomerManager.Instance != null
-            && CustomerManager.Instance.HasVipAwaitingPaymentsAt(entry.PaymentAnchor);
-
-        if (!showVipGlow)
-        {
-            if (entry.ExtraGlowRoot.gameObject.activeSelf)
-                entry.ExtraGlowRoot.gameObject.SetActive(false);
-
-            entry.ExtraGlowRoot.localScale = Vector3.one;
-            return;
-        }
-
-        if (!entry.ExtraGlowRoot.gameObject.activeSelf)
-            entry.ExtraGlowRoot.gameObject.SetActive(true);
-
-        entry.ExtraGlowRoot.localScale = Vector3.one;
     }
 
     private void EnsureScreenUiCaches()
@@ -6963,6 +7247,9 @@ public class UIManager : MonoBehaviour
 
     private void InitializeSceneNavigationUi()
     {
+        if (RestaurantSceneMode.IsFutureScene)
+            return;
+
         if (_townButton == null)
             _townButton = FindTownButton();
 
@@ -7004,6 +7291,7 @@ public class UIManager : MonoBehaviour
         if (_futureHomeButton == null)
             return;
 
+        _futureHomeButton.onClick.RemoveListener(HandleTownButtonClicked);
         _futureHomeButton.onClick.RemoveListener(HandleFutureHomeButtonClicked);
         _futureHomeButton.onClick.AddListener(HandleFutureHomeButtonClicked);
     }
@@ -7016,7 +7304,7 @@ public class UIManager : MonoBehaviour
 
     private void HandleFutureHomeButtonClicked()
     {
-        SceneManager.LoadScene(RestaurantSceneMode.MainSceneName);
+        PortalTransitionController.PlayLeaveThenLoad(RestaurantSceneMode.MainSceneName);
     }
 
     private void InitializeMainButtonsUi()
