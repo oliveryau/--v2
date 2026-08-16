@@ -186,6 +186,7 @@ public class CompetitorVisitController : MonoBehaviour
             _chaseRoutine = null;
         }
 
+        AudioManager.StopLooping(SfxId.Alert);
         ClearStealUis();
         ClearStolenTexts();
     }
@@ -458,6 +459,8 @@ public class CompetitorVisitController : MonoBehaviour
         if (_chasedUiRoot != null)
             _chasedUiRoot.gameObject.SetActive(false);
 
+        AudioManager.StopLooping(SfxId.Alert);
+
         // Keep Stolen UI root active as a pool parent; hide pooled children.
         CacheStolenTextPool();
     }
@@ -566,10 +569,12 @@ public class CompetitorVisitController : MonoBehaviour
         {
             _chasedUiRoot.localScale = Vector3.one;
             _chasedUiRoot.gameObject.SetActive(true);
+            AudioManager.PlayLooping(SfxId.Alert);
         }
 
         yield return new WaitForSeconds(Mathf.Max(0.01f, _chasedUiHoldSeconds));
 
+        AudioManager.StopLooping(SfxId.Alert);
         CompetitorSceneSelection.MarkChasedOutFromCurrentVisit();
         SceneManager.LoadScene(RestaurantSceneMode.TownSceneName);
     }

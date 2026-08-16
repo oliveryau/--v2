@@ -166,17 +166,4 @@ public class Customer : MonoBehaviour
         PendingPaymentAnchor = null;
         PendingPaymentTableLevel = 1;
     }
-
-    public AudioSource GetVipAudioSource()
-    {
-        return GetComponent<AudioSource>();
-    }
-
-    public void PlayVipHappyAudio()
-    {
-        if (!IsVip)
-            return;
-
-        AudioManager.PlayOn(GetVipAudioSource(), SfxId.Happy);
-    }
 }

@@ -7,6 +7,22 @@ public class VipCompetitorCatalog : ScriptableObject
 
     public VipCompetitorProfile[] Profiles => _profiles;
 
+    public Sprite GetProfilePic(VipCompetitor competitor)
+    {
+        if (_profiles == null)
+            return null;
+
+        for (int i = 0; i < _profiles.Length; i++)
+        {
+            VipCompetitorProfile profile = _profiles[i];
+
+            if (profile != null && profile.Competitor == competitor && profile.ProfilePic != null)
+                return profile.ProfilePic;
+        }
+
+        return null;
+    }
+
     public void ConfigureSelection()
     {
         CompetitorSceneSelection.Configure(_profiles);

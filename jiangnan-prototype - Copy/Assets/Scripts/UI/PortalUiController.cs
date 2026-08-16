@@ -270,6 +270,7 @@ public class PortalUiController : MonoBehaviour
         if (_phase != PresentationPhase.Checking)
             return;
 
+        AudioManager.Play(SfxId.UiClick);
         SetCheckPortalButtonActive(false);
         StopGrowRoutine();
         _growRoutine = StartCoroutine(GrowPortalParticleRoutine());
@@ -280,6 +281,7 @@ public class PortalUiController : MonoBehaviour
         if (_phase != PresentationPhase.Ready)
             return;
 
+        AudioManager.Play(SfxId.UiClick);
         PlayerProfileStorage.SetEnterPortalPressedForCurrentPlayer();
         PortalTransitionController.PlayLeaveThenLoad(RestaurantSceneMode.FutureSceneName);
     }

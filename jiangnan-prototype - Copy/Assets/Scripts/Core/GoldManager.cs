@@ -120,6 +120,7 @@ public class GoldManager : MonoBehaviour
         _currentGold -= amount;
         PersistGold();
         GameEvents.RaiseGoldChanged(_currentGold);
+        AudioManager.Play(SfxId.GoldMinus);
         return true;
     }
 

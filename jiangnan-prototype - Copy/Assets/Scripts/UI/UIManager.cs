@@ -143,6 +143,8 @@ public class UIManager : MonoBehaviour
     };
     [SerializeField] private float _vipNegativeDialogueHideDelay = 3f;
     [SerializeField] private Color _vipNegativeDialogueColor = new Color(0.9450981f, 0.3882353f, 0.3882353f, 1f);
+    [Tooltip("VIP Text color while he is stating his taste preference.")]
+    [SerializeField] private Color _vipPreferenceDialogueColor = new Color(1f, 0.5607843f, 0f, 1f);
     [Header("VIP Taste")]
     [SerializeField] private RectTransform _giveDishSelectionRoot;
     [SerializeField] private ItemCatalog _itemCatalog;
@@ -313,9 +315,9 @@ public class UIManager : MonoBehaviour
     [Header("Town Enter Competitor Shop UI")]
     [SerializeField] private GameObject _enterCompetitorShopUiRoot;
     [SerializeField] private EnterCompetitorShopUiBinding[] _enterCompetitorShopUiBindings;
-    [SerializeField] private float _enterCompetitorShopPulseMinScale = 0.9f;
-    [SerializeField] private float _enterCompetitorShopPulseMaxScale = 1.1f;
-    [SerializeField] private float _enterCompetitorShopPulseSpeed = 10f;
+    [SerializeField] private float _enterCompetitorShopPulseMinScale = 0.96f;
+    [SerializeField] private float _enterCompetitorShopPulseMaxScale = 1.04f;
+    [SerializeField] private float _enterCompetitorShopPulseSpeed = 4f;
 
     [Header("Competitor Scene Name UI")]
     [SerializeField] private TextMeshProUGUI _competitorRestaurantNameText;
@@ -893,6 +895,8 @@ public class UIManager : MonoBehaviour
             _chasedAlertRoutine = null;
         }
 
+        HideChasedAlertUi();
+
         HideVipUi();
         StopAllCoinTrailAnimations();
         ClearSeatPaymentUis();
@@ -1367,6 +1371,15 @@ public class UIManager : MonoBehaviour
         _vipDialogueText.color = isNegative
             ? _vipNegativeDialogueColor
             : _vipDialogueDefaultColor;
+    }
+
+    private void ApplyVipPreferenceDialogueColor()
+    {
+        if (_vipDialogueText == null)
+            return;
+
+        CacheVipDialogueDefaultColor();
+        _vipDialogueText.color = _vipPreferenceDialogueColor;
     }
 
     /// <summary>Legacy entry point used when the VIP reaches the entry waypoint.</summary>
@@ -1926,7 +1939,8 @@ public class UIManager : MonoBehaviour
         CacheCompetitorVisitorDialogueUi(keepVisibleIfActive: true);
 
         string displayName = CompetitorSceneSelection.GetCompetitorDisplayName(competitor);
-        Sprite profilePic = CompetitorSceneSelection.GetProfilePic(competitor);
+        Sprite profilePic = CompetitorSceneSelection.GetProfilePic(competitor)
+            ?? _competitorCatalog?.GetProfilePic(competitor);
 
         if (_competitorVisitorNameText != null)
             _competitorVisitorNameText.text = displayName;
@@ -2599,7 +2613,7 @@ public class UIManager : MonoBehaviour
 
         _vipDialogueText.gameObject.SetActive(true);
         _vipDialogueText.text = line;
-        ApplyVipDialogueColor(VipDialogueState.Arrived);
+        ApplyVipPreferenceDialogueColor();
 
         if (_vipUiRoot != null && !_vipUiRoot.gameObject.activeSelf)
             _vipUiRoot.gameObject.SetActive(true);
@@ -2983,6 +2997,7 @@ public class UIManager : MonoBehaviour
 
     private void HandleVipEventButtonClicked(VipEventType eventType)
     {
+        AudioManager.Play(SfxId.UiClick);
         CustomerManager.Instance?.AcknowledgeVipEvent(eventType);
         HideVipDialogue();
         HideVipEventButton(eventType);
@@ -3142,6 +3157,7 @@ public class UIManager : MonoBehaviour
 
     private void HandleVipIntroButtonClicked()
     {
+        AudioManager.Play(SfxId.UiClick);
         CustomerManager.Instance?.AcknowledgeVipIntro();
         HideVipDialogue();
         HideVipIntroButton();
@@ -4066,6 +4082,7 @@ public class UIManager : MonoBehaviour
 
         if (_openBusinessRoot == null)
         {
+            AudioManager.Play(SfxId.OpenBusiness);
             OpenBusinessAutomatically();
             _openBusinessSequenceRoutine = null;
             yield break;
@@ -4076,6 +4093,7 @@ public class UIManager : MonoBehaviour
         Color[] transparentColors = UiGraphicFade.BuildTransparentColors(targetColors);
 
         _openBusinessRoot.SetActive(true);
+        AudioManager.Play(SfxId.OpenBusiness);
         UiGraphicFade.RestoreColors(graphics, transparentColors);
 
         yield return UiGraphicFade.FadeColors(
@@ -4108,7 +4126,6 @@ public class UIManager : MonoBehaviour
         if (!GameManager.Instance.TryOpenBusinessSession())
             return;
 
-        AudioManager.Play(SfxId.OpenBusiness);
         HideOpenBusiness();
 
         MissionUiController missionUi = FindFirstObjectByType<MissionUiController>();
@@ -5909,7 +5926,6 @@ public class UIManager : MonoBehaviour
             int vipPayment = CustomerManager.Instance.CompletePaymentsAtPaymentAnchor(
                 paymentAnchor,
                 awardGold: false);
-            AudioManager.Play(SfxId.GoldCollect);
             TryHideSeatPaymentUi(paymentAnchor);
             CharacterPanelController.Instance?.GoToFirstFloor();
             VipTreasureDelivery.Instance?.PlayDelivery(vipPayment);
@@ -7117,6 +7133,7 @@ public class UIManager : MonoBehaviour
         if (spot == null || spot.IsBuilt)
             return;
 
+        AudioManager.Play(SfxId.UiClick);
         ShowNewBuildingUi();
     }
 
@@ -7492,15 +7509,22 @@ public class UIManager : MonoBehaviour
 
         _chasedAlertRoot.localScale = Vector3.one;
         _chasedAlertRoot.gameObject.SetActive(true);
+        AudioManager.PlayLooping(SfxId.Alert);
         yield return new WaitForSeconds(Mathf.Max(0.01f, _chasedAlertHoldSeconds));
+
+        HideChasedAlertUi();
+        _chasedAlertRoutine = null;
+    }
+
+    private void HideChasedAlertUi()
+    {
+        AudioManager.StopLooping(SfxId.Alert);
 
         if (_chasedAlertRoot != null)
         {
             _chasedAlertRoot.localScale = Vector3.one;
             _chasedAlertRoot.gameObject.SetActive(false);
         }
-
-        _chasedAlertRoutine = null;
     }
 
     private void UpdateChasedAlertPulse()
@@ -7537,7 +7561,8 @@ public class UIManager : MonoBehaviour
 
             int shopIndex = ResolveEnterCompetitorShopIndex(binding, i + 1);
             bool blocked = CompetitorSceneSelection.IsTownShopEnterBlocked(shopIndex);
-            binding.UiRoot.localScale = blocked ? Vector3.one : Vector3.one * pulseScale;
+            bool shouldPulse = !blocked && PlayerProfileStorage.IsPostVipLullActiveForCurrentPlayer();
+            binding.UiRoot.localScale = shouldPulse ? Vector3.one * pulseScale : Vector3.one;
         }
     }
 

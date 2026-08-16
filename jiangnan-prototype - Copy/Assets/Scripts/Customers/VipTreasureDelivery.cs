@@ -207,6 +207,7 @@ public class VipTreasureDelivery : MonoBehaviour
         // Award gold here so the plus-icon feedback lines up with the chest opening.
         GrantPendingGoldAward();
         PlayCoinBurstVfx();
+        AudioManager.Play(SfxId.GoldCollect);
         UIManager.Instance?.PlayVipTreasureCoinTrail(trailStart);
     }
 

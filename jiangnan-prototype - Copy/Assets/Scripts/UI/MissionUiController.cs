@@ -518,6 +518,7 @@ public class MissionUiController : MonoBehaviour
 
     private void HandleOpenButtonClicked()
     {
+        AudioManager.Play(SfxId.Mission);
         BindOpenedTextRefs();
         RefreshUi();
         SetPanelOpen(true);
@@ -525,6 +526,7 @@ public class MissionUiController : MonoBehaviour
 
     private void HandleCloseButtonClicked()
     {
+        AudioManager.Play(SfxId.Mission);
         SetPanelOpen(false);
     }
 

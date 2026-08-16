@@ -2017,9 +2017,9 @@ MonoBehaviour:
   - UiRoot: {fileID: 1593011753}
     Anchor: {fileID: 882241832}
     ShopIndex: 4
-  _enterCompetitorShopPulseMinScale: 0.9
-  _enterCompetitorShopPulseMaxScale: 1.1
-  _enterCompetitorShopPulseSpeed: 0
+  _enterCompetitorShopPulseMinScale: 0.96
+  _enterCompetitorShopPulseMaxScale: 1.04
+  _enterCompetitorShopPulseSpeed: 4
   _competitorRestaurantNameText: {fileID: 0}
   _competitorShopNameUiBindings:
   - UiRoot: {fileID: 246454990}

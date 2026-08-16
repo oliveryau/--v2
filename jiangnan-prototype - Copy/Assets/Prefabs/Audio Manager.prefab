@@ -46,53 +46,44 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _sfxClips:
   - Sfx: 1
-    Clip: {fileID: 8300000, guid: 12e601a5c35c398468f5f474e6c481ed, type: 3}
+    Clip: {fileID: 8300000, guid: 32a4b08974d58164ca040231c2ae1ca6, type: 3}
     Volume: 1
   - Sfx: 2
     Clip: {fileID: 8300000, guid: 7d87abb2a5d3a0b43bf025a9e89cd004, type: 3}
-    Volume: 1
+    Volume: 0.7
   - Sfx: 3
     Clip: {fileID: 8300000, guid: 1cc8559dd562548499cc9a9f203cde53, type: 3}
+    Volume: 1
+  - Sfx: 6
+    Clip: {fileID: 8300000, guid: a2a6e702005addf41a9b1b702351cc3c, type: 3}
     Volume: 1
   - Sfx: 4
     Clip: {fileID: 8300000, guid: b54ead8f895b1da4a8a3a76515e3e5f6, type: 3}
     Volume: 1
   - Sfx: 5
-    Clip: {fileID: 8300000, guid: d9877d6b72a51b142a5284323c642660, type: 3}
+    Clip: {fileID: 8300000, guid: ef9aaa6f277ef96429a99711374d89e4, type: 3}
     Volume: 0.7
-  - Sfx: 6
-    Clip: {fileID: 8300000, guid: 00703c78fca9b68488bfe3e0c9a5a586, type: 3}
-    Volume: 1
-  - Sfx: 8
-    Clip: {fileID: 8300000, guid: 2a1a770f1938e6a478eec0d53e15024d, type: 3}
-    Volume: 1
   - Sfx: 9
     Clip: {fileID: 8300000, guid: 01f9d61423cb9fb44a89aa9ef015a1be, type: 3}
     Volume: 1
-  - Sfx: 10
-    Clip: {fileID: 8300000, guid: 87b04891adca1b84fb6681e868f69c7a, type: 3}
-    Volume: 1
   - Sfx: 11
     Clip: {fileID: 8300000, guid: f969b6d409c94014ba0ba59e8d55307c, type: 3}
-    Volume: 1
-  - Sfx: 12
-    Clip: {fileID: 8300000, guid: 4c4c8b0d47a54eb47b44d1707be4197a, type: 3}
-    Volume: 1
+    Volume: 0.7
   - Sfx: 13
     Clip: {fileID: 8300000, guid: f5edbc37ec106fb45b7fb33912118434, type: 3}
     Volume: 0.7
   - Sfx: 14
     Clip: {fileID: 8300000, guid: 36bc9d30c5abe884086a8f9fc293324e, type: 3}
-    Volume: 1
-  - Sfx: 15
-    Clip: {fileID: 8300000, guid: 99368c2e0b443ae4da7200edc8e742bd, type: 3}
-    Volume: 1
+    Volume: 0.9
   - Sfx: 16
     Clip: {fileID: 8300000, guid: 0b1dcc77f2157764989e1517d7b6ac14, type: 3}
     Volume: 1
+  - Sfx: 8
+    Clip: {fileID: 8300000, guid: 2a1a770f1938e6a478eec0d53e15024d, type: 3}
+    Volume: 1
   - Sfx: 7
     Clip: {fileID: 8300000, guid: d68faa3746454d84dafd96e4b2d5941d, type: 3}
-    Volume: 1
+    Volume: 0.7
   - Sfx: 17
     Clip: {fileID: 8300000, guid: 936f9f6c93ef6374d9f1fb7facc491d6, type: 3}
     Volume: 1

@@ -21,6 +21,7 @@ public class CompetitorVisitorManager : MonoBehaviour
     [SerializeField] private Transform _outerSpawnPoint;
     [SerializeField] private Transform _competitorWaypoint;
     [SerializeField] private Transform _exitPoint;
+    [SerializeField] private VipCompetitorCatalog _competitorCatalog;
 
     [Header("Scheduling")]
     [Tooltip("Customers that must spawn after the last prankster leaves before the rival walks in.")]
@@ -88,7 +89,10 @@ public class CompetitorVisitorManager : MonoBehaviour
         _maleModel = CompetitorModel.Create(_maleCompetitor);
         _femaleModel = CompetitorModel.Create(_femaleCompetitor);
 
-        VipCompetitorCatalog.LoadOrCreateDefault().ConfigureSelection();
+        if (_competitorCatalog == null)
+            _competitorCatalog = VipCompetitorCatalog.LoadOrCreateDefault();
+
+        _competitorCatalog.ConfigureSelection();
     }
 
     private void OnEnable()

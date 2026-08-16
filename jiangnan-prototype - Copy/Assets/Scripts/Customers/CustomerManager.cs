@@ -641,9 +641,6 @@ public class CustomerManager : MonoBehaviour
 
             MarkPaymentCompleted(customer);
 
-            if (customer.IsVip)
-                customer.PlayVipHappyAudio();
-
             totalPayment += ResolvePaymentForCustomer(customer);
             customersServed++;
         }
@@ -1222,7 +1219,9 @@ public class CustomerManager : MonoBehaviour
         if (spawnVip)
         {
             MarkFirstVipCustomerReceivedIfNeeded(customer);
-            AudioManager.Play(SfxId.VipArrival);
+
+            if (!RestaurantSceneMode.IsCompetitorScene)
+                AudioManager.Play(SfxId.VipArrival);
         }
 
         Coroutine flow = StartCoroutine(RunCustomerFlow(customer));

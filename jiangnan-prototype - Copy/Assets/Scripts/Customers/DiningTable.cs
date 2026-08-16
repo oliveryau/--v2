@@ -232,7 +232,7 @@ public class DiningTable : MonoBehaviour
         RestoreFromBroken();
         ResetToLevelOneAfterRepair();
         PlayTableCompletionVfx();
-        PlayTableSfx(SfxId.TableRepair);
+        PlayTableSfx(SfxId.BuildComplete);
     }
 
     private void PlayTableCompletionVfx()
@@ -581,7 +581,7 @@ public class DiningTable : MonoBehaviour
 
         ApplyLevel(nextLevel);
         PlayTableCompletionVfx();
-        PlayTableSfx(SfxId.TableUpgrade);
+        PlayTableSfx(SfxId.BuildComplete);
         _isUpgrading = false;
         GameEvents.RaiseTableUpgraded(this);
         GameEvents.RaiseTableStatusChanged(this);

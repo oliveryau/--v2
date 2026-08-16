@@ -5,24 +5,22 @@ using UnityEngine;
 public enum SfxId
 {
     None = 0,
-    UiClick,
-    OpenBusiness,
-    GoldCollect,
-    Building,
-    BuildComplete,
-    HireWorker,
-    KickWorker,
-    WorkerResting,
-    TableUpgrade,
-    TableRepair,
-    VipArrival,
-    Happy,
-    PranksterBreakTable,
-    PranksterLaugh,
-    Carriage,
-    Unhappy,
-    Alert,
-    MenuSignature
+    UiClick = 1,
+    OpenBusiness = 2,
+    GoldCollect = 3,
+    Building = 4,
+    BuildComplete = 5,
+    GoldMinus = 6,
+    KickWorker = 7,
+    WorkerResting = 8,
+    TableUpgrade = 9,
+    VipArrival = 11,
+    Happy = 12,
+    PranksterBreakTable = 13,
+    PranksterLaugh = 14,
+    Unhappy = 16,
+    Alert = 17,
+    Mission = 18
 }
 
 public enum BgmId
@@ -73,7 +71,9 @@ public class AudioManager : MonoBehaviour
     private readonly Dictionary<BgmId, BgmClipBinding> _bgmById = new();
     private AudioSource _sfxSource;
     private AudioSource _bgmSource;
+    private AudioSource _loopSfxSource;
     private BgmId _currentBgm = BgmId.None;
+    private SfxId _currentLoopSfx = SfxId.None;
 
     public float MasterVolume
     {
@@ -129,6 +129,22 @@ public class AudioManager : MonoBehaviour
         Instance.PlaySfxOnSource(source, sfx, volumeMultiplier);
     }
 
+    public static void PlayLooping(SfxId sfx, float volumeMultiplier = 1f)
+    {
+        if (Instance == null)
+            return;
+
+        Instance.PlayLoopingInternal(sfx, volumeMultiplier);
+    }
+
+    public static void StopLooping(SfxId sfx = SfxId.None)
+    {
+        if (Instance == null)
+            return;
+
+        Instance.StopLoopingInternal(sfx);
+    }
+
     public static void PlayBgm(BgmId bgm)
     {
         if (Instance == null)
@@ -178,6 +194,40 @@ public class AudioManager : MonoBehaviour
         float clipVolume = binding.Volume > 0f ? binding.Volume : 1f;
         float volume = Mathf.Clamp01(_masterVolume * clipVolume * volumeMultiplier);
         source.PlayOneShot(binding.Clip, volume);
+    }
+
+    public void PlayLoopingInternal(SfxId sfx, float volumeMultiplier = 1f)
+    {
+        EnsureAudioSources();
+
+        if (_loopSfxSource == null)
+            return;
+
+        if (sfx == SfxId.None || !_sfxById.TryGetValue(sfx, out SfxClipBinding binding) || binding.Clip == null)
+            return;
+
+        if (_currentLoopSfx == sfx && _loopSfxSource.isPlaying && _loopSfxSource.clip == binding.Clip)
+            return;
+
+        float clipVolume = binding.Volume > 0f ? binding.Volume : 1f;
+        _currentLoopSfx = sfx;
+        _loopSfxSource.clip = binding.Clip;
+        _loopSfxSource.loop = true;
+        _loopSfxSource.volume = Mathf.Clamp01(_masterVolume * clipVolume * volumeMultiplier);
+        _loopSfxSource.Play();
+    }
+
+    public void StopLoopingInternal(SfxId sfx)
+    {
+        if (_loopSfxSource == null)
+            return;
+
+        if (sfx != SfxId.None && _currentLoopSfx != sfx)
+            return;
+
+        _loopSfxSource.Stop();
+        _loopSfxSource.clip = null;
+        _currentLoopSfx = SfxId.None;
     }
 
     public void PlayBgmInternal(BgmId bgm)
@@ -257,6 +307,17 @@ public class AudioManager : MonoBehaviour
         _sfxSource.loop = false;
         _bgmSource.playOnAwake = false;
         _bgmSource.loop = true;
+
+        if (_loopSfxSource == null)
+        {
+            if (sources.Length >= 3)
+                _loopSfxSource = sources[2];
+            else
+                _loopSfxSource = gameObject.AddComponent<AudioSource>();
+        }
+
+        _loopSfxSource.playOnAwake = false;
+        _loopSfxSource.loop = true;
     }
 
     private void RebuildClipLookups()

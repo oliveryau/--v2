@@ -218,7 +218,6 @@ public class HireSequenceController : MonoBehaviour
         if (GoldManager.Instance == null || !GoldManager.Instance.TrySpend(spot.Cost))
             return;
 
-        AudioManager.Play(SfxId.HireWorker);
         spot.HireCompleted += HandleSpotHireCompleted;
         spot.BeginHire();
 

@@ -5597,6 +5597,7 @@ MonoBehaviour:
   - "\u5477\uFF0C\u6000\u6162\u672C\u5C0A?!"
   _vipNegativeDialogueHideDelay: 3
   _vipNegativeDialogueColor: {r: 0.9450981, g: 0.3882353, b: 0.3882353, a: 1}
+  _vipPreferenceDialogueColor: {r: 1, g: 0.5607843, b: 0, a: 1}
   _giveDishSelectionRoot: {fileID: 273190878}
   _itemCatalog: {fileID: 11400000, guid: d8e9f0a1b2c34d5e6f708192a3b4c5d6, type: 2}
   _vipTasteDialogueDuration: 5
@@ -5611,9 +5612,9 @@ MonoBehaviour:
   - ItemName: "\u5976\u8336"
     Dialogue: "\u4ECA\u5929\u60F3\u559D\u70B9\u751C\u7684"
   - ItemName: "\u85AF\u7247"
-    Dialogue: "\u4ECA\u5929\u60F3\u5403\u70B9\u9178\u7684"
+    Dialogue: "\u4ECA\u5929\u60F3\u5403\u70B9\u54B8\u7684"
   - ItemName: "\u96EA\u7CD5"
-    Dialogue: "\u4ECA\u5929\u60F3\u5403\u70B9\u51B7\u7684"
+    Dialogue: "\u4ECA\u5929\u60F3\u5403\u51B0\u51B7\u7684"
   _vipItemTipsRoot: {fileID: 721573155}
   _vipItemTipsText: {fileID: 721573156}
   _vipItemTipsReactionImage: {fileID: 3567122}
@@ -5758,7 +5759,7 @@ MonoBehaviour:
   _competitorShopNameUiBindings: []
   _competitorShopOnlineStatusColor: {r: 0.2, g: 0.85, b: 0.35, a: 1}
   _competitorShopOfflineStatusColor: {r: 0.94509804, g: 0.3882353, b: 0.3882353, a: 1}
-  _competitorCatalog: {fileID: 0}
+  _competitorCatalog: {fileID: 11400000, guid: b7c8d9e0f1a24345c6d7e8f9a0b1c2d3, type: 2}
   _competitorStayDurationSeconds: 15
   _competitorChaseThresholdMinSeconds: 1
   _competitorChaseThresholdMaxSeconds: 5
@@ -61409,6 +61410,7 @@ MonoBehaviour:
   _outerSpawnPoint: {fileID: 2144774824}
   _competitorWaypoint: {fileID: 604312111}
   _exitPoint: {fileID: 2144774824}
+  _competitorCatalog: {fileID: 11400000, guid: b7c8d9e0f1a24345c6d7e8f9a0b1c2d3, type: 2}
   _customerSpawnInterval: 5
   _waitAtWaypointDuration: 10
 --- !u!1 &1303785964
@@ -109250,11 +109252,6 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: Audio Manager
-      objectReference: {fileID: 0}
-    - target: {fileID: 8602487606353188127, guid: 38bcdb42269645c4f960a7ac88a08c5b,
-        type: 3}
-      propertyPath: _sfxClips.Array.data[12].Volume
-      value: 0.7
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

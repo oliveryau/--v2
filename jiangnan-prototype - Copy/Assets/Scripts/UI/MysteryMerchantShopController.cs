@@ -283,9 +283,6 @@ public class MysteryMerchantShopController : MonoBehaviour
         if (slot.BuyButton != null)
             slot.BuyButton.interactable = false;
 
-        // No coin trail here — buying spends gold instead of earning it.
-        AudioManager.Play(SfxId.GoldCollect);
-
         PlayerProfileStorage.AddBagItemForCurrentPlayer(slot.OfferedItem, 1);
         MissionUiController.NotifyFutureItemPurchased();
 
