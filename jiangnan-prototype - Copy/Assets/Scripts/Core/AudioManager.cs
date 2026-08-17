@@ -1,6 +1,8 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public enum SfxId
 {
@@ -28,7 +30,9 @@ public enum BgmId
     None = 0,
     Main,
     Sleeping,
-    ChefCooking
+    ChefCooking,
+    Future,
+    Performer
 }
 
 [Serializable]
@@ -63,6 +67,7 @@ public class AudioManager : MonoBehaviour
     [Header("BGM Clips")]
     [SerializeField] private BgmClipBinding[] _bgmClips;
     [SerializeField] private BgmId _defaultBgm = BgmId.Main;
+    [SerializeField] private float _bgmCrossfadeDuration = 1.5f;
 
     [Header("Volume")]
     [SerializeField] [Range(0f, 1f)] private float _masterVolume = 1f;
@@ -71,9 +76,11 @@ public class AudioManager : MonoBehaviour
     private readonly Dictionary<BgmId, BgmClipBinding> _bgmById = new();
     private AudioSource _sfxSource;
     private AudioSource _bgmSource;
+    private AudioSource _bgmFadeSource;
     private AudioSource _loopSfxSource;
     private BgmId _currentBgm = BgmId.None;
     private SfxId _currentLoopSfx = SfxId.None;
+    private Coroutine _bgmFadeRoutine;
 
     public float MasterVolume
     {
@@ -103,12 +110,18 @@ public class AudioManager : MonoBehaviour
         EnsureAudioSources();
         RebuildClipLookups();
 
-        if (_defaultBgm != BgmId.None)
-            PlayBgmInternal(_defaultBgm);
+        BgmId startBgm = ResolveBgmForActiveScene();
+        if (startBgm == BgmId.None)
+            startBgm = _defaultBgm;
+
+        if (startBgm != BgmId.None)
+            PlayBgmInternal(startBgm);
     }
 
     private void OnDestroy()
     {
+        StopBgmFadeRoutine();
+
         if (Instance == this)
             Instance = null;
     }
@@ -159,6 +172,26 @@ public class AudioManager : MonoBehaviour
             return;
 
         Instance.PlayBgmOnSource(source, bgm);
+    }
+
+    public static void CrossfadeBgm(BgmId bgm, float duration = -1f)
+    {
+        if (Instance == null)
+            return;
+
+        Instance.CrossfadeBgmInternal(bgm, duration);
+    }
+
+    public static void CrossfadeBgmForScene(string sceneName, float duration = -1f)
+    {
+        if (Instance == null)
+            return;
+
+        BgmId bgm = ResolveBgmForScene(sceneName);
+        if (bgm == BgmId.None)
+            return;
+
+        Instance.CrossfadeBgmInternal(bgm, duration);
     }
 
     public static void StopBgm()
@@ -232,6 +265,10 @@ public class AudioManager : MonoBehaviour
 
     public void PlayBgmInternal(BgmId bgm)
     {
+        EnsureAudioSources();
+        StopBgmFadeRoutine();
+        PromoteFadeSourceIfPlaying();
+
         if (bgm == BgmId.None || !_bgmById.TryGetValue(bgm, out BgmClipBinding binding) || binding.Clip == null)
             return;
 
@@ -241,6 +278,7 @@ public class AudioManager : MonoBehaviour
             return;
         }
 
+        StopFadeSource();
         _currentBgm = bgm;
         _bgmSource.clip = binding.Clip;
         ApplyBgmVolume();
@@ -263,16 +301,82 @@ public class AudioManager : MonoBehaviour
         source.Play();
     }
 
+    public void CrossfadeBgmInternal(BgmId bgm, float duration)
+    {
+        EnsureAudioSources();
+
+        if (bgm == BgmId.None || !_bgmById.TryGetValue(bgm, out BgmClipBinding binding) || binding.Clip == null)
+            return;
+
+        PromoteFadeSourceIfPlaying();
+
+        if (_currentBgm == bgm && _bgmSource != null && _bgmSource.isPlaying && _bgmSource.clip == binding.Clip)
+        {
+            ApplyBgmVolume();
+            return;
+        }
+
+        float fadeDuration = duration >= 0f ? duration : _bgmCrossfadeDuration;
+        if (fadeDuration <= 0.01f || _bgmSource == null || !_bgmSource.isPlaying)
+        {
+            PlayBgmInternal(bgm);
+            return;
+        }
+
+        StopBgmFadeRoutine();
+        _bgmFadeRoutine = StartCoroutine(CrossfadeBgmRoutine(bgm, binding, fadeDuration));
+    }
+
     public void StopBgmInternal()
     {
+        StopBgmFadeRoutine();
+        StopFadeSource();
         _currentBgm = BgmId.None;
+
+        if (_bgmSource == null)
+            return;
+
         _bgmSource.Stop();
         _bgmSource.clip = null;
     }
 
+    private IEnumerator CrossfadeBgmRoutine(BgmId bgm, BgmClipBinding binding, float duration)
+    {
+        float targetVolume = GetClipVolume(binding);
+        float fromStartVolume = _bgmSource.isPlaying ? _bgmSource.volume : 0f;
+
+        _bgmFadeSource.Stop();
+        _bgmFadeSource.clip = binding.Clip;
+        _bgmFadeSource.loop = true;
+        _bgmFadeSource.volume = 0f;
+        _bgmFadeSource.Play();
+
+        _currentBgm = bgm;
+
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            _bgmSource.volume = Mathf.Lerp(fromStartVolume, 0f, t);
+            _bgmFadeSource.volume = Mathf.Lerp(0f, targetVolume, t);
+            yield return null;
+        }
+
+        _bgmSource.Stop();
+        _bgmSource.clip = null;
+        _bgmSource.volume = 0f;
+        _bgmFadeSource.volume = targetVolume;
+
+        AudioSource finished = _bgmSource;
+        _bgmSource = _bgmFadeSource;
+        _bgmFadeSource = finished;
+        _bgmFadeRoutine = null;
+    }
+
     private void ApplyBgmVolume()
     {
-        if (_bgmSource == null)
+        if (_bgmSource == null || _bgmFadeRoutine != null)
             return;
 
         float clipVolume = 1f;
@@ -283,41 +387,88 @@ public class AudioManager : MonoBehaviour
         _bgmSource.volume = Mathf.Clamp01(_masterVolume * clipVolume);
     }
 
+    private float GetClipVolume(BgmClipBinding binding)
+    {
+        float clipVolume = binding.Volume > 0f ? binding.Volume : 1f;
+        return Mathf.Clamp01(_masterVolume * clipVolume);
+    }
+
+    private static BgmId ResolveBgmForActiveScene()
+    {
+        return ResolveBgmForScene(SceneManager.GetActiveScene().name);
+    }
+
+    private static BgmId ResolveBgmForScene(string sceneName)
+    {
+        if (string.Equals(sceneName, RestaurantSceneMode.FutureSceneName, StringComparison.Ordinal))
+            return BgmId.Future;
+
+        if (string.Equals(sceneName, RestaurantSceneMode.MainSceneName, StringComparison.Ordinal))
+            return BgmId.Main;
+
+        return BgmId.None;
+    }
+
+    private void StopBgmFadeRoutine()
+    {
+        if (_bgmFadeRoutine == null)
+            return;
+
+        StopCoroutine(_bgmFadeRoutine);
+        _bgmFadeRoutine = null;
+    }
+
+    private void PromoteFadeSourceIfPlaying()
+    {
+        if (_bgmFadeSource == null || !_bgmFadeSource.isPlaying)
+            return;
+
+        if (_bgmSource != null && _bgmSource.isPlaying && _bgmSource.volume >= _bgmFadeSource.volume)
+            return;
+
+        AudioSource previous = _bgmSource;
+        _bgmSource = _bgmFadeSource;
+        _bgmFadeSource = previous;
+        StopFadeSource();
+    }
+
+    private void StopFadeSource()
+    {
+        if (_bgmFadeSource == null)
+            return;
+
+        _bgmFadeSource.Stop();
+        _bgmFadeSource.clip = null;
+        _bgmFadeSource.volume = 0f;
+    }
+
     private void EnsureAudioSources()
     {
-        AudioSource[] sources = GetComponents<AudioSource>();
+        if (_sfxSource == null || _bgmSource == null || _loopSfxSource == null || _bgmFadeSource == null)
+        {
+            AudioSource[] sources = GetComponents<AudioSource>();
 
-        if (sources.Length == 0)
-        {
-            _sfxSource = gameObject.AddComponent<AudioSource>();
-            _bgmSource = gameObject.AddComponent<AudioSource>();
-        }
-        else if (sources.Length == 1)
-        {
-            _sfxSource = sources[0];
-            _bgmSource = gameObject.AddComponent<AudioSource>();
-        }
-        else
-        {
-            _sfxSource = sources[0];
-            _bgmSource = sources[1];
+            if (_sfxSource == null)
+                _sfxSource = sources.Length > 0 ? sources[0] : gameObject.AddComponent<AudioSource>();
+
+            if (_bgmSource == null)
+                _bgmSource = sources.Length > 1 ? sources[1] : gameObject.AddComponent<AudioSource>();
+
+            if (_loopSfxSource == null)
+                _loopSfxSource = sources.Length > 2 ? sources[2] : gameObject.AddComponent<AudioSource>();
+
+            if (_bgmFadeSource == null)
+                _bgmFadeSource = sources.Length > 3 ? sources[3] : gameObject.AddComponent<AudioSource>();
         }
 
         _sfxSource.playOnAwake = false;
         _sfxSource.loop = false;
         _bgmSource.playOnAwake = false;
         _bgmSource.loop = true;
-
-        if (_loopSfxSource == null)
-        {
-            if (sources.Length >= 3)
-                _loopSfxSource = sources[2];
-            else
-                _loopSfxSource = gameObject.AddComponent<AudioSource>();
-        }
-
         _loopSfxSource.playOnAwake = false;
         _loopSfxSource.loop = true;
+        _bgmFadeSource.playOnAwake = false;
+        _bgmFadeSource.loop = true;
     }
 
     private void RebuildClipLookups()

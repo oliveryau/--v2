@@ -229,9 +229,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _screenCanvas: {fileID: 1611837569}
   _worldCamera: {fileID: 963194227}
-  _buildSpotCostUiRoot: {fileID: 0}
-  _buildCostText: {fileID: 0}
-  _buildCostButton: {fileID: 0}
   _goldAmountText: {fileID: 0}
   _addGoldButton: {fileID: 0}
   _addGoldButtonAmount: 1000
@@ -247,19 +244,23 @@ MonoBehaviour:
   _waiterHirePulseMinScale: 0.9
   _waiterHirePulseMaxScale: 1
   _waiterHirePulseSpeed: 8
+  _hireUiWorldHeightOffset: 0.85
+  _edgeClampPeekPixels: 22
   _seatPaymentUiRoot: {fileID: 0}
+  _normalCoinCollectionRoot: {fileID: 0}
+  _normalCoinCollectionHoldSeconds: 3
   _coinVfxRoot: {fileID: 0}
   _coinTrailTargetUi: {fileID: 0}
   _coinTrailCount: 3
   _vipCoinTrailCount: 0
   _coinTrailDelay: 0.05
   _coinTrailDuration: 0.5
+  _vipCoinTrailDuration: 1.5
   _coinTrailArcHeight: 120
   _vipUiRoot: {fileID: 0}
   _vipFireworksRoot: {fileID: 0}
   _vipFireworksHoldDuration: 3
   _vipFireworksFadeOutDuration: 0.4
-  _vipDoneEatingRoot: {fileID: 0}
   _vipIntroButtonRoot: {fileID: 0}
   _vipIntroButton: {fileID: 0}
   _vipWaitTimerRoot: {fileID: 0}
@@ -269,6 +270,74 @@ MonoBehaviour:
   _vipServeDishButton: {fileID: 0}
   _vipCallLadyButtonRoot: {fileID: 0}
   _vipCallLadyButton: {fileID: 0}
+  _vipGeTaiButtonRoot: {fileID: 0}
+  _vipGeTaiButton: {fileID: 0}
+  _vipButtonPulseMinScale: 0.96
+  _vipButtonPulseMaxScale: 1.04
+  _vipButtonPulseSpeed: 5
+  _vipButtonEdgeClampPeekPixels: 22
+  _stairFloorButtonsRoot: {fileID: 0}
+  _stairFirstFloorButtonRoot: {fileID: 0}
+  _stairFirstFloorButton: {fileID: 0}
+  _stairSecondFloorButtonRoot: {fileID: 0}
+  _stairSecondFloorButton: {fileID: 0}
+  _firstFloorUiPoint: {fileID: 0}
+  _secondFloorUiPoint: {fileID: 0}
+  _stairFloorButtonEdgeClampPeekPixels: 22
+  _vipMainIconRoot: {fileID: 0}
+  _vipMainIconButton: {fileID: 0}
+  _vipMainIconImage: {fileID: 0}
+  _vipIconNormalSprite: {fileID: 0}
+  _vipIconShockedSprite: {fileID: 0}
+  _vipIconPulseMinScale: 0.92
+  _vipIconPulseMaxScale: 1.08
+  _vipIconPulseSpeed: 8
+  _vipIconShockedPulseMinScale: 0.85
+  _vipIconShockedPulseMaxScale: 1.2
+  _vipIconShockedPulseSpeed: 12
+  _vipDialogueText: {fileID: 0}
+  _vipDialogueArrived:
+  - "\u54FC\uFF0C\u7ED9\u672C\u5C0A\u5F00\u95E8!"
+  _vipDialogueUnhappyLeave:
+  - "\u5C82\u6709\u6B64\u7406! \u672C\u5C0A\u8D70\u4E86!"
+  _vipDialogueSuccessLeave:
+  - "\u592A\u597D\u5403\u4E86\uFF0C\u4E0B\u6B21\u518D\u6765!"
+  _vipDialogueRequestServeDish:
+  - "\u4E0A\u83DC! \u672C\u5C0A\u997F\u4E86!"
+  _vipDialogueRequestCallLady:
+  - "\u53EB\u51E0\u4E2A\u7F8E\u5973\u6765\u966A\u672C\u5C0A!"
+  _vipDialogueRequestWatchStage:
+  - "\u6765\u6BB5\u8868\u6F14\uFF0C\u52A9\u52A9\u5174!"
+  _vipDialogueDiscontent:
+  - "\u54FC\uFF0C\u6020\u6162\u672C\u5C0A?!"
+  _vipNegativeDialogueHideDelay: 3
+  _vipNegativeDialogueColor: {r: 0.9450981, g: 0.3882353, b: 0.3882353, a: 1}
+  _vipPreferenceDialogueColor: {r: 1, g: 0.5607843, b: 0, a: 1}
+  _giveDishSelectionRoot: {fileID: 0}
+  _itemCatalog: {fileID: 0}
+  _vipTasteDialogueDuration: 5
+  _vipTasteSoldDialogue: "\u592A\u7F8E\u5473\u4E86\uFF01\u91D1\u5E01\u62FF\u53BB\uFF01"
+  _vipTasteWrongDialogue: "\u8FD9\u4E2A\u8FD8\u597D\uFF0C\u62FF\u5C0F\u8D39\u5427"
+  _giveDishLabelPrefix: "\u7ED9"
+  _vipTastePreferenceLines:
+  - ItemName: "\u706B\u9505"
+    Dialogue: "\u4ECA\u5929\u60F3\u5403\u70B9\u8FA3\u7684"
+  - ItemName: "\u4E50\u53EF"
+    Dialogue: "\u4ECA\u5929\u60F3\u559D\u70B9\u6C14\u6CE1\u7684"
+  - ItemName: "\u5976\u8336"
+    Dialogue: "\u4ECA\u5929\u60F3\u559D\u70B9\u751C\u7684"
+  - ItemName: "\u85AF\u7247"
+    Dialogue: "\u4ECA\u5929\u60F3\u5403\u70B9\u9178\u7684"
+  - ItemName: "\u96EA\u7CD5"
+    Dialogue: "\u4ECA\u5929\u60F3\u5403\u70B9\u51B7\u7684"
+  _vipItemTipsRoot: {fileID: 0}
+  _vipItemTipsText: {fileID: 0}
+  _vipItemTipsReactionImage: {fileID: 0}
+  _vipItemTipsFloatDistance: 48
+  _vipItemTipsFloatDuration: 4.5
+  _vipItemTipsFadeOutDuration: 0.5
+  _vipItemTipsCorrectColor: {r: 0.3372549, g: 0.8862745, b: 0.3921569, a: 1}
+  _vipItemTipsWrongColor: {r: 1, g: 1, b: 1, a: 1}
   _tableStatusUiRoot: {fileID: 0}
   _tableStatusEmptySeatColor: {r: 1, g: 1, b: 1, a: 1}
   _tableStatusFullColor: {r: 1, g: 0, b: 0, a: 1}
@@ -280,18 +349,54 @@ MonoBehaviour:
   _chasePranksterPulseMaxScale: 1.1
   _chasePranksterPulseSpeed: 10
   _pranksterDialogueRoot: {fileID: 0}
+  _pranksterDialogueText: {fileID: 0}
+  _pranksterDialogueIconImage: {fileID: 0}
+  _pranksterDialogueIconButton: {fileID: 0}
   _pranksterDialogueSmirkIcon: {fileID: 0}
   _pranksterDialogueAngryIcon1: {fileID: 0}
   _pranksterDialogueAngryIcon2: {fileID: 0}
   _pranksterDialogueFadeInDuration: 0.35
-  _pranksterDialogueHoldDuration: 1
   _pranksterDialogueFadeOutDuration: 0.3
+  _pranksterArrivalMessages:
+  - "\u563F\u563F, \u53C8\u6765\u8E6D\u996D\u4E86!"
+  - "\u8001\u677F, \u4ECA\u65E5\u53EF\u6709\u7A7A\u62DB\u5F85?"
   _pranksterChasedAwayMessages:
   - "\u7B97\u4F60\u72E0! \u8D70\u7740\u77A7!"
   - "\u5207, \u771F\u6CA1\u52B2, \u64A4!"
   _pranksterTableBrokenMessages:
   - "\u54C8\u54C8, \u8BA9\u4F60\u5F00\u95E8\u505A\u751F\u610F!"
   - "\u54CE\u5440\uFF0C\u624B\u6ED1\u4E86~"
+  _pranksterWaitTimerRoot: {fileID: 0}
+  _pranksterWaitTimerFillImage: {fileID: 0}
+  _pranksterWaitTimerCountdownText: {fileID: 0}
+  _pranksterIconPulseMinScale: 0.95
+  _pranksterIconPulseMaxScale: 1.05
+  _pranksterIconPulseSpeed: 4
+  _chaseCompetitorUiRoot: {fileID: 0}
+  _chaseCompetitorButton: {fileID: 0}
+  _competitorVisitorNameUiRoot: {fileID: 0}
+  _competitorVisitorNameText: {fileID: 0}
+  _chaseCompetitorPulseMinScale: 0.9
+  _chaseCompetitorPulseMaxScale: 1.1
+  _chaseCompetitorPulseSpeed: 10
+  _competitorVisitorDialogueRoot: {fileID: 0}
+  _competitorVisitorDialogueText: {fileID: 0}
+  _competitorVisitorDialogueNameText: {fileID: 0}
+  _competitorVisitorDialogueIconImage: {fileID: 0}
+  _competitorVisitorDialogueFadeInDuration: 0.35
+  _competitorVisitorDialogueFadeOutDuration: 0.3
+  _competitorVisitorArrivalMessage: "\u53BB\u6211\u5E97\uFF0C\u5168\u573A\u4E94\u6298\uFF01"
+  _competitorVisitorChasedAwayMessage: "\u5207\uFF0C\u591A\u7BA1\u95F2\u4E8B\uFF01"
+  _competitorVisitorStoleCustomersMessage: "\u8FD9\u684C\u5BA2\u6211\u5E26\u8D70\u4E86\uFF01"
+  _competitorVisitorWaitTimerRoot: {fileID: 0}
+  _competitorVisitorWaitTimerFillImage: {fileID: 0}
+  _competitorVisitorWaitTimerCountdownText: {fileID: 0}
+  _competitorVisitorIconPulseMinScale: 0.95
+  _competitorVisitorIconPulseMaxScale: 1.05
+  _competitorVisitorIconPulseSpeed: 4
+  _competitorVisitorShoutRoot: {fileID: 0}
+  _competitorVisitorShoutText: {fileID: 0}
+  _competitorVisitorShoutMessage: "{0}\uFF1A\n\u522B\u5728\u8FD9\u6D6A\u8D39\u94B1\uFF0C\u8DDF\u6211\u8D70\u5427"
   _repairTableUiRoot: {fileID: 0}
   _repairTablePulseMinScale: 0.88
   _repairTablePulseMaxScale: 1.08
@@ -299,15 +404,10 @@ MonoBehaviour:
   _dushRepairUiRoot: {fileID: 0}
   _dushRepairDuration: 1
   _openBusinessRoot: {fileID: 0}
-  _openBusinessButton: {fileID: 0}
   _businessTimerText: {fileID: 0}
   _openBusinessFadeInDuration: 0.4
   _openBusinessHoldDuration: 1.2
   _openBusinessFadeOutDuration: 0.5
-  _businessOverviewRoot: {fileID: 0}
-  _businessAcknowledgeButton: {fileID: 0}
-  _tableBuildInfoRoot: {fileID: 0}
-  _tableBuildInfoCloseButton: {fileID: 0}
   _upgradeTableRoot: {fileID: 0}
   _upgradeLeftText: {fileID: 0}
   _upgradeRightText: {fileID: 0}
@@ -355,12 +455,26 @@ MonoBehaviour:
   _enterCompetitorShopPulseSpeed: 10
   _competitorRestaurantNameText: {fileID: 0}
   _competitorShopNameUiBindings: []
+  _competitorShopOnlineStatusColor: {r: 0.2, g: 0.85, b: 0.35, a: 1}
+  _competitorShopOfflineStatusColor: {r: 0.94509804, g: 0.3882353, b: 0.3882353, a: 1}
   _competitorCatalog: {fileID: 0}
+  _competitorStayDurationSeconds: 15
+  _competitorChaseThresholdMinSeconds: 1
+  _competitorChaseThresholdMaxSeconds: 5
+  _chasedAlertHoldSeconds: 3
+  _chasedAlertPulseMinScale: 0.97
+  _chasedAlertPulseMaxScale: 1.03
+  _chasedAlertPulseSpeed: 4
   _ownShopNameUiRoot: {fileID: 0}
   _ownShopNameText: {fileID: 0}
   _ownRatingUiRoot: {fileID: 0}
   _ownRatingText: {fileID: 0}
   _townButton: {fileID: 0}
+  _townPopupButton: {fileID: 0}
+  _futureHomeButton: {fileID: 0}
+  _townPopupPulseMinScale: 0.92
+  _townPopupPulseMaxScale: 1.08
+  _townPopupPulseSpeed: 8
   _mainButtonsRoot: {fileID: 0}
   _missionCatalog: {fileID: 0}
 --- !u!4 &202236838
@@ -1466,6 +1580,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 184014227}
+  - {fileID: 1613804981}
   - {fileID: 880456708}
   - {fileID: 755181027}
   - {fileID: 1762969828}
@@ -1476,6 +1591,140 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
+--- !u!1 &1613804980
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1613804981}
+  - component: {fileID: 1613804983}
+  - component: {fileID: 1613804982}
+  m_Layer: 5
+  m_Name: Text (TMP)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1613804981
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1613804980}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1611837570}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: -401, y: 1186}
+  m_SizeDelta: {x: 300, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &1613804982
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1613804980}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_text: Oliver
+  m_isRightToLeft: 0
+  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontSharedMaterials: []
+  m_fontMaterial: {fileID: 0}
+  m_fontMaterials: []
+  m_fontColor32:
+    serializedVersion: 2
+    rgba: 4294967295
+  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
+  m_enableVertexGradient: 0
+  m_colorMode: 3
+  m_fontColorGradient:
+    topLeft: {r: 1, g: 1, b: 1, a: 1}
+    topRight: {r: 1, g: 1, b: 1, a: 1}
+    bottomLeft: {r: 1, g: 1, b: 1, a: 1}
+    bottomRight: {r: 1, g: 1, b: 1, a: 1}
+  m_fontColorGradientPreset: {fileID: 0}
+  m_spriteAsset: {fileID: 0}
+  m_tintAllSprites: 0
+  m_StyleSheet: {fileID: 0}
+  m_TextStyleHashCode: -1183493901
+  m_overrideHtmlColors: 0
+  m_faceColor:
+    serializedVersion: 2
+    rgba: 4294967295
+  m_fontSize: 72
+  m_fontSizeBase: 36
+  m_fontWeight: 400
+  m_enableAutoSizing: 1
+  m_fontSizeMin: 18
+  m_fontSizeMax: 72
+  m_fontStyle: 0
+  m_HorizontalAlignment: 1
+  m_VerticalAlignment: 256
+  m_textAlignment: 65535
+  m_characterSpacing: 0
+  m_wordSpacing: 0
+  m_lineSpacing: 0
+  m_lineSpacingMax: 0
+  m_paragraphSpacing: 0
+  m_charWidthMaxAdj: 0
+  m_enableWordWrapping: 1
+  m_wordWrappingRatios: 0.4
+  m_overflowMode: 0
+  m_linkedTextComponent: {fileID: 0}
+  parentLinkedComponent: {fileID: 0}
+  m_enableKerning: 1
+  m_enableExtraPadding: 0
+  checkPaddingRequired: 0
+  m_isRichText: 1
+  m_parseCtrlCharacters: 1
+  m_isOrthographic: 1
+  m_isCullingEnabled: 0
+  m_horizontalMapping: 0
+  m_verticalMapping: 0
+  m_uvLineOffset: 0
+  m_geometrySortingOrder: 0
+  m_IsTextObjectScaleStatic: 0
+  m_VertexBufferAutoSizeReduction: 0
+  m_useMaxVisibleDescender: 1
+  m_pageToDisplay: 1
+  m_margin: {x: 0, y: 0, z: 0, w: 0}
+  m_isUsingLegacyAnimationComponent: 0
+  m_isVolumetricText: 0
+  m_hasFontAssetChanged: 0
+  m_baseMaterial: {fileID: 0}
+  m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
+--- !u!222 &1613804983
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1613804980}
+  m_CullTransparentMesh: 1
 --- !u!1 &1728680596
 GameObject:
   m_ObjectHideFlags: 0

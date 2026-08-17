@@ -69,6 +69,8 @@ public class CustomerManager : MonoBehaviour
     [SerializeField] private Transform _vipPerformerWaypoint;
     [Tooltip("Looping music notes under GeTai. Plays while the performer is on stage.")]
     [SerializeField] private ParticleSystem _vipStageMusicParticles;
+    [Tooltip("Stage AudioSource that plays performer_loop while the performer faces the VIP.")]
+    [SerializeField] private AudioSource _vipStageAudioSource;
 
     private readonly Dictionary<Customer, Coroutine> _activeFlows = new();
     private readonly HashSet<Customer> _completedPayments = new();
@@ -272,6 +274,7 @@ public class CustomerManager : MonoBehaviour
             _vipPerformerWaypoint = FindTransformByName("Performer Waypoint");
 
         CacheVipStageMusicParticles();
+        CacheVipStageAudioSource();
 
         if (_vipPerformer != null)
             return;
@@ -303,7 +306,7 @@ public class CustomerManager : MonoBehaviour
 
         _vipPerformer.gameObject.SetActive(false);
         _performerOnStage = false;
-        StopVipStageMusicParticles();
+        StopVipStageMusic();
     }
 
     private static bool IsWorkerOwnedByHiredOrHiringSpot(Worker worker)
@@ -333,7 +336,7 @@ public class CustomerManager : MonoBehaviour
 
     private void OnDestroy()
     {
-        StopVipStageMusicParticles();
+        StopVipStageMusic();
 
         if (Instance == this)
             Instance = null;
@@ -1895,7 +1898,7 @@ public class CustomerManager : MonoBehaviour
         FaceWorkerToward(performer, faceTarget);
         performer.Locomotion?.EnterStationary();
         _performerOnStage = true;
-        PlayVipStageMusicParticles();
+        PlayVipStageMusic();
     }
 
     private IEnumerator SpawnVipCallLadies(Customer vip)
@@ -2140,7 +2143,7 @@ public class CustomerManager : MonoBehaviour
 
     private void BeginReturnVipPerformer()
     {
-        StopVipStageMusicParticles();
+        StopVipStageMusic();
 
         if (!_performerOnStage)
             return;
@@ -2674,7 +2677,7 @@ public class CustomerManager : MonoBehaviour
         _vipIntroAcknowledged = false;
         UIManager.Instance?.HideVipIntroButton();
         UIManager.Instance?.HideVipWaitTimer();
-        StopVipStageMusicParticles();
+        StopVipStageMusic();
     }
 
     private void CacheVipStageMusicParticles()
@@ -2733,6 +2736,52 @@ public class CustomerManager : MonoBehaviour
             return;
 
         _vipStageMusicParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+    }
+
+    private void PlayVipStageMusic()
+    {
+        PlayVipStageMusicParticles();
+        PlayVipStageAudio();
+    }
+
+    private void StopVipStageMusic()
+    {
+        StopVipStageMusicParticles();
+        StopVipStageAudio();
+    }
+
+    private void CacheVipStageAudioSource()
+    {
+        if (_vipStageAudioSource != null)
+            return;
+
+        if (_vipPerformerWaypoint != null)
+            _vipStageAudioSource = _vipPerformerWaypoint.GetComponent<AudioSource>();
+
+        if (_vipStageAudioSource == null && _vipPerformStagePoint != null)
+            _vipStageAudioSource = _vipPerformStagePoint.GetComponent<AudioSource>();
+
+        if (_vipStageAudioSource == null && _vipStagePoint != null)
+        {
+            _vipStageAudioSource = _vipStagePoint.GetComponent<AudioSource>()
+                ?? _vipStagePoint.GetComponentInChildren<AudioSource>(true);
+        }
+    }
+
+    private void PlayVipStageAudio()
+    {
+        CacheVipStageAudioSource();
+        if (_vipStageAudioSource == null)
+            return;
+
+        _vipStageAudioSource.playOnAwake = false;
+        AudioManager.PlayBgmOn(_vipStageAudioSource, BgmId.Performer);
+    }
+
+    private void StopVipStageAudio()
+    {
+        CacheVipStageAudioSource();
+        AudioManager.StopSource(_vipStageAudioSource);
     }
 
     private static Transform FindChildTransformByName(Transform root, string objectName)

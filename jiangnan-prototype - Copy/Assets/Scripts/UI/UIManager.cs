@@ -104,6 +104,9 @@ public class UIManager : MonoBehaviour
     [SerializeField] private float _vipIconShockedPulseMinScale = 0.85f;
     [SerializeField] private float _vipIconShockedPulseMaxScale = 1.2f;
     [SerializeField] private float _vipIconShockedPulseSpeed = 12f;
+    [Tooltip("Finger under VIP Icon. Shown if a VIP request button is ignored for the hint delay.")]
+    [SerializeField] private GameObject _vipIconFinger;
+    [SerializeField] private float _vipButtonHintDelay = 3f;
     [SerializeField] private TextMeshProUGUI _vipDialogueText;
     [Header("VIP Dialogue Lines")]
     [Tooltip("VIP arrives at the entry waypoint.")]
@@ -424,6 +427,8 @@ public class UIManager : MonoBehaviour
     private float _vipWaitTimerDuration;
     private bool _vipIntroButtonWired;
     private bool _vipEventButtonsWired;
+    private bool _vipIconFingerWired;
+    private Coroutine _vipButtonHintRoutine;
     private bool _stairFloorButtonsWired;
     private RectTransform _pranksterDialogueRootRuntime;
     private RectTransform _pranksterDialogueIconRoot;
@@ -564,6 +569,7 @@ public class UIManager : MonoBehaviour
     private const string VipUiRootName = "VIP Main UI";
     private const string VipFireworksName = "Fireworks";
     private const string VipMainIconName = "VIP Icon";
+    private const string VipIconFingerName = "Finger";
     private const string VipIntroButtonName = "VIP Intro Button";
     private const string VipWaitTimerName = "VIP Wait Timer";
     private const string VipWaitTimerFillName = "Energy Bar";
@@ -867,6 +873,8 @@ public class UIManager : MonoBehaviour
         if (_vipMainIconButton != null && _vipMainIconButtonWired)
             _vipMainIconButton.onClick.RemoveListener(HandleVipMainIconClicked);
 
+        UnsubscribeVipIconFinger();
+
         UnsubscribeStairFloorButtons();
 
         if (_pranksterDialogueIconButton != null && _pranksterDialogueIconButtonWired)
@@ -969,6 +977,7 @@ public class UIManager : MonoBehaviour
         SetGiveDishSelectionActive(false);
         ClearVipTasteEligibility();
         RestoreVipIconSprite();
+        HideVipButtonHint();
 
         if (_vipUiRoot != null)
             _vipUiRoot.gameObject.SetActive(false);
@@ -1399,11 +1408,13 @@ public class UIManager : MonoBehaviour
         _vipIntroCustomer = vip;
         _vipIntroButtonRoot.gameObject.SetActive(true);
         UpdateVipIntroButtonPosition();
+        BeginVipButtonHint();
     }
 
     public void HideVipIntroButton()
     {
         _vipIntroCustomer = null;
+        HideVipButtonHint();
 
         if (_vipIntroButtonRoot != null)
         {
@@ -1476,6 +1487,7 @@ public class UIManager : MonoBehaviour
         root.SetAsLastSibling();
         SetVipDialogueForEvent(eventType);
         UpdateVipEventButtonPosition();
+        BeginVipButtonHint();
     }
 
     public void HideVipEventButton(VipEventType eventType)
@@ -1491,6 +1503,7 @@ public class UIManager : MonoBehaviour
         {
             _activeVipEventButton = null;
             _vipEventCustomer = null;
+            HideVipButtonHint();
 
             // No request pending — go back to stating what he is craving.
             ShowVipPreferenceDialogue();
@@ -1499,6 +1512,7 @@ public class UIManager : MonoBehaviour
 
     public void HideAllVipEventButtons(bool restoreCravingDialogue = true)
     {
+        HideVipButtonHint();
         SetVipEventButtonActive(_vipServeDishButtonRoot, false);
         SetVipEventButtonActive(_vipCallLadyButtonRoot, false);
         SetVipEventButtonActive(_vipGeTaiButtonRoot, false);
@@ -2439,6 +2453,8 @@ public class UIManager : MonoBehaviour
             _vipMainIconButton.onClick.AddListener(HandleVipMainIconClicked);
             _vipMainIconButtonWired = true;
         }
+
+        CacheVipIconFinger();
     }
 
     private void ApplyVipIconSprite(Sprite sprite)
@@ -2460,6 +2476,8 @@ public class UIManager : MonoBehaviour
 
     private void HandleVipMainIconClicked()
     {
+        HideVipButtonHint();
+
         if (!RestaurantSceneMode.IsMainScene || CharacterPanelController.Instance == null)
             return;
 
@@ -2473,6 +2491,90 @@ public class UIManager : MonoBehaviour
         }
 
         CharacterPanelController.Instance.FocusDefaultFloorCamera(floor);
+    }
+
+    private void CacheVipIconFinger()
+    {
+        if (_vipIconFinger == null && _vipMainIconRoot != null)
+        {
+            Transform finger = FindChildTransform(_vipMainIconRoot, VipIconFingerName);
+            if (finger != null)
+                _vipIconFinger = finger.gameObject;
+        }
+
+        if (_vipIconFinger == null)
+            return;
+
+        Button fingerButton = _vipIconFinger.GetComponent<Button>()
+            ?? _vipIconFinger.AddComponent<Button>();
+        fingerButton.transition = Selectable.Transition.None;
+
+        Graphic graphic = _vipIconFinger.GetComponent<Graphic>();
+        if (graphic != null)
+            graphic.raycastTarget = true;
+
+        if (_vipIconFingerWired)
+            return;
+
+        fingerButton.onClick.AddListener(HandleVipMainIconClicked);
+        _vipIconFingerWired = true;
+    }
+
+    private void UnsubscribeVipIconFinger()
+    {
+        if (_vipIconFinger == null || !_vipIconFingerWired)
+            return;
+
+        Button fingerButton = _vipIconFinger.GetComponent<Button>();
+        if (fingerButton != null)
+            fingerButton.onClick.RemoveListener(HandleVipMainIconClicked);
+
+        _vipIconFingerWired = false;
+    }
+
+    private void BeginVipButtonHint()
+    {
+        HideVipButtonHint();
+
+        if (!isActiveAndEnabled)
+            return;
+
+        _vipButtonHintRoutine = StartCoroutine(ShowVipButtonHintAfterDelay());
+    }
+
+    private void HideVipButtonHint()
+    {
+        if (_vipButtonHintRoutine != null)
+        {
+            StopCoroutine(_vipButtonHintRoutine);
+            _vipButtonHintRoutine = null;
+        }
+
+        SetVipIconFingerActive(false);
+    }
+
+    private IEnumerator ShowVipButtonHintAfterDelay()
+    {
+        float delay = Mathf.Max(0f, _vipButtonHintDelay);
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
+
+        SetVipIconFingerActive(true);
+        _vipButtonHintRoutine = null;
+    }
+
+    private void SetVipIconFingerActive(bool active)
+    {
+        if (_vipIconFinger == null)
+            CacheVipMainIconUi();
+        else
+            CacheVipIconFinger();
+
+        if (_vipIconFinger == null)
+            return;
+
+        if (_vipIconFinger.activeSelf != active)
+            _vipIconFinger.SetActive(active);
     }
 
     private void CacheVipTasteButtonUi()

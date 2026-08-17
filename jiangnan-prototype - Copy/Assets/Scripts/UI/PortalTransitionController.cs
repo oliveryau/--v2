@@ -135,6 +135,8 @@ public class PortalTransitionController : MonoBehaviour
 
     private IEnumerator LeaveThenLoadRoutine(string sceneName)
     {
+        AudioManager.CrossfadeBgmForScene(sceneName, TransitionClipDuration);
+
         yield return PlayState(TransitionInHash, TransitionClipDuration);
 
         if (_animator != null)

@@ -100,5 +100,12 @@ MonoBehaviour:
   - Bgm: 3
     Clip: {fileID: 8300000, guid: f360f9f1f8146254cb93fe4aa63a7706, type: 3}
     Volume: 1
+  - Bgm: 4
+    Clip: {fileID: 8300000, guid: 028bc10a3f88a7842886da09c7cbb838, type: 3}
+    Volume: 1
+  - Bgm: 5
+    Clip: {fileID: 8300000, guid: 549f86d983584364b997fe2b658ba5b3, type: 3}
+    Volume: 0.8
   _defaultBgm: 1
+  _bgmCrossfadeDuration: 1.5
   _masterVolume: 1
