@@ -104,9 +104,8 @@ public class UIManager : MonoBehaviour
     [SerializeField] private float _vipIconShockedPulseMinScale = 0.85f;
     [SerializeField] private float _vipIconShockedPulseMaxScale = 1.2f;
     [SerializeField] private float _vipIconShockedPulseSpeed = 12f;
-    [Tooltip("Finger under VIP Icon. Shown if a VIP request button is ignored for the hint delay.")]
+    [Tooltip("Finger under VIP Icon. Shown while a VIP request button is waiting to be tapped.")]
     [SerializeField] private GameObject _vipIconFinger;
-    [SerializeField] private float _vipButtonHintDelay = 3f;
     [SerializeField] private TextMeshProUGUI _vipDialogueText;
     [Header("VIP Dialogue Lines")]
     [Tooltip("VIP arrives at the entry waypoint.")]
@@ -191,6 +190,8 @@ public class UIManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI _pranksterDialogueText;
     [SerializeField] private Image _pranksterDialogueIconImage;
     [SerializeField] private Button _pranksterDialogueIconButton;
+    [Tooltip("Finger under Prankster Dialogue. Stays visible until Chase Prankster is pressed.")]
+    [SerializeField] private GameObject _pranksterDialogueFinger;
     [SerializeField] private Sprite _pranksterDialogueSmirkIcon;
     [SerializeField] private Sprite _pranksterDialogueAngryIcon1;
     [SerializeField] private Sprite _pranksterDialogueAngryIcon2;
@@ -230,6 +231,8 @@ public class UIManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI _competitorVisitorDialogueText;
     [SerializeField] private TextMeshProUGUI _competitorVisitorDialogueNameText;
     [SerializeField] private Image _competitorVisitorDialogueIconImage;
+    [Tooltip("Finger under Competitor Dialogue. Stays visible until Chase Competitor is pressed.")]
+    [SerializeField] private GameObject _competitorVisitorDialogueFinger;
     [SerializeField] private float _competitorVisitorDialogueFadeInDuration = 0.35f;
     [SerializeField] private float _competitorVisitorDialogueFadeOutDuration = 0.3f;
     [Tooltip("Said when the rival owner arrives at the waypoint.")]
@@ -428,7 +431,6 @@ public class UIManager : MonoBehaviour
     private bool _vipIntroButtonWired;
     private bool _vipEventButtonsWired;
     private bool _vipIconFingerWired;
-    private Coroutine _vipButtonHintRoutine;
     private bool _stairFloorButtonsWired;
     private RectTransform _pranksterDialogueRootRuntime;
     private RectTransform _pranksterDialogueIconRoot;
@@ -1414,7 +1416,6 @@ public class UIManager : MonoBehaviour
     public void HideVipIntroButton()
     {
         _vipIntroCustomer = null;
-        HideVipButtonHint();
 
         if (_vipIntroButtonRoot != null)
         {
@@ -1503,7 +1504,6 @@ public class UIManager : MonoBehaviour
         {
             _activeVipEventButton = null;
             _vipEventCustomer = null;
-            HideVipButtonHint();
 
             // No request pending — go back to stating what he is craving.
             ShowVipPreferenceDialogue();
@@ -1512,7 +1512,6 @@ public class UIManager : MonoBehaviour
 
     public void HideAllVipEventButtons(bool restoreCravingDialogue = true)
     {
-        HideVipButtonHint();
         SetVipEventButtonActive(_vipServeDishButtonRoot, false);
         SetVipEventButtonActive(_vipCallLadyButtonRoot, false);
         SetVipEventButtonActive(_vipGeTaiButtonRoot, false);
@@ -1675,6 +1674,8 @@ public class UIManager : MonoBehaviour
 
         if (_pranksterDialogueIconRoot == null && _pranksterDialogueIconImage != null)
             _pranksterDialogueIconRoot = _pranksterDialogueIconImage.transform as RectTransform;
+
+        CacheDialogueFinger(ref _pranksterDialogueFinger, _pranksterDialogueRootRuntime);
 
         WirePranksterDialogueIconButton();
 
@@ -1855,6 +1856,7 @@ public class UIManager : MonoBehaviour
         Color[] transparentColors = UiGraphicFade.BuildTransparentColors(_pranksterDialogueTargetColors);
 
         _pranksterDialogueRootRuntime.gameObject.SetActive(true);
+        SetDialogueFingerActive(_pranksterDialogueFinger, true);
         UiGraphicFade.RestoreColors(_pranksterDialogueGraphics, transparentColors);
 
         yield return UiGraphicFade.FadeColors(
@@ -2175,6 +2177,8 @@ public class UIManager : MonoBehaviour
         if (_competitorVisitorDialogueIconRoot == null && _competitorVisitorDialogueIconImage != null)
             _competitorVisitorDialogueIconRoot = _competitorVisitorDialogueIconImage.transform as RectTransform;
 
+        CacheDialogueFinger(ref _competitorVisitorDialogueFinger, _competitorVisitorDialogueRootRuntime);
+
         if (_competitorVisitorDialogueNameText == null)
         {
             Transform nameRoot = FindChildTransform(
@@ -2288,6 +2292,7 @@ public class UIManager : MonoBehaviour
         Color[] transparentColors = UiGraphicFade.BuildTransparentColors(_competitorVisitorDialogueTargetColors);
 
         _competitorVisitorDialogueRootRuntime.gameObject.SetActive(true);
+        SetDialogueFingerActive(_competitorVisitorDialogueFinger, true);
         UiGraphicFade.RestoreColors(_competitorVisitorDialogueGraphics, transparentColors);
 
         yield return UiGraphicFade.FadeColors(
@@ -2476,8 +2481,6 @@ public class UIManager : MonoBehaviour
 
     private void HandleVipMainIconClicked()
     {
-        HideVipButtonHint();
-
         if (!RestaurantSceneMode.IsMainScene || CharacterPanelController.Instance == null)
             return;
 
@@ -2498,6 +2501,13 @@ public class UIManager : MonoBehaviour
         if (_vipIconFinger == null && _vipMainIconRoot != null)
         {
             Transform finger = FindChildTransform(_vipMainIconRoot, VipIconFingerName);
+            if (finger != null)
+                _vipIconFinger = finger.gameObject;
+        }
+
+        if (_vipIconFinger == null && _vipUiRoot != null)
+        {
+            Transform finger = FindChildTransform(_vipUiRoot, VipIconFingerName);
             if (finger != null)
                 _vipIconFinger = finger.gameObject;
         }
@@ -2534,33 +2544,15 @@ public class UIManager : MonoBehaviour
 
     private void BeginVipButtonHint()
     {
-        HideVipButtonHint();
-
         if (!isActiveAndEnabled)
             return;
 
-        _vipButtonHintRoutine = StartCoroutine(ShowVipButtonHintAfterDelay());
+        SetVipIconFingerActive(true);
     }
 
     private void HideVipButtonHint()
     {
-        if (_vipButtonHintRoutine != null)
-        {
-            StopCoroutine(_vipButtonHintRoutine);
-            _vipButtonHintRoutine = null;
-        }
-
         SetVipIconFingerActive(false);
-    }
-
-    private IEnumerator ShowVipButtonHintAfterDelay()
-    {
-        float delay = Mathf.Max(0f, _vipButtonHintDelay);
-        if (delay > 0f)
-            yield return new WaitForSeconds(delay);
-
-        SetVipIconFingerActive(true);
-        _vipButtonHintRoutine = null;
     }
 
     private void SetVipIconFingerActive(bool active)
@@ -2575,6 +2567,25 @@ public class UIManager : MonoBehaviour
 
         if (_vipIconFinger.activeSelf != active)
             _vipIconFinger.SetActive(active);
+    }
+
+    private static void CacheDialogueFinger(ref GameObject finger, Transform dialogueRoot)
+    {
+        if (finger != null || dialogueRoot == null)
+            return;
+
+        Transform found = FindChildTransform(dialogueRoot, VipIconFingerName);
+        if (found != null)
+            finger = found.gameObject;
+    }
+
+    private static void SetDialogueFingerActive(GameObject finger, bool active)
+    {
+        if (finger == null)
+            return;
+
+        if (finger.activeSelf != active)
+            finger.SetActive(active);
     }
 
     private void CacheVipTasteButtonUi()
@@ -3101,6 +3112,7 @@ public class UIManager : MonoBehaviour
     {
         AudioManager.Play(SfxId.UiClick);
         CustomerManager.Instance?.AcknowledgeVipEvent(eventType);
+        HideVipButtonHint();
         HideVipDialogue();
         HideVipEventButton(eventType);
     }
@@ -3261,6 +3273,7 @@ public class UIManager : MonoBehaviour
     {
         AudioManager.Play(SfxId.UiClick);
         CustomerManager.Instance?.AcknowledgeVipIntro();
+        HideVipButtonHint();
         HideVipDialogue();
         HideVipIntroButton();
     }
@@ -8477,6 +8490,7 @@ public class UIManager : MonoBehaviour
         SafeSetUiActive(_pranksterNameUiRoot, false);
         CachePranksterDialogueUi();
         HidePranksterDialogue(immediate: true);
+        SetDialogueFingerActive(_pranksterDialogueFinger, false);
     }
 
     private void InitializeCompetitorVisitorUi()
@@ -8510,6 +8524,7 @@ public class UIManager : MonoBehaviour
         SafeSetUiActive(_competitorVisitorNameUiRoot, false);
         CacheCompetitorVisitorDialogueUi();
         HideCompetitorVisitorDialogue(immediate: true);
+        SetDialogueFingerActive(_competitorVisitorDialogueFinger, false);
     }
 
     private void InitializeRepairTableUi()
@@ -8811,6 +8826,8 @@ public class UIManager : MonoBehaviour
 
     private void HandleChasePranksterClicked()
     {
+        SetDialogueFingerActive(_pranksterDialogueFinger, false);
+
         if (_pranksterManager == null)
             _pranksterManager = FindFirstObjectByType<PranksterManager>();
 
@@ -8819,6 +8836,8 @@ public class UIManager : MonoBehaviour
 
     private void HandleChaseCompetitorClicked()
     {
+        SetDialogueFingerActive(_competitorVisitorDialogueFinger, false);
+
         if (_competitorVisitorManager == null)
             _competitorVisitorManager = FindFirstObjectByType<CompetitorVisitorManager>();
 
@@ -8846,6 +8865,7 @@ public class UIManager : MonoBehaviour
 
         SafeSetUiActive(_pranksterNameUiRoot, false);
         HidePranksterDialogue(immediate: true);
+        SetDialogueFingerActive(_pranksterDialogueFinger, false);
     }
 
     private void ClearCompetitorVisitorUi()
@@ -8858,6 +8878,7 @@ public class UIManager : MonoBehaviour
 
         SafeSetUiActive(_competitorVisitorNameUiRoot, false);
         HideCompetitorVisitorDialogue(immediate: true);
+        SetDialogueFingerActive(_competitorVisitorDialogueFinger, false);
     }
 
     private void ClearRepairTableUis()

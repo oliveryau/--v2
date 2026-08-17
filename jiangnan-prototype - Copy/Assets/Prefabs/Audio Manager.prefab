@@ -86,7 +86,7 @@ MonoBehaviour:
     Volume: 0.7
   - Sfx: 17
     Clip: {fileID: 8300000, guid: 936f9f6c93ef6374d9f1fb7facc491d6, type: 3}
-    Volume: 1
+    Volume: 0.8
   - Sfx: 18
     Clip: {fileID: 8300000, guid: bf591f6dcdaef804099480f9a5378e02, type: 3}
     Volume: 1
@@ -99,7 +99,7 @@ MonoBehaviour:
     Volume: 1
   - Bgm: 3
     Clip: {fileID: 8300000, guid: f360f9f1f8146254cb93fe4aa63a7706, type: 3}
-    Volume: 1
+    Volume: 0.5
   - Bgm: 4
     Clip: {fileID: 8300000, guid: 028bc10a3f88a7842886da09c7cbb838, type: 3}
     Volume: 1
