@@ -5089,6 +5089,7 @@ public class UIManager : MonoBehaviour
         if (GoldManager.Instance == null)
             return;
 
+        AudioManager.Play(SfxId.GoldCollect);
         GoldManager.Instance.AddGold(_addGoldButtonAmount);
     }
 

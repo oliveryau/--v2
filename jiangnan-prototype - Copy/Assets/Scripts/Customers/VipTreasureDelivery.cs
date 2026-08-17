@@ -7,17 +7,22 @@ public class VipTreasureDelivery : MonoBehaviour
     public static VipTreasureDelivery Instance { get; private set; }
 
     private const string CarrierName = "CarrierWorker_Treasure";
+    private const string TreasureBoxName = "Treasure Box";
     private const string WaypointName = "VIP TreasureChest Waypoint";
     private const string CoinPointName = "Coin Point";
     private const string CoinBurstVfxName = "Coin Burst VFX";
+    private const string OpenStateName = "Open";
+    private const string ClosedStateName = "Closed";
 
     [SerializeField] private GameObject _carrierWorkerTreasure;
     [SerializeField] private Transform _treasureChestWaypoint;
     [SerializeField] private Transform _coinPoint;
     [SerializeField] private ParticleSystem _coinBurstVfx;
     [SerializeField] private Animator _treasureAnimator;
-    [Tooltip("Animator trigger played when the carrier reaches the waypoint. Leave empty if unused.")]
-    [SerializeField] private string _openTrigger = "Open";
+    [Tooltip("Animator trigger played when the carrier reaches the waypoint.")]
+    [SerializeField] private string _openTrigger = "open";
+    [Tooltip("Animator trigger played when the treasure hides.")]
+    [SerializeField] private string _closeTrigger = "close";
     [SerializeField] private float _deliveryDuration = 2f;
     [Tooltip("How long the opened treasure stays visible before despawning.")]
     [SerializeField] private float _openHoldDuration = 4f;
@@ -111,6 +116,7 @@ public class VipTreasureDelivery : MonoBehaviour
 
         carrierTransform.SetPositionAndRotation(spawnPosition, spawnRotation);
         _carrierWorkerTreasure.SetActive(true);
+        ResetTreasureTriggers();
         StopCoinBurstVfx();
         RuntimeMeshVisibility.PrepareHierarchyForRuntimeMove(carrierTransform);
 
@@ -150,6 +156,9 @@ public class VipTreasureDelivery : MonoBehaviour
         // Safety: never lose VIP payment if the open/trail path was skipped.
         GrantPendingGoldAward();
 
+        PlayTreasureClosed();
+        yield return null;
+
         carrierTransform.SetPositionAndRotation(spawnPosition, spawnRotation);
         _carrierWorkerTreasure.SetActive(false);
         _deliveryRoutine = null;
@@ -157,18 +166,60 @@ public class VipTreasureDelivery : MonoBehaviour
 
     private void TryPlayOpenAnimation()
     {
-        if (_treasureAnimator == null)
-            _treasureAnimator = _carrierWorkerTreasure != null
-                ? _carrierWorkerTreasure.GetComponentInChildren<Animator>(true)
-                : null;
+        PlayTreasureState(_openTrigger, OpenStateName, resetTrigger: _closeTrigger);
+    }
 
-        if (_treasureAnimator == null || string.IsNullOrEmpty(_openTrigger))
+    private void PlayTreasureClosed()
+    {
+        PlayTreasureState(_closeTrigger, ClosedStateName, resetTrigger: _openTrigger);
+    }
+
+    private void ResetTreasureTriggers()
+    {
+        EnsureTreasureAnimator();
+        if (_treasureAnimator == null)
             return;
 
         if (HasAnimatorTrigger(_treasureAnimator, _openTrigger))
-            _treasureAnimator.SetTrigger(_openTrigger);
-        else
-            _treasureAnimator.Play(_openTrigger, 0, 0f);
+            _treasureAnimator.ResetTrigger(_openTrigger);
+
+        if (HasAnimatorTrigger(_treasureAnimator, _closeTrigger))
+            _treasureAnimator.ResetTrigger(_closeTrigger);
+    }
+
+    private void PlayTreasureState(string triggerName, string stateName, string resetTrigger)
+    {
+        EnsureTreasureAnimator();
+        if (_treasureAnimator == null)
+            return;
+
+        if (!string.IsNullOrEmpty(resetTrigger) && HasAnimatorTrigger(_treasureAnimator, resetTrigger))
+            _treasureAnimator.ResetTrigger(resetTrigger);
+
+        if (!string.IsNullOrEmpty(triggerName) && HasAnimatorTrigger(_treasureAnimator, triggerName))
+        {
+            _treasureAnimator.SetTrigger(triggerName);
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(stateName))
+            _treasureAnimator.Play(stateName, 0, 0f);
+    }
+
+    private void EnsureTreasureAnimator()
+    {
+        if (_treasureAnimator != null)
+            return;
+
+        if (_carrierWorkerTreasure == null)
+            return;
+
+        Transform box = FindChildTransformByName(_carrierWorkerTreasure.transform, TreasureBoxName);
+        if (box != null)
+            _treasureAnimator = box.GetComponent<Animator>();
+
+        if (_treasureAnimator == null)
+            _treasureAnimator = _carrierWorkerTreasure.GetComponentInChildren<Animator>(true);
     }
 
     private static bool HasAnimatorTrigger(Animator animator, string triggerName)
@@ -278,7 +329,7 @@ public class VipTreasureDelivery : MonoBehaviour
         }
 
         if (_treasureAnimator == null && _carrierWorkerTreasure != null)
-            _treasureAnimator = _carrierWorkerTreasure.GetComponentInChildren<Animator>(true);
+            EnsureTreasureAnimator();
     }
 
     private static Transform FindChildTransformByName(Transform root, string objectName)

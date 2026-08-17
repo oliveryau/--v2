@@ -798,6 +798,8 @@ public class CompetitorVisitController : MonoBehaviour
         if (CustomerManager.Instance == null)
             return;
 
+        AudioManager.Play(SfxId.UiClick);
+
         // First steal tap reveals the stay timer and starts the visit countdown.
         BeginStayTimer();
 
