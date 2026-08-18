@@ -48,8 +48,10 @@ public class TableSeat : MonoBehaviour
         if (_occupant == null)
             return;
 
+        DiningTable table = ParentTable;
         _occupant.Seat = null;
         _occupant = null;
+        table?.RefreshFoodVisibility();
     }
 
     public Customer DetachOccupantForReplacement()

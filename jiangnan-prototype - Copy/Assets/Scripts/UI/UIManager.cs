@@ -150,6 +150,8 @@ public class UIManager : MonoBehaviour
     [Header("VIP Taste")]
     [SerializeField] private RectTransform _giveDishSelectionRoot;
     [SerializeField] private ItemCatalog _itemCatalog;
+    [Tooltip("Give Dish Selection appears only after the preference line has stayed on screen this long without being interrupted.")]
+    [SerializeField] private float _vipPreferenceGiveDishDelay = 3f;
     [SerializeField] private float _vipTasteDialogueDuration = 5f;
     [SerializeField] private string _vipTasteSoldDialogue = "\u592a\u7f8e\u5473\u4e86\uff01\u91d1\u5e01\u62ff\u53bb\uff01";
     [Tooltip("Shown when the given dish is not what the VIP was craving.")]
@@ -162,6 +164,8 @@ public class UIManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI _vipItemTipsText;
     [Tooltip("Love reaction shown only when the dish matches the VIP's craving.")]
     [SerializeField] private Image _vipItemTipsReactionImage;
+    [Tooltip("Shows the sprite of the dish that was just given to the VIP.")]
+    [SerializeField] private Image _vipItemTipsItemImage;
     [Tooltip("How far up (in canvas pixels) the item tips travel.")]
     [SerializeField] private float _vipItemTipsFloatDistance = 48f;
     [Tooltip("Seconds spent floating up before fading. Total on-screen time = float + fade out.")]
@@ -417,10 +421,14 @@ public class UIManager : MonoBehaviour
     private VipEventType? _activeVipEventButton;
     private bool _vipMainIconButtonWired;
     private bool _pranksterDialogueIconButtonWired;
+    private bool _competitorVisitorDialogueIconButtonWired;
     private Customer _vipTasteEligibleCustomer;
     private bool _vipTasteSoldForEligibleVip;
     private bool _vipIconShockedActive;
     private bool _vipTasteDialogueLocked;
+    private bool _vipPreferenceDialogueActive;
+    private bool _giveDishRevealReady;
+    private Coroutine _giveDishRevealRoutine;
     private VipDialogueState? _pendingVipDialogueState;
     private readonly List<GiveDishButtonUi> _giveDishButtons = new();
     private readonly List<string> _giveDishOfferedItems = new();
@@ -443,6 +451,7 @@ public class UIManager : MonoBehaviour
     private CompetitorVisitorManager _competitorVisitorManager;
     private RectTransform _competitorVisitorDialogueRootRuntime;
     private RectTransform _competitorVisitorDialogueIconRoot;
+    private Button _competitorVisitorDialogueIconButton;
     private Graphic[] _competitorVisitorDialogueGraphics;
     private Color[] _competitorVisitorDialogueTargetColors;
     private Coroutine _competitorVisitorDialogueRoutine;
@@ -586,6 +595,7 @@ public class UIManager : MonoBehaviour
     private const int MaxGiveDishButtons = 3;
     private const string VipItemTipsName = "Item Tips";
     private const string VipItemTipsReactionName = "Reaction - Love";
+    private const string VipItemTipsItemImageName = "Item Image";
     private const string StairFloorButtonsRootName = "Floor Buttons";
     private const string StairFirstFloorButtonName = "FirstFloor Button";
     private const string StairSecondFloorButtonName = "SecondFloor Button";
@@ -882,6 +892,9 @@ public class UIManager : MonoBehaviour
         if (_pranksterDialogueIconButton != null && _pranksterDialogueIconButtonWired)
             _pranksterDialogueIconButton.onClick.RemoveListener(HandlePranksterDialogueIconClicked);
 
+        if (_competitorVisitorDialogueIconButton != null && _competitorVisitorDialogueIconButtonWired)
+            _competitorVisitorDialogueIconButton.onClick.RemoveListener(HandleCompetitorVisitorDialogueIconClicked);
+
         if (_addGoldButton != null)
             _addGoldButton.onClick.RemoveListener(HandleAddGoldClicked);
 
@@ -970,6 +983,7 @@ public class UIManager : MonoBehaviour
     {
         StopVipFireworksRoutine();
         ClearVipTasteDialogueLock();
+        InterruptVipPreferenceDialogue();
         StopVipDialogueHideRoutine();
         StopVipItemTips();
 
@@ -994,6 +1008,7 @@ public class UIManager : MonoBehaviour
             return;
         }
 
+        InterruptVipPreferenceDialogue();
         CacheVipDialogueText();
 
         string[] lines = ResolveVipDialogueLines(state);
@@ -1045,6 +1060,7 @@ public class UIManager : MonoBehaviour
             return;
         }
 
+        InterruptVipPreferenceDialogue();
         StopVipDialogueHideRoutine();
         StopVipItemTips();
         RestoreVipIconSprite();
@@ -1120,6 +1136,7 @@ public class UIManager : MonoBehaviour
             return;
 
         ClearVipTasteDialogueLock();
+        InterruptVipPreferenceDialogue();
         StopVipDialogueHideRoutine();
 
         if (_vipDialogueText.transform.parent != null)
@@ -1199,6 +1216,19 @@ public class UIManager : MonoBehaviour
             _vipItemTipsReactionImage.gameObject.SetActive(false);
         }
 
+        if (_vipItemTipsItemImage == null)
+        {
+            Transform itemImage = FindChildTransform(_vipItemTipsRoot, VipItemTipsItemImageName);
+            if (itemImage != null)
+                _vipItemTipsItemImage = itemImage.GetComponent<Image>();
+        }
+
+        if (_vipItemTipsItemImage != null)
+        {
+            _vipItemTipsItemImage.raycastTarget = false;
+            _vipItemTipsItemImage.preserveAspect = true;
+        }
+
         if (!_hasVipItemTipsRestPosition)
         {
             _vipItemTipsRestPosition = _vipItemTipsRoot.anchoredPosition;
@@ -1209,7 +1239,7 @@ public class UIManager : MonoBehaviour
         _vipItemTipsCached = true;
     }
 
-    private void ShowVipItemTips(int amount, bool matchesPreference)
+    private void ShowVipItemTips(int amount, bool matchesPreference, string itemName)
     {
         CacheVipItemTipsUi();
         if (_vipItemTipsRoot == null)
@@ -1218,12 +1248,34 @@ public class UIManager : MonoBehaviour
         if (_vipItemTipsText != null)
             _vipItemTipsText.text = $"+{Mathf.Max(0, amount)}";
 
+        ApplyVipItemTipsItemSprite(itemName);
+
         // Green with a love reaction for the craved dish, plain white otherwise.
         _vipItemTipsTargetColor = matchesPreference ? _vipItemTipsCorrectColor : _vipItemTipsWrongColor;
         _vipItemTipsShowReaction = matchesPreference;
 
         StopVipItemTips();
         _vipItemTipsRoutine = StartCoroutine(PlayVipItemTipsCoroutine());
+    }
+
+    private void ApplyVipItemTipsItemSprite(string itemName)
+    {
+        if (_vipItemTipsItemImage == null)
+            return;
+
+        EnsureItemCatalog();
+        ShopItemDefinition definition = !string.IsNullOrWhiteSpace(itemName)
+            ? PlayerProfileStorage.ResolveCatalogItem(_itemCatalog, itemName)
+            : null;
+        Sprite sprite = definition != null ? definition.Image : null;
+
+        _vipItemTipsItemImage.sprite = sprite;
+        _vipItemTipsItemImage.enabled = sprite != null;
+        _vipItemTipsItemImage.preserveAspect = true;
+
+        Color color = _vipItemTipsItemImage.color;
+        color.a = 1f;
+        _vipItemTipsItemImage.color = color;
     }
 
     private void StopVipItemTips()
@@ -1255,6 +1307,13 @@ public class UIManager : MonoBehaviour
             _vipItemTipsReactionImage.color = reactionColor;
             _vipItemTipsReactionImage.gameObject.SetActive(false);
         }
+
+        if (_vipItemTipsItemImage != null)
+        {
+            Color itemColor = _vipItemTipsItemImage.color;
+            itemColor.a = 1f;
+            _vipItemTipsItemImage.color = itemColor;
+        }
     }
 
     private IEnumerator PlayVipItemTipsCoroutine()
@@ -1273,6 +1332,13 @@ public class UIManager : MonoBehaviour
 
         if (_vipItemTipsReactionImage != null)
             _vipItemTipsReactionImage.gameObject.SetActive(_vipItemTipsShowReaction);
+
+        if (_vipItemTipsItemImage != null)
+        {
+            Color itemColor = _vipItemTipsItemImage.color;
+            itemColor.a = 1f;
+            _vipItemTipsItemImage.color = itemColor;
+        }
 
         Vector2 endPosition = _vipItemTipsRestPosition + Vector2.up * Mathf.Max(0f, _vipItemTipsFloatDistance);
         float floatDuration = Mathf.Max(0.01f, _vipItemTipsFloatDuration);
@@ -1295,6 +1361,8 @@ public class UIManager : MonoBehaviour
             Color textStart = _vipItemTipsText != null ? _vipItemTipsText.color : Color.white;
             bool fadeReaction = _vipItemTipsReactionImage != null && _vipItemTipsShowReaction;
             Color reactionStart = fadeReaction ? _vipItemTipsReactionImage.color : Color.white;
+            bool fadeItem = _vipItemTipsItemImage != null && _vipItemTipsItemImage.enabled;
+            Color itemStart = fadeItem ? _vipItemTipsItemImage.color : Color.white;
             elapsed = 0f;
 
             while (elapsed < fadeDuration)
@@ -1314,6 +1382,13 @@ public class UIManager : MonoBehaviour
                     Color reactionEnd = reactionStart;
                     reactionEnd.a = 0f;
                     _vipItemTipsReactionImage.color = Color.Lerp(reactionStart, reactionEnd, t);
+                }
+
+                if (fadeItem)
+                {
+                    Color itemEnd = itemStart;
+                    itemEnd.a = 0f;
+                    _vipItemTipsItemImage.color = Color.Lerp(itemStart, itemEnd, t);
                 }
 
                 yield return null;
@@ -1717,6 +1792,8 @@ public class UIManager : MonoBehaviour
             }
         }
 
+        WirePranksterDialogueIconButton();
+
         if (!keepVisibleIfActive || !wasActive)
         {
             _pranksterDialogueRootRuntime.gameObject.SetActive(false);
@@ -1816,10 +1893,10 @@ public class UIManager : MonoBehaviour
             return;
 
         if (_pranksterDialogueIconButton == null)
-            _pranksterDialogueIconButton = _pranksterDialogueIconRoot.GetComponent<Button>()
-                ?? _pranksterDialogueIconRoot.GetComponentInChildren<Button>(true);
+            _pranksterDialogueIconButton = EnsureButtonOnObject(_pranksterDialogueIconRoot.gameObject);
 
         EnableRaycastTargets(_pranksterDialogueIconRoot);
+        EnableDialogueFingerClicks(_pranksterDialogueFinger, HandlePranksterDialogueIconClicked);
 
         if (_pranksterDialogueIconButton != null && !_pranksterDialogueIconButtonWired)
         {
@@ -1830,10 +1907,7 @@ public class UIManager : MonoBehaviour
 
     private void HandlePranksterDialogueIconClicked()
     {
-        if (!RestaurantSceneMode.IsMainScene)
-            return;
-
-        CharacterPanelController.Instance?.FocusDefaultFloorCamera(1);
+        FocusGroundFloorCameraFromDialogue();
     }
 
     private Sprite PickRandomPranksterAngryIcon()
@@ -2179,6 +2253,8 @@ public class UIManager : MonoBehaviour
 
         CacheDialogueFinger(ref _competitorVisitorDialogueFinger, _competitorVisitorDialogueRootRuntime);
 
+        WireCompetitorVisitorDialogueIconButton();
+
         if (_competitorVisitorDialogueNameText == null)
         {
             Transform nameRoot = FindChildTransform(
@@ -2233,6 +2309,8 @@ public class UIManager : MonoBehaviour
             }
         }
 
+        WireCompetitorVisitorDialogueIconButton();
+
         if (!keepVisibleIfActive || !wasActive)
         {
             _competitorVisitorDialogueRootRuntime.gameObject.SetActive(false);
@@ -2271,6 +2349,8 @@ public class UIManager : MonoBehaviour
 
         if (_competitorVisitorDialogueIconImage != null)
             _competitorVisitorDialogueIconImage.gameObject.SetActive(true);
+
+        WireCompetitorVisitorDialogueIconButton();
 
         if (_competitorVisitorDialogueNameText != null)
             _competitorVisitorDialogueNameText.gameObject.SetActive(true);
@@ -2325,6 +2405,56 @@ public class UIManager : MonoBehaviour
         UiGraphicFade.RestoreColors(_competitorVisitorDialogueGraphics, _competitorVisitorDialogueTargetColors);
         ResetCompetitorVisitorIconScale();
         _competitorVisitorDialogueRoutine = null;
+    }
+
+    private void WireCompetitorVisitorDialogueIconButton()
+    {
+        if (_competitorVisitorDialogueIconRoot == null && _competitorVisitorDialogueIconImage != null)
+            _competitorVisitorDialogueIconRoot = _competitorVisitorDialogueIconImage.transform as RectTransform;
+
+        if (_competitorVisitorDialogueIconRoot == null)
+            return;
+
+        if (_competitorVisitorDialogueIconButton == null)
+            _competitorVisitorDialogueIconButton = EnsureButtonOnObject(_competitorVisitorDialogueIconRoot.gameObject);
+
+        EnableRaycastTargets(_competitorVisitorDialogueIconRoot);
+        EnableDialogueFingerClicks(_competitorVisitorDialogueFinger, HandleCompetitorVisitorDialogueIconClicked);
+
+        if (_competitorVisitorDialogueIconButton != null && !_competitorVisitorDialogueIconButtonWired)
+        {
+            _competitorVisitorDialogueIconButton.onClick.AddListener(HandleCompetitorVisitorDialogueIconClicked);
+            _competitorVisitorDialogueIconButtonWired = true;
+        }
+    }
+
+    private void HandleCompetitorVisitorDialogueIconClicked()
+    {
+        FocusGroundFloorCameraFromDialogue();
+    }
+
+    private static void FocusGroundFloorCameraFromDialogue()
+    {
+        if (!RestaurantSceneMode.IsMainScene)
+            return;
+
+        CharacterPanelController.Instance?.FocusDefaultFloorCamera(1);
+    }
+
+    private static void EnableDialogueFingerClicks(GameObject finger, UnityEngine.Events.UnityAction onClicked)
+    {
+        if (finger == null || onClicked == null)
+            return;
+
+        Button fingerButton = EnsureButtonOnObject(finger);
+        if (fingerButton == null)
+            return;
+
+        fingerButton.transition = Selectable.Transition.None;
+        EnableRaycastTargets(finger.transform);
+
+        fingerButton.onClick.RemoveListener(onClicked);
+        fingerButton.onClick.AddListener(onClicked);
     }
 
     private void UpdateCompetitorVisitorDialoguePresentation()
@@ -2672,27 +2802,62 @@ public class UIManager : MonoBehaviour
 
     private void AssignVipTastePreference(Customer vip)
     {
-        if (vip == null || !string.IsNullOrWhiteSpace(vip.VipTastePreference))
+        if (vip == null)
             return;
 
         EnsureItemCatalog();
-        ShopItemDefinition[] items = _itemCatalog != null ? _itemCatalog.Items : null;
-
-        if (items == null || items.Length == 0)
-            return;
-
         _giveDishCatalogScratch.Clear();
-        for (int i = 0; i < items.Length; i++)
-        {
-            if (items[i] != null && !string.IsNullOrWhiteSpace(items[i].Name))
-                _giveDishCatalogScratch.Add(items[i].Name.Trim());
-        }
+        CollectOwnedBagItemNames(_giveDishCatalogScratch);
+
+        // Always crave something the player can actually give, when they have bag items.
+        if (_giveDishCatalogScratch.Count == 0)
+            CollectCatalogItemNames(_giveDishCatalogScratch);
 
         if (_giveDishCatalogScratch.Count == 0)
             return;
 
         vip.VipTastePreference = _giveDishCatalogScratch[
             UnityEngine.Random.Range(0, _giveDishCatalogScratch.Count)];
+    }
+
+    private static void CollectOwnedBagItemNames(List<string> destination)
+    {
+        if (destination == null)
+            return;
+
+        BagInventoryEntry[] bagItems = PlayerProfileStorage.GetBagItemsForCurrentPlayer();
+
+        for (int i = 0; i < bagItems.Length; i++)
+        {
+            BagInventoryEntry entry = bagItems[i];
+
+            if (entry == null || entry.count <= 0 || string.IsNullOrWhiteSpace(entry.itemName))
+                continue;
+
+            string itemName = entry.itemName.Trim();
+            if (!destination.Contains(itemName))
+                destination.Add(itemName);
+        }
+    }
+
+    private void CollectCatalogItemNames(List<string> destination)
+    {
+        if (destination == null)
+            return;
+
+        ShopItemDefinition[] items = _itemCatalog != null ? _itemCatalog.Items : null;
+        if (items == null)
+            return;
+
+        for (int i = 0; i < items.Length; i++)
+        {
+            if (items[i] == null || string.IsNullOrWhiteSpace(items[i].Name))
+                continue;
+
+            string itemName = items[i].Name.Trim();
+            if (!destination.Contains(itemName))
+                destination.Add(itemName);
+        }
     }
 
     /// <summary>Shows what the seated VIP is craving (used when no request is pending).</summary>
@@ -2704,19 +2869,31 @@ public class UIManager : MonoBehaviour
         CacheVipDialogueText();
 
         if (_vipDialogueText == null || _activeVipEventButton.HasValue)
+        {
+            InterruptVipPreferenceDialogue();
             return;
+        }
 
         Customer vip = _vipTasteEligibleCustomer;
         if (vip == null || _vipTasteSoldForEligibleVip)
+        {
+            InterruptVipPreferenceDialogue();
             return;
+        }
 
         // Only while he is seated and waiting — never over leave/pay dialogue.
         if (vip.State != CustomerState.Ordering && vip.State != CustomerState.Eating)
+        {
+            InterruptVipPreferenceDialogue();
             return;
+        }
 
         string line = ResolveVipPreferenceDialogue(vip.VipTastePreference);
         if (string.IsNullOrWhiteSpace(line))
+        {
+            InterruptVipPreferenceDialogue();
             return;
+        }
 
         StopVipDialogueHideRoutine();
         RestoreVipIconSprite();
@@ -2730,6 +2907,8 @@ public class UIManager : MonoBehaviour
 
         if (_vipUiRoot != null && !_vipUiRoot.gameObject.activeSelf)
             _vipUiRoot.gameObject.SetActive(true);
+
+        BeginVipPreferenceGiveDishDelay();
     }
 
     private string ResolveVipPreferenceDialogue(string itemName)
@@ -2753,11 +2932,57 @@ public class UIManager : MonoBehaviour
 
     private void ClearVipTasteEligibility()
     {
+        InterruptVipPreferenceDialogue();
         _vipTasteEligibleCustomer = null;
         _vipTasteSoldForEligibleVip = false;
         _giveDishOfferedItems.Clear();
         _giveDishOffersDirty = true;
         SetGiveDishSelectionActive(false);
+    }
+
+    private void InterruptVipPreferenceDialogue()
+    {
+        _vipPreferenceDialogueActive = false;
+        _giveDishRevealReady = false;
+        StopGiveDishRevealRoutine();
+        SetGiveDishSelectionActive(false);
+    }
+
+    private void BeginVipPreferenceGiveDishDelay()
+    {
+        _vipPreferenceDialogueActive = true;
+        _giveDishRevealReady = false;
+        StopGiveDishRevealRoutine();
+        SetGiveDishSelectionActive(false);
+
+        if (!isActiveAndEnabled)
+            return;
+
+        _giveDishRevealRoutine = StartCoroutine(RevealGiveDishAfterPreferenceDelay());
+    }
+
+    private IEnumerator RevealGiveDishAfterPreferenceDelay()
+    {
+        float wait = Mathf.Max(0f, _vipPreferenceGiveDishDelay);
+        if (wait > 0f)
+            yield return new WaitForSeconds(wait);
+
+        _giveDishRevealRoutine = null;
+
+        if (!_vipPreferenceDialogueActive)
+            yield break;
+
+        _giveDishRevealReady = true;
+        RefreshVipTasteButton();
+    }
+
+    private void StopGiveDishRevealRoutine()
+    {
+        if (_giveDishRevealRoutine == null)
+            return;
+
+        StopCoroutine(_giveDishRevealRoutine);
+        _giveDishRevealRoutine = null;
     }
 
     private void RefreshVipTasteButton()
@@ -2767,7 +2992,7 @@ public class UIManager : MonoBehaviour
         bool vipUiVisible = _vipUiRoot != null && _vipUiRoot.gameObject.activeSelf;
         bool seatedEligible = _vipTasteEligibleCustomer != null && !_vipTasteSoldForEligibleVip;
 
-        if (!vipUiVisible || !seatedEligible)
+        if (!vipUiVisible || !seatedEligible || !_vipPreferenceDialogueActive || !_giveDishRevealReady)
         {
             SetGiveDishSelectionActive(false);
             return;
@@ -2972,7 +3197,7 @@ public class UIManager : MonoBehaviour
         }
 
         ShowVipTasteSoldDialogue(matchesPreference);
-        ShowVipItemTips(payout, matchesPreference);
+        ShowVipItemTips(payout, matchesPreference, givenItem);
     }
 
     private void CacheVipIntroButtonUi()
@@ -4341,10 +4566,15 @@ public class UIManager : MonoBehaviour
         if (GameManager.Instance != null && !GameManager.Instance.IsBusiness)
             return;
 
-        if (_vipTasteEligibleCustomer != null && customer == _vipTasteEligibleCustomer
-            && (state == CustomerState.Leaving || state == CustomerState.Queue || state == CustomerState.WalkingToSeat))
+        if (RestaurantSceneMode.IsCompetitorScene)
+            return;
+
+        if (_vipTasteEligibleCustomer != null && customer == _vipTasteEligibleCustomer)
         {
-            ClearVipTasteEligibility();
+            if (state == CustomerState.Leaving || state == CustomerState.Queue || state == CustomerState.WalkingToSeat)
+                ClearVipTasteEligibility();
+            else if (state != CustomerState.Ordering && state != CustomerState.Eating)
+                InterruptVipPreferenceDialogue();
         }
 
         if (state == CustomerState.Paying)
@@ -4450,6 +4680,9 @@ public class UIManager : MonoBehaviour
 
     private void SyncAllHireSpotUi()
     {
+        if (!RestaurantSceneMode.IsMainScene)
+            return;
+
         EnsureScreenUiCaches();
 
         HireSpot[] spots = FindObjectsByType<HireSpot>(FindObjectsInactive.Include, FindObjectsSortMode.None);
@@ -5162,7 +5395,11 @@ public class UIManager : MonoBehaviour
         ApplyWorldAnchoredUiSiblingOrder();
 
         if (customer.IsVip)
+        {
             SetVipDialogue(VipDialogueState.SuccessLeave);
+            if (RestaurantSceneMode.IsMainScene)
+                BeginVipButtonHint();
+        }
     }
 
     private void ShowNormalCoinCollectionUi(Customer customer)
@@ -5921,6 +6158,11 @@ public class UIManager : MonoBehaviour
 
     private void HandleCanvasWillRenderCanvases()
     {
+        // Competitor steal taps toggle UI and rebuild the canvas. Main-scene hire/VIP/stair
+        // lookups (including FindObjectsByType) are unused here and hitch the tap.
+        if (RestaurantSceneMode.IsCompetitorScene)
+            return;
+
         UpdateWorkerEnergyUis();
         SyncAllHireSpotUi();
         UpdateVipReceptionUi();
@@ -6038,6 +6280,9 @@ public class UIManager : MonoBehaviour
 
         if (isVipCollection)
         {
+            HideVipButtonHint();
+            if (paymentAnchor != null)
+                paymentAnchor.GetComponentInParent<DiningTable>()?.HideVipServedFood();
             // Defer gold + plus UI until the carrier opens the treasure chest.
             int vipPayment = CustomerManager.Instance.CompletePaymentsAtPaymentAnchor(
                 paymentAnchor,

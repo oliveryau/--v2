@@ -69,7 +69,7 @@ public class CustomerManager : MonoBehaviour
     [SerializeField] private Transform _vipPerformerWaypoint;
     [Tooltip("Looping music notes under GeTai. Plays while the performer is on stage.")]
     [SerializeField] private ParticleSystem _vipStageMusicParticles;
-    [Tooltip("Stage AudioSource that plays performer_loop while the performer faces the VIP.")]
+    [Tooltip("AudioSource child on the performer that plays performer_loop while on stage.")]
     [SerializeField] private AudioSource _vipStageAudioSource;
 
     private readonly Dictionary<Customer, Coroutine> _activeFlows = new();
@@ -100,6 +100,7 @@ public class CustomerManager : MonoBehaviour
     private PranksterManager _pranksterManager;
     private CompetitorVisitorManager _competitorVisitorManager;
     private const string VipStageMusicParticlesName = "Music Particles";
+    private const string PerformerAudioSourceName = "AudioSource";
 
     /// <summary>Optional GeTai prop reference.</summary>
     public Transform VipStagePoint
@@ -274,24 +275,25 @@ public class CustomerManager : MonoBehaviour
             _vipPerformerWaypoint = FindTransformByName("Performer Waypoint");
 
         CacheVipStageMusicParticles();
-        CacheVipStageAudioSource();
 
-        if (_vipPerformer != null)
-            return;
-
-        Worker[] workers = FindObjectsByType<Worker>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        for (int i = 0; i < workers.Length; i++)
+        if (_vipPerformer == null)
         {
-            Worker worker = workers[i];
-            if (worker == null || !worker.ExcludeFromServicePool || !worker.ServesVipFloorOnly)
-                continue;
+            Worker[] workers = FindObjectsByType<Worker>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < workers.Length; i++)
+            {
+                Worker worker = workers[i];
+                if (worker == null || !worker.ExcludeFromServicePool || !worker.ServesVipFloorOnly)
+                    continue;
 
-            if (worker.name.IndexOf("Performer", System.StringComparison.OrdinalIgnoreCase) < 0)
-                continue;
+                if (worker.name.IndexOf("Performer", System.StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
 
-            _vipPerformer = worker;
-            return;
+                _vipPerformer = worker;
+                break;
+            }
         }
+
+        CacheVipStageAudioSource();
     }
 
     private void HideVipPerformerIfUnhired()
@@ -390,6 +392,9 @@ public class CustomerManager : MonoBehaviour
             return;
 
         _vipIntroAcknowledged = true;
+
+        if (RestaurantSceneMode.IsMainScene)
+            PlayerProfileStorage.SetMainSceneVipSeatedVisitPendingForCurrentPlayer();
     }
 
     public void AcknowledgeVipEvent(VipEventType eventType)
@@ -448,6 +453,8 @@ public class CustomerManager : MonoBehaviour
 
     private void OnDisable()
     {
+        PersistSeatedVipVisitIfNeeded();
+
         GameEvents.StateChanged -= HandleStateChanged;
         GameEvents.BusinessSessionStarted -= HandleBusinessSessionStarted;
         GameEvents.BusinessSessionEnded -= HandleBusinessSessionEnded;
@@ -798,6 +805,7 @@ public class CustomerManager : MonoBehaviour
             _runtimeVipSpawnStopCount = baseStopCount + Mathf.Max(0, stolenShopCount);
             PlayerProfileStorage.SetMainSceneVipSpawnStopCountOverrideForCurrentPlayer(_runtimeVipSpawnStopCount);
             _pendingLullAfterPrankster = false;
+            PlayerProfileStorage.ClearMainSceneVipSeatedVisitPendingForCurrentPlayer();
         }
 
         // Resume / migrate: if enough VIPs already left and none are active, unlock lull now.
@@ -887,6 +895,7 @@ public class CustomerManager : MonoBehaviour
 
         _servedVipCount++;
         PlayerProfileStorage.SetMainSceneServedVipCountForCurrentPlayer(_servedVipCount);
+        PlayerProfileStorage.ClearMainSceneVipSeatedVisitPendingForCurrentPlayer();
     }
 
     /// <summary>True once enough VIPs have fully left — no more VIP spawns.</summary>
@@ -955,17 +964,26 @@ public class CustomerManager : MonoBehaviour
 
     private IEnumerator SpawnLoopWithOptionalPrewarm(bool prewarm)
     {
-        if (prewarm)
+        bool restoreSeatedVip = ShouldRestoreSeatedVipVisit();
+        if (prewarm || restoreSeatedVip)
         {
             // Let seats/tables finish enabling before seeding mid-session customers.
             float seatWait = 0f;
-            while (_registeredSeats.Count == 0 && seatWait < 1f)
+            while (seatWait < 1f)
             {
+                bool seatsReady = _registeredSeats.Count > 0;
+                bool vipSeatReady = !restoreSeatedVip || HasAvailableVipSeat();
+                if (seatsReady && vipSeatReady)
+                    break;
+
                 seatWait += Time.deltaTime;
                 yield return null;
             }
 
-            SeedMidSessionCustomers();
+            TrySeedSeatedVipVisitFromSave();
+
+            if (prewarm)
+                SeedMidSessionCustomers();
         }
 
         yield return SpawnLoop();
@@ -1027,6 +1045,81 @@ public class CustomerManager : MonoBehaviour
                 _spawnCount++;
             }
         }
+    }
+
+    private static bool ShouldRestoreSeatedVipVisit()
+    {
+        return RestaurantSceneMode.IsMainScene
+            && PlayerProfileStorage.HasMainSceneVipSeatedVisitPendingForCurrentPlayer();
+    }
+
+    private void PersistSeatedVipVisitIfNeeded()
+    {
+        if (!RestaurantSceneMode.IsMainScene || _customerPool == null)
+            return;
+
+        // Still waiting on the intro button — do not reseat them on return.
+        if (_vipAwaitingIntro != null)
+            return;
+
+        IReadOnlyList<Customer> customers = _customerPool.ActiveCustomers;
+        for (int i = 0; i < customers.Count; i++)
+        {
+            Customer customer = customers[i];
+            if (customer == null || !customer.IsVip || customer.IgnoresVipCap)
+                continue;
+
+            if (customer.State == CustomerState.Leaving)
+                continue;
+
+            PlayerProfileStorage.SetMainSceneVipSeatedVisitPendingForCurrentPlayer();
+            return;
+        }
+    }
+
+    private bool TrySeedSeatedVipVisitFromSave()
+    {
+        if (!ShouldRestoreSeatedVipVisit())
+            return false;
+
+        if (HasReachedVipVisitLimit() || IsPostVipLullActive())
+        {
+            PlayerProfileStorage.ClearMainSceneVipSeatedVisitPendingForCurrentPlayer();
+            return false;
+        }
+
+        if (_customerPool == null || !_customerPool.HasVipPrefabs || !CanStartVipPhaseContent())
+            return false;
+
+        if (GetActiveVipCount() >= Mathf.Max(1, _maxActiveVips))
+            return false;
+
+        Customer customer = _customerPool.GetVip(_spawnPoint != null ? _spawnPoint.position : Vector3.zero);
+        if (customer == null)
+            return false;
+
+        TableSeat seat = FindFreeSeat(customer);
+        if (seat == null || !seat.TryReserve(customer))
+        {
+            ReleaseCustomerToPool(customer);
+            return false;
+        }
+
+        customer.WarpTo(seat.Position);
+        if (customer.Locomotion != null)
+            customer.Locomotion.FaceDirection(seat.Rotation);
+        customer.EnterStationary();
+        NotifyTableSeatChanged(seat);
+
+        customer.SetState(CustomerState.Ordering);
+        MarkFirstVipCustomerReceivedIfNeeded(customer);
+        UIManager.Instance?.NotifyVipSeatedForTaste(customer);
+
+        Coroutine flow = StartCoroutine(RunVipSeatedEvents(customer, seat, skipSettleDelay: true));
+        _activeFlows[customer] = flow;
+        _spawnCount++;
+        GameEvents.RaiseCustomerSpawned();
+        return true;
     }
 
     private bool TrySeedSeatedCustomer(bool eating)
@@ -1665,7 +1758,7 @@ public class CustomerManager : MonoBehaviour
         yield return RunVipSeatedEvents(customer, assignedSeat);
     }
 
-    private IEnumerator RunVipSeatedEvents(Customer customer, TableSeat seat)
+    private IEnumerator RunVipSeatedEvents(Customer customer, TableSeat seat, bool skipSettleDelay = false)
     {
         customer.VipEventBonus = 0;
 
@@ -1674,7 +1767,7 @@ public class CustomerManager : MonoBehaviour
             ? WorkerManager.Instance.SubmitVipHeldOrder(customer)
             : null;
 
-        if (_vipSettleDelay > 0f)
+        if (!skipSettleDelay && _vipSettleDelay > 0f)
             yield return new WaitForSeconds(_vipSettleDelay);
 
         VipEventType[] events = BuildVipEventSequence();
@@ -2551,7 +2644,10 @@ public class CustomerManager : MonoBehaviour
 
         UnregisterAwaitingPayment(customer);
         _completedPayments.Remove(customer);
-        WorkerManager.Instance?.CancelOrdersForCustomer(customer);
+
+        // Queued steals have no dish yet — skip worker reassignment on the tap frame.
+        if (customer.State != CustomerState.Queue)
+            WorkerManager.Instance?.CancelOrdersForCustomer(customer);
 
         Transform paymentAnchor = customer.PendingPaymentAnchor;
 
@@ -2570,7 +2666,14 @@ public class CustomerManager : MonoBehaviour
 
         customer.QueueSlotIndex = -1;
         customer.SetState(CustomerState.Leaving);
-        StartCoroutine(Leave(customer));
+        StartCoroutine(LeaveStolenCustomer(customer));
+    }
+
+    private IEnumerator LeaveStolenCustomer(Customer customer)
+    {
+        // Let the steal tap finish this frame before NavMesh pathing, which can hitch.
+        yield return null;
+        yield return Leave(customer);
     }
 
     private TableSeat FindFreeSeat(Customer customer)
@@ -2755,17 +2858,12 @@ public class CustomerManager : MonoBehaviour
         if (_vipStageAudioSource != null)
             return;
 
-        if (_vipPerformerWaypoint != null)
-            _vipStageAudioSource = _vipPerformerWaypoint.GetComponent<AudioSource>();
+        if (_vipPerformer == null)
+            return;
 
-        if (_vipStageAudioSource == null && _vipPerformStagePoint != null)
-            _vipStageAudioSource = _vipPerformStagePoint.GetComponent<AudioSource>();
-
-        if (_vipStageAudioSource == null && _vipStagePoint != null)
-        {
-            _vipStageAudioSource = _vipStagePoint.GetComponent<AudioSource>()
-                ?? _vipStagePoint.GetComponentInChildren<AudioSource>(true);
-        }
+        Transform audioObject = FindChildTransformByName(_vipPerformer.transform, PerformerAudioSourceName);
+        if (audioObject != null && audioObject != _vipPerformer.transform)
+            _vipStageAudioSource = audioObject.GetComponent<AudioSource>();
     }
 
     private void PlayVipStageAudio()

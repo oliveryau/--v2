@@ -41,8 +41,12 @@ public class DiningTable : MonoBehaviour
     [SerializeField] private Vector3 _level2TableLocalOffset = new Vector3(0f, 0.22f, 0f);
     [Tooltip("Local position offset applied to the level 3 table when it is placed.")]
     [SerializeField] private Vector3 _level3TableLocalOffset = Vector3.zero;
+    [Header("Table Food")]
+    [Tooltip("Food mesh shown while a seated customer is eating or finished eating/paying (VIP: after 上菜 is served). Hidden by default.")]
+    [SerializeField] private GameObject _foodVisual;
 
     private bool _isUpgrading;
+    private bool _vipFoodServed;
     private bool _isRepairing;
     private bool _isBroken;
     private GameObject _activeBrokenTable;
@@ -102,6 +106,8 @@ public class DiningTable : MonoBehaviour
         }
 
         EnsureTapCollider();
+        CacheFoodVisual();
+        SetFoodVisible(false);
 
         // VIP tables are static (no upgrades / broken variants / save index).
         if (_isVipTable)
@@ -114,10 +120,17 @@ public class DiningTable : MonoBehaviour
 
     private void OnEnable()
     {
+        GameEvents.CustomerStateChanged += HandleCustomerStateChangedForFood;
+
         if (_isBroken || _isVipTable)
             return;
 
         RefreshVisualsForBuild();
+    }
+
+    private void OnDisable()
+    {
+        GameEvents.CustomerStateChanged -= HandleCustomerStateChangedForFood;
     }
 
     private void Start()
@@ -143,11 +156,13 @@ public class DiningTable : MonoBehaviour
 
         RestoreVisualLevel(_level);
         RefreshRuntimeReferences();
+        RefreshFoodVisibility();
         GameEvents.RaiseTableStatusChanged(this);
     }
 
     private void OnDestroy()
     {
+        GameEvents.CustomerStateChanged -= HandleCustomerStateChangedForFood;
         UnregisterSeatsWithCustomerManager();
         HideBrokenVisual();
     }
@@ -174,6 +189,48 @@ public class DiningTable : MonoBehaviour
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Called after the second-floor waiter picks up the VIP dish and reaches the serve point.
+    /// </summary>
+    public void NotifyVipDishServed()
+    {
+        if (!_isVipTable || RestaurantSceneMode.IsCompetitorScene)
+            return;
+
+        _vipFoodServed = true;
+        SetFoodVisible(true);
+    }
+
+    /// <summary>
+    /// Hides VIP food when the player collects VIP coins, or when the VIP leaves the table.
+    /// </summary>
+    public void HideVipServedFood()
+    {
+        _vipFoodServed = false;
+        SetFoodVisible(false);
+    }
+
+    public void RefreshFoodVisibility()
+    {
+        if (_isVipTable)
+        {
+            if (RestaurantSceneMode.IsCompetitorScene)
+            {
+                SetFoodVisible(false);
+                return;
+            }
+
+            if (_vipFoodServed && HasVipOccupant())
+                SetFoodVisible(true);
+            else if (!HasVipOccupant())
+                HideVipServedFood();
+
+            return;
+        }
+
+        RefreshNormalFoodVisibility();
     }
 
     public Vector3 GetPranksterApproachPosition()
@@ -287,7 +344,11 @@ public class DiningTable : MonoBehaviour
         _isBroken = broken;
 
         if (broken)
+        {
+            HideVipServedFood();
+            SetFoodVisible(false);
             ApplyBrokenVisual();
+        }
         else
             HideBrokenVisual();
 
@@ -615,6 +676,7 @@ public class DiningTable : MonoBehaviour
         SetVisualSetActive(nextVisuals, true);
         MigrateOccupants(previousSeats, CaptureSeats(nextVisuals, includeInactive: true));
         RefreshRuntimeReferences();
+        RefreshFoodVisibility();
         UpdateSeatRegistry(previousSeats);
         GameEvents.RaiseTableStatusChanged(this);
     }
@@ -1131,6 +1193,72 @@ public class DiningTable : MonoBehaviour
         }
 
         return null;
+    }
+
+    private void HandleCustomerStateChangedForFood(Customer customer, CustomerState _)
+    {
+        if (customer == null)
+            return;
+
+        DiningTable table = customer.Seat != null ? customer.Seat.ParentTable : null;
+
+        if (table != this)
+            return;
+
+        RefreshFoodVisibility();
+    }
+
+    private void RefreshNormalFoodVisibility()
+    {
+        bool anyEating = false;
+
+        if (_seats != null)
+        {
+            for (int i = 0; i < _seats.Length; i++)
+            {
+                TableSeat seat = _seats[i];
+                Customer occupant = seat != null ? seat.Occupant : null;
+
+                if (occupant != null && ShouldShowFoodForNormalCustomer(occupant))
+                {
+                    anyEating = true;
+                    break;
+                }
+            }
+        }
+
+        SetFoodVisible(anyEating);
+    }
+
+    private static bool ShouldShowFoodForNormalCustomer(Customer occupant)
+    {
+        CustomerState state = occupant.State;
+
+        if (RestaurantSceneMode.IsCompetitorScene)
+            return state == CustomerState.Eating;
+
+        return state == CustomerState.Eating || state == CustomerState.Paying;
+    }
+
+    private void CacheFoodVisual()
+    {
+        if (_foodVisual != null)
+            return;
+
+        Transform found = transform.Find("Food");
+
+        if (found != null)
+            _foodVisual = found.gameObject;
+    }
+
+    private void SetFoodVisible(bool visible)
+    {
+        CacheFoodVisual();
+
+        if (_foodVisual == null || _foodVisual.activeSelf == visible)
+            return;
+
+        _foodVisual.SetActive(visible);
     }
 
     private void EnsureTapCollider()

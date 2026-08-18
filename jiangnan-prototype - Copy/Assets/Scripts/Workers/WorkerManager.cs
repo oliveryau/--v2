@@ -464,6 +464,9 @@ public class WorkerManager : MonoBehaviour
             waiter.FaceDirection(customer.Seat.Rotation);
             order.MarkDelivered();
 
+            if (customer.IsVip && !RestaurantSceneMode.IsCompetitorScene)
+                customer.Seat?.ParentTable?.NotifyVipDishServed();
+
             yield return FinishWorkerTask(waiter);
         }
         finally

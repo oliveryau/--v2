@@ -81,6 +81,7 @@ public class CompetitorVisitController : MonoBehaviour
 
     private readonly Dictionary<Customer, StealUiEntry> _activeStealUis = new();
     private readonly List<Customer> _stealUiScratch = new();
+    private readonly List<RectTransform> _stealUiPool = new();
     private readonly List<RectTransform> _stolenTextPool = new();
     private readonly List<StolenTextEntry> _activeStolenTexts = new();
 
@@ -380,8 +381,13 @@ public class CompetitorVisitController : MonoBehaviour
         CacheStolenTextPool();
     }
 
+    private bool _stolenTextPoolCached;
+
     private void CacheStolenTextPool()
     {
+        if (_stolenTextPoolCached && _stolenUiRoot != null)
+            return;
+
         if (_stolenUiRoot == null)
         {
             GameObject stolenRootObject = FindSceneUiObject(StolenUiRootName);
@@ -412,6 +418,8 @@ public class CompetitorVisitController : MonoBehaviour
             PrepareStolenTextForPool(stolenText);
             _stolenTextPool.Add(stolenText);
         }
+
+        _stolenTextPoolCached = true;
     }
 
     private static bool IsStolenTextName(string objectName)
@@ -467,7 +475,8 @@ public class CompetitorVisitController : MonoBehaviour
 
     private void BeginStayTimer()
     {
-        CacheUi();
+        if (_stayTimerRoot == null)
+            CacheUi();
 
         // First steal engagement: show stay timer and remove the voluntary town exit.
         HideTownButtonUi();
@@ -744,7 +753,7 @@ public class CompetitorVisitController : MonoBehaviour
             if (entry.UiRoot == _stealTemplateRoot)
                 entry.UiRoot.gameObject.SetActive(false);
             else
-                Destroy(entry.UiRoot.gameObject);
+                ReleaseStealUiToPool(entry.UiRoot);
         }
 
         _activeStealUis.Remove(customer);
@@ -785,9 +794,32 @@ public class CompetitorVisitController : MonoBehaviour
         if (!templateInUse)
             return _stealTemplateRoot;
 
+        for (int i = _stealUiPool.Count - 1; i >= 0; i--)
+        {
+            RectTransform pooled = _stealUiPool[i];
+            _stealUiPool.RemoveAt(i);
+
+            if (pooled == null)
+                continue;
+
+            pooled.gameObject.SetActive(true);
+            return pooled;
+        }
+
         RectTransform instance = Instantiate(_stealTemplateRoot, _stealTemplateRoot.parent);
         instance.name = StealCustomersUiName;
         return instance;
+    }
+
+    private void ReleaseStealUiToPool(RectTransform uiRoot)
+    {
+        if (uiRoot == null)
+            return;
+
+        uiRoot.gameObject.SetActive(false);
+
+        if (!_stealUiPool.Contains(uiRoot))
+            _stealUiPool.Add(uiRoot);
     }
 
     private void HandleStealClicked(Customer customer)

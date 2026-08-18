@@ -1912,7 +1912,6 @@ MonoBehaviour:
   _vipIconShockedPulseMaxScale: 1.2
   _vipIconShockedPulseSpeed: 12
   _vipIconFinger: {fileID: 0}
-  _vipButtonHintDelay: 3
   _vipDialogueText: {fileID: 0}
   _vipDialogueArrived:
   - "\u54FC\uFF0C\u7ED9\u672C\u5C0A\u5F00\u95E8!"
@@ -1970,6 +1969,7 @@ MonoBehaviour:
   _pranksterDialogueText: {fileID: 0}
   _pranksterDialogueIconImage: {fileID: 0}
   _pranksterDialogueIconButton: {fileID: 0}
+  _pranksterDialogueFinger: {fileID: 0}
   _pranksterDialogueSmirkIcon: {fileID: 0}
   _pranksterDialogueAngryIcon1: {fileID: 0}
   _pranksterDialogueAngryIcon2: {fileID: 0}
@@ -2001,6 +2001,7 @@ MonoBehaviour:
   _competitorVisitorDialogueText: {fileID: 0}
   _competitorVisitorDialogueNameText: {fileID: 0}
   _competitorVisitorDialogueIconImage: {fileID: 0}
+  _competitorVisitorDialogueFinger: {fileID: 0}
   _competitorVisitorDialogueFadeInDuration: 0.35
   _competitorVisitorDialogueFadeOutDuration: 0.3
   _competitorVisitorArrivalMessage: "\u53BB\u6211\u5E97\uFF0C\u5168\u573A\u4E94\u6298\uFF01"
@@ -2668,7 +2669,7 @@ MonoBehaviour:
   m_fontColor32:
     serializedVersion: 2
     rgba: 4284703729
-  m_fontColor: {r: 0.9433962, g: 0.38714847, b: 0.38714847, a: 1}
+  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -10569,7 +10570,7 @@ MonoBehaviour:
   m_fontColor32:
     serializedVersion: 2
     rgba: 4284703729
-  m_fontColor: {r: 0.9433962, g: 0.38714847, b: 0.38714847, a: 1}
+  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -12516,7 +12517,7 @@ MonoBehaviour:
   m_fontColor32:
     serializedVersion: 2
     rgba: 4284703729
-  m_fontColor: {r: 0.9433962, g: 0.38714847, b: 0.38714847, a: 1}
+  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -16444,7 +16445,7 @@ MonoBehaviour:
   m_fontColor32:
     serializedVersion: 2
     rgba: 4284703729
-  m_fontColor: {r: 0.9433962, g: 0.38714847, b: 0.38714847, a: 1}
+  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:

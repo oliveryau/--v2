@@ -20,6 +20,11 @@ public class PlayerProfileData
     public bool mainSceneBusinessStarted;
     /// <summary>How many VIPs have arrived in the main restaurant (not successful serves).</summary>
     public int mainSceneServedVipCount;
+    /// <summary>
+    /// True after the VIP intro button was pressed and that visit has not fully left yet.
+    /// Used to reseat the VIP when returning to the main scene.
+    /// </summary>
+    public bool mainSceneVipSeatedVisitPending;
     /// <summary>True once the post-VIP lull has unlocked (enough visits and all VIPs have left).</summary>
     public bool mainScenePostVipLullUnlocked;
     /// <summary>
@@ -648,6 +653,25 @@ public static class PlayerProfileStorage
 
     public static void SetMainSceneServedVipCountForCurrentPlayer(int servedVipCount) =>
         ModifyCurrentProfile(profile => profile.mainSceneServedVipCount = Mathf.Max(0, servedVipCount));
+
+    public static bool HasMainSceneVipSeatedVisitPendingForCurrentPlayer() =>
+        TryGetCurrentProfile(out PlayerProfileData profile) && profile.mainSceneVipSeatedVisitPending;
+
+    public static void SetMainSceneVipSeatedVisitPendingForCurrentPlayer()
+    {
+        if (HasMainSceneVipSeatedVisitPendingForCurrentPlayer())
+            return;
+
+        ModifyCurrentProfile(profile => profile.mainSceneVipSeatedVisitPending = true);
+    }
+
+    public static void ClearMainSceneVipSeatedVisitPendingForCurrentPlayer()
+    {
+        if (!HasMainSceneVipSeatedVisitPendingForCurrentPlayer())
+            return;
+
+        ModifyCurrentProfile(profile => profile.mainSceneVipSeatedVisitPending = false);
+    }
 
     /// <summary>
     /// Post-VIP lull unlock threshold: this many VIP visits leave, then lull after the following prankster.

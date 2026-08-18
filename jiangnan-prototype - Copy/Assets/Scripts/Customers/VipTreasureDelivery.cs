@@ -23,7 +23,7 @@ public class VipTreasureDelivery : MonoBehaviour
     [SerializeField] private string _openTrigger = "open";
     [Tooltip("Animator trigger played when the treasure hides.")]
     [SerializeField] private string _closeTrigger = "close";
-    [SerializeField] private float _deliveryDuration = 2f;
+    [SerializeField] private float _deliveryDuration = 1.5f;
     [Tooltip("How long the opened treasure stays visible before despawning.")]
     [SerializeField] private float _openHoldDuration = 4f;
     [Tooltip("If true, coin trail waits for OnTreasureBoxOpened() (AnimationEvent). If false, trail starts when open is triggered.")]

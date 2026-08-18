@@ -50,7 +50,7 @@ MonoBehaviour:
     Volume: 1
   - Sfx: 2
     Clip: {fileID: 8300000, guid: 7d87abb2a5d3a0b43bf025a9e89cd004, type: 3}
-    Volume: 0.7
+    Volume: 0.6
   - Sfx: 3
     Clip: {fileID: 8300000, guid: 1cc8559dd562548499cc9a9f203cde53, type: 3}
     Volume: 1
@@ -68,7 +68,7 @@ MonoBehaviour:
     Volume: 1
   - Sfx: 11
     Clip: {fileID: 8300000, guid: f969b6d409c94014ba0ba59e8d55307c, type: 3}
-    Volume: 0.7
+    Volume: 0.25
   - Sfx: 13
     Clip: {fileID: 8300000, guid: f5edbc37ec106fb45b7fb33912118434, type: 3}
     Volume: 0.7
@@ -99,13 +99,13 @@ MonoBehaviour:
     Volume: 1
   - Bgm: 3
     Clip: {fileID: 8300000, guid: f360f9f1f8146254cb93fe4aa63a7706, type: 3}
-    Volume: 0.5
+    Volume: 0.05
   - Bgm: 4
     Clip: {fileID: 8300000, guid: 028bc10a3f88a7842886da09c7cbb838, type: 3}
     Volume: 1
   - Bgm: 5
     Clip: {fileID: 8300000, guid: 549f86d983584364b997fe2b658ba5b3, type: 3}
-    Volume: 0.8
+    Volume: 0.4
   _defaultBgm: 1
   _bgmCrossfadeDuration: 1.5
   _masterVolume: 1
