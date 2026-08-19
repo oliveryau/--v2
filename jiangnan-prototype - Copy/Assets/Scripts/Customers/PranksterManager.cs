@@ -257,6 +257,7 @@ public class PranksterManager : MonoBehaviour
 
         _prankster.EnterStationary();
         float waitDuration = Mathf.Max(0f, _waitAtWaypointDuration);
+        AudioManager.Play(SfxId.PranksterLaugh);
         UIManager.Instance?.PlayPranksterArrivalDialogue(waitDuration);
 
         float elapsed = 0f;

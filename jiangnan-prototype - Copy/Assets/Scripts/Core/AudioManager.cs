@@ -22,7 +22,10 @@ public enum SfxId
     PranksterLaugh = 14,
     Unhappy = 16,
     Alert = 17,
-    Mission = 18
+    Mission = 18,
+    PortalBig = 19,
+    BigCoins = 20,
+    FireBurst = 21
 }
 
 public enum BgmId
@@ -32,7 +35,9 @@ public enum BgmId
     Sleeping,
     ChefCooking,
     Future,
-    Performer
+    Performer,
+    Fire,
+    PortalOpen
 }
 
 [Serializable]
@@ -174,6 +179,14 @@ public class AudioManager : MonoBehaviour
         Instance.PlayBgmOnSource(source, bgm);
     }
 
+    public static float GetBgmVolume(BgmId bgm)
+    {
+        if (Instance == null)
+            return 1f;
+
+        return Instance.GetBgmClipVolume(bgm);
+    }
+
     public static void CrossfadeBgm(BgmId bgm, float duration = -1f)
     {
         if (Instance == null)
@@ -294,11 +307,19 @@ public class AudioManager : MonoBehaviour
         if (bgm == BgmId.None || !_bgmById.TryGetValue(bgm, out BgmClipBinding binding) || binding.Clip == null)
             return;
 
-        float clipVolume = binding.Volume > 0f ? binding.Volume : 1f;
         source.clip = binding.Clip;
         source.loop = true;
-        source.volume = Mathf.Clamp01(_masterVolume * clipVolume);
+        source.volume = GetBgmClipVolume(bgm);
         source.Play();
+    }
+
+    private float GetBgmClipVolume(BgmId bgm)
+    {
+        if (bgm == BgmId.None || !_bgmById.TryGetValue(bgm, out BgmClipBinding binding) || binding.Clip == null)
+            return 1f;
+
+        float clipVolume = binding.Volume > 0f ? binding.Volume : 1f;
+        return Mathf.Clamp01(_masterVolume * clipVolume);
     }
 
     public void CrossfadeBgmInternal(BgmId bgm, float duration)

@@ -259,6 +259,7 @@ public class VipTreasureDelivery : MonoBehaviour
         GrantPendingGoldAward();
         PlayCoinBurstVfx();
         AudioManager.Play(SfxId.GoldCollect);
+        AudioManager.Play(SfxId.BigCoins);
         UIManager.Instance?.PlayVipTreasureCoinTrail(trailStart);
     }
 

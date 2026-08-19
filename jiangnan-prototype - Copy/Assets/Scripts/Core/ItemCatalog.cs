@@ -30,13 +30,32 @@ public class ItemCatalog : ScriptableObject
         return item != null;
     }
 
-    public static ItemCatalog LoadOrCreateDefault()
+    public bool ContainsItem(string itemName)
     {
-        ItemCatalog catalog = Resources.Load<ItemCatalog>("ItemCatalog");
+        return TryGetItemByName(itemName, out _);
+    }
 
-        if (catalog != null)
-            return catalog;
+    public bool TryGetItemByName(string itemName, out ShopItemDefinition item)
+    {
+        item = null;
 
-        return CreateInstance<ItemCatalog>();
+        if (_items == null || string.IsNullOrWhiteSpace(itemName))
+            return false;
+
+        string trimmed = itemName.Trim();
+        for (int i = 0; i < _items.Length; i++)
+        {
+            ShopItemDefinition candidate = _items[i];
+            if (candidate == null || string.IsNullOrWhiteSpace(candidate.Name))
+                continue;
+
+            if (string.Equals(candidate.Name.Trim(), trimmed, StringComparison.Ordinal))
+            {
+                item = candidate;
+                return true;
+            }
+        }
+
+        return false;
     }
 }

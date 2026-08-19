@@ -10,26 +10,14 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7c4e9a1b2d3f4568a9b0c1d2e3f4a5b6, type: 3}
-  m_Name: ItemCatalog
+  m_Name: ItemCatalog_Convenience
   m_EditorClassIdentifier: 
   _items:
-  - Name: "\u706B\u9505"
-    Cost: 3000
-    Worth: 6000
-    Image: {fileID: 21300000, guid: 8816bc62abec7d240b5580342e482011, type: 3}
   - Name: "\u4E50\u53EF"
     Cost: 2500
     Worth: 5000
     Image: {fileID: 21300000, guid: baa809368e866b64e848567acbaf84f0, type: 3}
-  - Name: "\u5976\u8336"
+  - Name: "\u96EA\u78A7"
     Cost: 2800
     Worth: 5600
-    Image: {fileID: 21300000, guid: f4879eaa32c06ae4ca6c67947a098ccd, type: 3}
-  - Name: "\u85AF\u7247"
-    Cost: 2800
-    Worth: 5600
-    Image: {fileID: 21300000, guid: 97125b8b61a87f449b500bccd1b1ee29, type: 3}
-  - Name: "\u96EA\u7CD5"
-    Cost: 2800
-    Worth: 5600
-    Image: {fileID: 21300000, guid: 7346ffd60c05a6446b5aaf4fc58f6603, type: 3}
+    Image: {fileID: 21300000, guid: e12b43d0568aaa7489037736661844d1, type: 3}

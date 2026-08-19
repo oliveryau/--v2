@@ -127,6 +127,14 @@ public class MissionUiController : MonoBehaviour
             changed = true;
         }
 
+        if (RestaurantSceneMode.IsMainScene
+            && PlayerProfileStorage.IsMissionServeVipCompletedForCurrentPlayer()
+            && !PlayerProfileStorage.IsMissionStealUnlockedForCurrentPlayer())
+        {
+            PlayerProfileStorage.SetMissionStealUnlockedForCurrentPlayer();
+            changed = true;
+        }
+
         if (RestaurantSceneMode.IsFutureScene
             && !PlayerProfileStorage.IsMissionFutureUnlockedForCurrentPlayer())
         {
@@ -423,7 +431,7 @@ public class MissionUiController : MonoBehaviour
     /// <summary>
     /// Picks which mission card to show for the active scene.
     /// Competitor: only mission 7 (steal). Future: only mission 8 (purchase).
-    /// Main: linear 1-6, then mission 9 (sell). Missions 7/8 never appear on Main.
+    /// Main: linear 1-6, then mission 7 (steal), then mission 9 (sell). Mission 8 never appears on Main.
     /// </summary>
     private bool TryResolveDisplayedPart(out int partIndex, out MissionPartDefinition part)
     {
@@ -459,7 +467,7 @@ public class MissionUiController : MonoBehaviour
             return false;
         }
 
-        // Main scene (and any non-Future/Competitor): never show missions 7 or 8.
+        // Main scene (and any non-Future/Competitor): never show mission 8.
         if (!RestaurantSceneMode.IsMainScene)
             return false;
 
@@ -474,6 +482,13 @@ public class MissionUiController : MonoBehaviour
         if (!PlayerProfileStorage.IsMissionServeVipCompletedForCurrentPlayer())
         {
             partIndex = MissionCatalog.ServeVipMissionPartIndex;
+            return _missionCatalog.TryGetPart(partIndex, out part);
+        }
+
+        // Mission 7 — steal customers. Also shown in Main so the player knows to visit a competitor.
+        if (!PlayerProfileStorage.IsMissionStealCompletedForCurrentPlayer())
+        {
+            partIndex = MissionCatalog.StealCustomersMissionPartIndex;
             return _missionCatalog.TryGetPart(partIndex, out part);
         }
 

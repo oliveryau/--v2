@@ -24,6 +24,14 @@ public class CompetitorVisitController : MonoBehaviour
     private const string StolenUiRootName = "Stolen UI";
     private const string StolenTextNamePrefix = "Stolen Text";
     private const string TownButtonUiName = "Town Button";
+    private const string FireUiName = "Fire";
+    private const string StealFireNormalStateName = "Normal";
+    private const string StealFireFastStateName = "Fast";
+    private const int RequiredNormalStealsForFire = 3;
+    private const int RequiredVipStealsForFire = 1;
+    private const int RequiredExtraStealsForFastFire = 4;
+    private const float StealFireFastAudioVolume = 1f;
+    private static readonly int StealFireFastHash = Animator.StringToHash("fast");
     private const string OnlineStatusLabel = "Online";
     private const string OfflineStatusLabel = "Offline";
     private const string StealResultFailLabel = "只抢几个客人！";
@@ -74,6 +82,13 @@ public class CompetitorVisitController : MonoBehaviour
     private RectTransform _stolenUiRoot;
     private RectTransform _stolenTextTemplate;
     private GameObject _townButtonRoot;
+    private RectTransform _fireRoot;
+    private Animator _fireAnimator;
+    private AudioSource _fireAudioSource;
+    private int _stolenNormalThisVisit;
+    private int _stolenVipThisVisit;
+    private int _stolenAfterFireUnlockedThisVisit;
+    private bool _fireFastStartedThisVisit;
 
     private Canvas _screenCanvas;
     private RectTransform _canvasRect;
@@ -148,6 +163,7 @@ public class CompetitorVisitController : MonoBehaviour
     {
         GameEvents.CustomerStateChanged -= HandleCustomerStateChanged;
         GameEvents.BusinessSessionStarted -= HandleBusinessSessionStarted;
+        StopStealFireAudio();
     }
 
     private void Start()
@@ -162,6 +178,8 @@ public class CompetitorVisitController : MonoBehaviour
         HideVisitChrome();
         ApplyCompetitorProfileUi();
         ApplyCompetitorStatusVisuals(forceOffline: true);
+        ResetStealFireVisitProgress();
+        RefreshStealFireUi();
         SyncStealUiForActiveQueuedCustomers();
     }
 
@@ -188,6 +206,7 @@ public class CompetitorVisitController : MonoBehaviour
         }
 
         AudioManager.StopLooping(SfxId.Alert);
+        StopStealFireAudio();
         ClearStealUis();
         ClearStolenTexts();
     }
@@ -378,6 +397,7 @@ public class CompetitorVisitController : MonoBehaviour
         if (_townButtonRoot == null)
             _townButtonRoot = FindSceneUiObject(TownButtonUiName);
 
+        CacheFireUi();
         CacheStolenTextPool();
     }
 
@@ -471,6 +491,160 @@ public class CompetitorVisitController : MonoBehaviour
 
         // Keep Stolen UI root active as a pool parent; hide pooled children.
         CacheStolenTextPool();
+    }
+
+    private void CacheFireUi()
+    {
+        if (_fireRoot == null)
+        {
+            GameObject fireObject = FindSceneUiObject(FireUiName);
+            if (fireObject != null)
+                _fireRoot = fireObject.transform as RectTransform;
+        }
+
+        if (_fireRoot == null)
+            return;
+
+        if (_fireAnimator == null)
+            _fireAnimator = _fireRoot.GetComponent<Animator>();
+
+        EnsureFireAudioSource();
+
+        Graphic[] graphics = _fireRoot.GetComponentsInChildren<Graphic>(true);
+        for (int i = 0; i < graphics.Length; i++)
+        {
+            if (graphics[i] != null)
+                graphics[i].raycastTarget = false;
+        }
+
+        if (!HasUnlockedStealFireThisVisit())
+            HideStealFireUi();
+    }
+
+    private void RefreshStealFireUi()
+    {
+        CacheFireUi();
+
+        if (_fireRoot == null)
+            return;
+
+        if (!HasUnlockedStealFireThisVisit())
+        {
+            HideStealFireUi();
+            return;
+        }
+
+        bool playFast = HasReachedStealFireFastThisVisit();
+        bool wasActive = _fireRoot.gameObject.activeSelf;
+        _fireRoot.gameObject.SetActive(true);
+        PlayStealFireAudio();
+
+        if (playFast && !_fireFastStartedThisVisit)
+        {
+            _fireFastStartedThisVisit = true;
+            AudioManager.Play(SfxId.FireBurst);
+        }
+
+        ApplyStealFireAudioVolume();
+
+        if (_fireAnimator == null)
+            return;
+
+        _fireAnimator.enabled = true;
+        _fireAnimator.SetBool(StealFireFastHash, playFast);
+
+        if (!wasActive)
+            _fireAnimator.Play(playFast ? StealFireFastStateName : StealFireNormalStateName, 0, 0f);
+    }
+
+    private void ResetStealFireVisitProgress()
+    {
+        _stolenNormalThisVisit = 0;
+        _stolenVipThisVisit = 0;
+        _stolenAfterFireUnlockedThisVisit = 0;
+        _fireFastStartedThisVisit = false;
+        HideStealFireUi();
+    }
+
+    private void RegisterStealFireProgress(bool isVip)
+    {
+        bool alreadyUnlocked = HasUnlockedStealFireThisVisit();
+
+        if (isVip)
+            _stolenVipThisVisit++;
+        else
+            _stolenNormalThisVisit++;
+
+        if (alreadyUnlocked)
+            _stolenAfterFireUnlockedThisVisit++;
+    }
+
+    private bool HasUnlockedStealFireThisVisit()
+    {
+        return _stolenVipThisVisit >= RequiredVipStealsForFire
+            || _stolenNormalThisVisit >= RequiredNormalStealsForFire;
+    }
+
+    private bool HasReachedStealFireFastThisVisit()
+    {
+        return HasUnlockedStealFireThisVisit()
+            && _stolenAfterFireUnlockedThisVisit >= RequiredExtraStealsForFastFire;
+    }
+
+    private void HideStealFireUi()
+    {
+        StopStealFireAudio();
+
+        if (_fireAnimator != null)
+        {
+            _fireAnimator.SetBool(StealFireFastHash, false);
+            _fireAnimator.Play(StealFireNormalStateName, 0, 0f);
+        }
+
+        if (_fireRoot != null)
+            _fireRoot.gameObject.SetActive(false);
+    }
+
+    private void EnsureFireAudioSource()
+    {
+        if (_fireAudioSource != null || _fireRoot == null)
+            return;
+
+        _fireAudioSource = _fireRoot.GetComponent<AudioSource>();
+        if (_fireAudioSource == null)
+            _fireAudioSource = _fireRoot.gameObject.AddComponent<AudioSource>();
+
+        _fireAudioSource.playOnAwake = false;
+        _fireAudioSource.loop = true;
+        _fireAudioSource.spatialBlend = 0f;
+    }
+
+    private void PlayStealFireAudio()
+    {
+        EnsureFireAudioSource();
+        if (_fireAudioSource == null || _fireAudioSource.isPlaying)
+            return;
+
+        AudioManager.PlayBgmOn(_fireAudioSource, BgmId.Fire);
+        ApplyStealFireAudioVolume();
+    }
+
+    private void ApplyStealFireAudioVolume()
+    {
+        if (_fireAudioSource == null)
+            return;
+
+        _fireAudioSource.volume = _fireFastStartedThisVisit
+            ? StealFireFastAudioVolume
+            : AudioManager.GetBgmVolume(BgmId.Fire);
+    }
+
+    private void StopStealFireAudio()
+    {
+        if (_fireAudioSource != null)
+            _fireAudioSource.volume = AudioManager.GetBgmVolume(BgmId.Fire);
+
+        AudioManager.StopSource(_fireAudioSource);
     }
 
     private void BeginStayTimer()
@@ -844,8 +1018,10 @@ public class CompetitorVisitController : MonoBehaviour
             return;
 
         CompetitorSceneSelection.RegisterSuccessfulSteal(customer.IsVip);
+        RegisterStealFireProgress(customer.IsVip);
         HideStealUi(customer);
         ShowStolenText(feedbackWorldPosition);
+        RefreshStealFireUi();
     }
 
     private void ShowStolenText(Vector3 worldAnchorPosition)

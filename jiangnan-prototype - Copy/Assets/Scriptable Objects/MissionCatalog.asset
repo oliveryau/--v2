@@ -87,7 +87,7 @@ MonoBehaviour:
       requiredCount: 1
     revealSecondFloorWhenComplete: 0
     startHiringWhenComplete: 0
-  - title: "\u6210\u529F\u62A2\u5BA2"
+  - title: "\u6210\u529F\u62C9\u5BA2"
     tasks:
     - taskKind: 4
       description: "\u6210\u529F\u62A2\u66F4\u591A\u5BA2\u4EBA"

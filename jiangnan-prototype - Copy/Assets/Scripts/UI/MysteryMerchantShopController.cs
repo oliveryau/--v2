@@ -16,15 +16,14 @@ public class MysteryMerchantShopController : MonoBehaviour
     private const string CostName = "Cost";
     private const string WelcomeDialogue = "欢迎！来尝尝菜品吧！";
     private const string ThanksDialogue = "感谢！下次再来！";
-    private const int MinShopItemCount = 2;
-    private const int MaxShopItemCount = 3;
 
     [SerializeField] private ItemCatalog _itemCatalog;
     [SerializeField] private Transform _itemListRoot;
     [SerializeField] private TextMeshProUGUI _merchantDialogueText;
 
     private readonly List<ShopSlotUi> _slots = new();
-    private readonly List<int> _catalogIndexScratch = new();
+    private readonly Dictionary<int, ShopVisitStock> _visitStockByShop = new();
+    private int _activeShopId = -1;
     private bool _purchasedThisVisit;
 
     private sealed class ShopSlotUi
@@ -39,15 +38,44 @@ public class MysteryMerchantShopController : MonoBehaviour
         public bool Sold;
     }
 
+    private sealed class ShopVisitStock
+    {
+        public readonly List<ShopItemDefinition> OfferedItems = new();
+        public readonly List<bool> Sold = new();
+        public bool PurchasedThisVisit;
+    }
+
     private void Awake()
     {
+        CacheSlots();
+        EnsureDialogue();
+        _purchasedThisVisit = false;
+        SetMerchantDialogue(WelcomeDialogue);
+    }
+
+    public void OpenShop(ItemCatalog catalog, int shopId)
+    {
+        if (catalog != null)
+            _itemCatalog = catalog;
+
         EnsureCatalog();
         CacheSlots();
         EnsureDialogue();
-        // Each Future scene visit starts with the welcome line; thanks only after a buy this visit.
+
+        _activeShopId = shopId;
+
+        if (_visitStockByShop.TryGetValue(shopId, out ShopVisitStock stock))
+        {
+            RestoreVisitStock(stock);
+            _purchasedThisVisit = stock.PurchasedThisVisit;
+            SetMerchantDialogue(_purchasedThisVisit ? ThanksDialogue : WelcomeDialogue);
+            return;
+        }
+
         _purchasedThisVisit = false;
         SetMerchantDialogue(WelcomeDialogue);
-        RefreshRandomStock();
+        RefreshCatalogStock();
+        CaptureVisitStock(shopId);
     }
 
     private void OnDestroy()
@@ -66,8 +94,6 @@ public class MysteryMerchantShopController : MonoBehaviour
     {
         if (_itemCatalog != null)
             return;
-
-        _itemCatalog = ItemCatalog.LoadOrCreateDefault();
     }
 
     private void EnsureDialogue()
@@ -92,7 +118,8 @@ public class MysteryMerchantShopController : MonoBehaviour
 
     private void CacheSlots()
     {
-        _slots.Clear();
+        if (_slots.Count > 0)
+            return;
 
         if (_itemListRoot == null)
         {
@@ -165,7 +192,7 @@ public class MysteryMerchantShopController : MonoBehaviour
         };
     }
 
-    private void RefreshRandomStock()
+    private void RefreshCatalogStock()
     {
         EnsureCatalog();
 
@@ -174,40 +201,23 @@ public class MysteryMerchantShopController : MonoBehaviour
 
         ShopItemDefinition[] catalogItems = _itemCatalog != null ? _itemCatalog.Items : null;
         int catalogCount = catalogItems != null ? catalogItems.Length : 0;
-        if (catalogCount <= 0)
+        int writeIndex = 0;
+
+        for (int i = 0; i < catalogCount && writeIndex < _slots.Count; i++)
         {
-            for (int i = 0; i < _slots.Count; i++)
-                SetSlotActive(_slots[i], false);
-            return;
-        }
-
-        int offerCount = Mathf.Clamp(
-            Random.Range(MinShopItemCount, MaxShopItemCount + 1),
-            MinShopItemCount,
-            Mathf.Min(MaxShopItemCount, _slots.Count, catalogCount));
-
-        _catalogIndexScratch.Clear();
-        for (int i = 0; i < catalogCount; i++)
-        {
-            if (catalogItems[i] != null)
-                _catalogIndexScratch.Add(i);
-        }
-
-        Shuffle(_catalogIndexScratch);
-
-        for (int i = 0; i < _slots.Count; i++)
-        {
-            ShopSlotUi slot = _slots[i];
-            if (i >= offerCount || i >= _catalogIndexScratch.Count)
-            {
-                ClearSlot(slot);
-                SetSlotActive(slot, false);
+            ShopItemDefinition item = catalogItems[i];
+            if (item == null)
                 continue;
-            }
 
-            ShopItemDefinition item = catalogItems[_catalogIndexScratch[i]];
-            ApplyItemToSlot(slot, item);
-            SetSlotActive(slot, true);
+            ApplyItemToSlot(_slots[writeIndex], item);
+            SetSlotActive(_slots[writeIndex], true);
+            writeIndex++;
+        }
+
+        for (int i = writeIndex; i < _slots.Count; i++)
+        {
+            ClearSlot(_slots[i]);
+            SetSlotActive(_slots[i], false);
         }
     }
 
@@ -294,17 +304,93 @@ public class MysteryMerchantShopController : MonoBehaviour
             _purchasedThisVisit = true;
             SetMerchantDialogue(ThanksDialogue);
         }
+
+        MarkVisitSlotSold(slotIndex);
     }
 
-    private static void Shuffle(List<int> values)
+    private void RestoreVisitStock(ShopVisitStock stock)
     {
-        for (int i = values.Count - 1; i > 0; i--)
+        if (stock == null)
+            return;
+
+        for (int i = 0; i < _slots.Count; i++)
         {
-            int j = Random.Range(0, i + 1);
-            int temp = values[i];
-            values[i] = values[j];
-            values[j] = temp;
+            ShopSlotUi slot = _slots[i];
+            if (i >= stock.OfferedItems.Count || stock.OfferedItems[i] == null)
+            {
+                ClearSlot(slot);
+                SetSlotActive(slot, false);
+                continue;
+            }
+
+            ApplyItemToSlot(slot, stock.OfferedItems[i]);
+            bool sold = i < stock.Sold.Count && stock.Sold[i];
+            slot.Sold = sold;
+            if (slot.BuyButton != null)
+                slot.BuyButton.interactable = !sold;
+
+            SetSlotActive(slot, !sold);
         }
+    }
+
+    private void CaptureVisitStock(int shopId)
+    {
+        ShopVisitStock stock = new ShopVisitStock
+        {
+            PurchasedThisVisit = _purchasedThisVisit
+        };
+
+        for (int i = 0; i < _slots.Count; i++)
+        {
+            ShopSlotUi slot = _slots[i];
+            stock.OfferedItems.Add(slot != null ? slot.OfferedItem : null);
+            stock.Sold.Add(slot != null && slot.Sold);
+        }
+
+        _visitStockByShop[shopId] = stock;
+    }
+
+    private void MarkVisitSlotSold(int slotIndex)
+    {
+        if (_activeShopId < 0)
+            return;
+
+        if (!_visitStockByShop.TryGetValue(_activeShopId, out ShopVisitStock stock) || stock == null)
+        {
+            CaptureVisitStock(_activeShopId);
+            return;
+        }
+
+        while (stock.Sold.Count <= slotIndex)
+            stock.Sold.Add(false);
+
+        while (stock.OfferedItems.Count <= slotIndex)
+            stock.OfferedItems.Add(null);
+
+        stock.Sold[slotIndex] = true;
+        if (slotIndex < _slots.Count && _slots[slotIndex] != null)
+            stock.OfferedItems[slotIndex] = _slots[slotIndex].OfferedItem;
+
+        stock.PurchasedThisVisit = true;
+    }
+
+    public bool IsShopSoldOut(int shopId)
+    {
+        if (!_visitStockByShop.TryGetValue(shopId, out ShopVisitStock stock) || stock == null)
+            return false;
+
+        bool hasOffer = false;
+        for (int i = 0; i < stock.OfferedItems.Count; i++)
+        {
+            if (stock.OfferedItems[i] == null)
+                continue;
+
+            hasOffer = true;
+            if (i >= stock.Sold.Count || !stock.Sold[i])
+                return false;
+        }
+
+        return hasOffer;
     }
 
     private static Transform FindDeepChild(Transform root, string objectName)

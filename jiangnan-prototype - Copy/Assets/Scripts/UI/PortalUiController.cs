@@ -60,6 +60,7 @@ public class PortalUiController : MonoBehaviour
     private bool _enterButtonWired;
     private bool _checkButtonWired;
     private Coroutine _growRoutine;
+    private AudioSource _portalAudioSource;
     private static Coroutine _delayedPresentRoutine;
     private static MonoBehaviour _delayedPresentHost;
 
@@ -148,6 +149,7 @@ public class PortalUiController : MonoBehaviour
     private void OnDisable()
     {
         StopGrowRoutine();
+        StopPortalOpenAudio();
         HidePresentationUiOnly();
         _phase = PresentationPhase.Hidden;
     }
@@ -219,6 +221,7 @@ public class PortalUiController : MonoBehaviour
         SetEnterPortalButtonActive(false);
         SetCheckPortalButtonActive(true);
         SetWaiterDialogueActive(true);
+        PlayPortalOpenAudio();
         SyncActiveButtons();
         CharacterPanelController.Instance?.FocusCameraAt(_presentationCameraPosition, ensureGroundFloor: true);
     }
@@ -226,6 +229,7 @@ public class PortalUiController : MonoBehaviour
     private void HidePresentation()
     {
         StopGrowRoutine();
+        StopPortalOpenAudio();
         _phase = PresentationPhase.Hidden;
         HidePresentationUiOnly();
 
@@ -271,6 +275,7 @@ public class PortalUiController : MonoBehaviour
             return;
 
         AudioManager.Play(SfxId.UiClick);
+        AudioManager.Play(SfxId.PortalBig);
         SetCheckPortalButtonActive(false);
         StopGrowRoutine();
         _growRoutine = StartCoroutine(GrowPortalParticleRoutine());
@@ -282,6 +287,8 @@ public class PortalUiController : MonoBehaviour
             return;
 
         AudioManager.Play(SfxId.UiClick);
+        AudioManager.Play(SfxId.PortalBig);
+        StopPortalOpenAudio();
         PlayerProfileStorage.SetEnterPortalPressedForCurrentPlayer();
         PortalTransitionController.PlayLeaveThenLoad(RestaurantSceneMode.FutureSceneName);
     }
@@ -368,6 +375,31 @@ public class PortalUiController : MonoBehaviour
         ResolveWaiterDialogue();
         ResolveScreenCanvas();
         ResolveWorldCamera();
+        ResolvePortalAudioSource();
+    }
+
+    private void ResolvePortalAudioSource()
+    {
+        if (_portalAudioSource == null)
+            _portalAudioSource = GetComponent<AudioSource>();
+    }
+
+    private void PlayPortalOpenAudio()
+    {
+        ResolvePortalAudioSource();
+        if (_portalAudioSource == null)
+            return;
+
+        if (_portalAudioSource.isPlaying)
+            return;
+
+        AudioManager.PlayBgmOn(_portalAudioSource, BgmId.PortalOpen);
+    }
+
+    private void StopPortalOpenAudio()
+    {
+        ResolvePortalAudioSource();
+        AudioManager.StopSource(_portalAudioSource);
     }
 
     private void ResolveAnchor()

@@ -27,8 +27,8 @@ public class Customer : MonoBehaviour
     public Transform PendingPaymentAnchor { get; set; }
     public int PendingPaymentTableLevel { get; set; } = 1;
     public int VipEventBonus { get; set; }
-    /// <summary>Catalog item name this VIP is craving this visit (empty for normal customers).</summary>
-    public string VipTastePreference { get; set; }
+    /// <summary>Shop catalog this VIP is craving this visit (null for normal customers).</summary>
+    public ItemCatalog VipTastePreferredShop { get; set; }
 
     public Transform ReactPoint => _reactPoint != null ? _reactPoint : transform;
 
@@ -120,7 +120,7 @@ public class Customer : MonoBehaviour
         QueueSlotIndex = -1;
         Seat = null;
         VipEventBonus = 0;
-        VipTastePreference = null;
+        VipTastePreferredShop = null;
         ClearPendingPayment();
         _state = CustomerState.Queue;
         _locomotion.Release();
@@ -154,7 +154,7 @@ public class Customer : MonoBehaviour
         QueueSlotIndex = -1;
         Seat = null;
         VipEventBonus = 0;
-        VipTastePreference = null;
+        VipTastePreferredShop = null;
         ClearPendingPayment();
         _locomotion.Release();
         RestaurantFloorUtil.SetBelongsToSecondFloorView(gameObject, false);

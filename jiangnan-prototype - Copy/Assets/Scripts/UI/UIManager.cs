@@ -47,6 +47,9 @@ public class UIManager : MonoBehaviour
     [SerializeField] private RectTransform _normalCoinCollectionRoot;
     [Tooltip("Seconds a normal customer waits at the table for a tap before auto-collect.")]
     [SerializeField] private float _normalCoinCollectionHoldSeconds = 3f;
+    [SerializeField] private float _vipCoinCollectionPulseMinScale = 0.96f;
+    [SerializeField] private float _vipCoinCollectionPulseMaxScale = 1.04f;
+    [SerializeField] private float _vipCoinCollectionPulseSpeed = 8f;
 
     [Header("Coin Trail UI")]
     [SerializeField] private RectTransform _coinVfxRoot;
@@ -149,7 +152,6 @@ public class UIManager : MonoBehaviour
     [SerializeField] private Color _vipPreferenceDialogueColor = new Color(1f, 0.5607843f, 0f, 1f);
     [Header("VIP Taste")]
     [SerializeField] private RectTransform _giveDishSelectionRoot;
-    [SerializeField] private ItemCatalog _itemCatalog;
     [Tooltip("Give Dish Selection appears only after the preference line has stayed on screen this long without being interrupted.")]
     [SerializeField] private float _vipPreferenceGiveDishDelay = 3f;
     [SerializeField] private float _vipTasteDialogueDuration = 5f;
@@ -158,7 +160,7 @@ public class UIManager : MonoBehaviour
     [SerializeField] private string _vipTasteWrongDialogue = "\u8fd9\u4e2a\u8fd8\u597d\uff0c\u62ff\u5c0f\u8d39\u5427";
     [Tooltip("Prefix on each Give Dish button label (gei + item name).")]
     [SerializeField] private string _giveDishLabelPrefix = "\u7ed9";
-    [Tooltip("What the VIP says while craving each catalog item (no request pending).")]
+    [Tooltip("What the VIP says while craving each shop. Any item from that shop's catalog matches.")]
     [SerializeField] private VipTastePreferenceLine[] _vipTastePreferenceLines = BuildDefaultVipTastePreferenceLines();
     [SerializeField] private RectTransform _vipItemTipsRoot;
     [SerializeField] private TextMeshProUGUI _vipItemTipsText;
@@ -433,6 +435,8 @@ public class UIManager : MonoBehaviour
     private readonly List<GiveDishButtonUi> _giveDishButtons = new();
     private readonly List<string> _giveDishOfferedItems = new();
     private readonly List<string> _giveDishCatalogScratch = new();
+    private readonly List<string> _giveDishCorrectScratch = new();
+    private readonly List<string> _giveDishOtherShopScratch = new();
     private bool _giveDishOffersDirty = true;
     private float _vipWaitTimerRemaining;
     private float _vipWaitTimerDuration;
@@ -488,7 +492,7 @@ public class UIManager : MonoBehaviour
     [Serializable]
     public class VipTastePreferenceLine
     {
-        public string ItemName;
+        public ItemCatalog ShopCatalog;
         [TextArea] public string Dialogue;
     }
 
@@ -505,11 +509,11 @@ public class UIManager : MonoBehaviour
     {
         return new[]
         {
-            new VipTastePreferenceLine { ItemName = "\u706b\u9505", Dialogue = "\u4eca\u5929\u60f3\u5403\u70b9\u8fa3\u7684" },
-            new VipTastePreferenceLine { ItemName = "\u4e50\u53ef", Dialogue = "\u4eca\u5929\u60f3\u559d\u70b9\u6c14\u6ce1\u7684" },
-            new VipTastePreferenceLine { ItemName = "\u5976\u8336", Dialogue = "\u4eca\u5929\u60f3\u559d\u70b9\u751c\u7684" },
-            new VipTastePreferenceLine { ItemName = "\u85af\u7247", Dialogue = "\u4eca\u5929\u60f3\u5403\u70b9\u9178\u7684" },
-            new VipTastePreferenceLine { ItemName = "\u96ea\u7cd5", Dialogue = "\u4eca\u5929\u60f3\u5403\u70b9\u51b7\u7684" }
+            new VipTastePreferenceLine { Dialogue = "\u4eca\u5929\u60f3\u5403\u70b9\u8fa3\u7684" },
+            new VipTastePreferenceLine { Dialogue = "\u4eca\u5929\u60f3\u559d\u70b9\u6c14\u6ce1\u7684" },
+            new VipTastePreferenceLine { Dialogue = "\u4eca\u5929\u60f3\u559d\u70b9\u82e6\u7684" },
+            new VipTastePreferenceLine { Dialogue = "\u4eca\u5929\u60f3\u559d\u70b9\u751c\u7684" },
+            new VipTastePreferenceLine { Dialogue = "\u4eca\u5929\u60f3\u5403\u70b9\u51b7\u7684" }
         };
     }
 
@@ -1263,10 +1267,7 @@ public class UIManager : MonoBehaviour
         if (_vipItemTipsItemImage == null)
             return;
 
-        EnsureItemCatalog();
-        ShopItemDefinition definition = !string.IsNullOrWhiteSpace(itemName)
-            ? PlayerProfileStorage.ResolveCatalogItem(_itemCatalog, itemName)
-            : null;
+        ShopItemDefinition definition = ResolveAnyShopItem(itemName);
         Sprite sprite = definition != null ? definition.Image : null;
 
         _vipItemTipsItemImage.sprite = sprite;
@@ -2722,7 +2723,6 @@ public class UIManager : MonoBehaviour
     {
         CacheVipMainIconUi();
         CacheVipDialogueText();
-        EnsureItemCatalog();
 
         if (_giveDishSelectionRoot == null)
         {
@@ -2774,12 +2774,6 @@ public class UIManager : MonoBehaviour
         SetGiveDishSelectionActive(false);
     }
 
-    private void EnsureItemCatalog()
-    {
-        if (_itemCatalog == null)
-            _itemCatalog = ItemCatalog.LoadOrCreateDefault();
-    }
-
     private void HandleBagInventoryChangedForVipTaste()
     {
         _giveDishOffersDirty = true;
@@ -2802,62 +2796,125 @@ public class UIManager : MonoBehaviour
 
     private void AssignVipTastePreference(Customer vip)
     {
-        if (vip == null)
-            return;
-
-        EnsureItemCatalog();
-        _giveDishCatalogScratch.Clear();
-        CollectOwnedBagItemNames(_giveDishCatalogScratch);
-
-        // Always crave something the player can actually give, when they have bag items.
-        if (_giveDishCatalogScratch.Count == 0)
-            CollectCatalogItemNames(_giveDishCatalogScratch);
-
-        if (_giveDishCatalogScratch.Count == 0)
-            return;
-
-        vip.VipTastePreference = _giveDishCatalogScratch[
-            UnityEngine.Random.Range(0, _giveDishCatalogScratch.Count)];
-    }
-
-    private static void CollectOwnedBagItemNames(List<string> destination)
-    {
-        if (destination == null)
+        if (vip == null || _vipTastePreferenceLines == null)
             return;
 
         BagInventoryEntry[] bagItems = PlayerProfileStorage.GetBagItemsForCurrentPlayer();
+        int matchingCount = CountVipTasteShopsInBag(bagItems);
+        bool restrictToBag = matchingCount > 0;
+        int poolCount = restrictToBag ? matchingCount : CountValidVipTastePreferenceLines();
+
+        if (poolCount <= 0)
+            return;
+
+        int pick = UnityEngine.Random.Range(0, poolCount);
+        for (int i = 0; i < _vipTastePreferenceLines.Length; i++)
+        {
+            VipTastePreferenceLine line = _vipTastePreferenceLines[i];
+            if (line == null || line.ShopCatalog == null)
+                continue;
+
+            if (restrictToBag && !BagContainsItemFromShop(bagItems, line.ShopCatalog))
+                continue;
+
+            if (pick == 0)
+            {
+                vip.VipTastePreferredShop = line.ShopCatalog;
+                return;
+            }
+
+            pick--;
+        }
+    }
+
+    private int CountValidVipTastePreferenceLines()
+    {
+        int validCount = 0;
+        if (_vipTastePreferenceLines == null)
+            return validCount;
+
+        for (int i = 0; i < _vipTastePreferenceLines.Length; i++)
+        {
+            if (_vipTastePreferenceLines[i] != null && _vipTastePreferenceLines[i].ShopCatalog != null)
+                validCount++;
+        }
+
+        return validCount;
+    }
+
+    private int CountVipTasteShopsInBag(BagInventoryEntry[] bagItems)
+    {
+        int matchingCount = 0;
+        if (_vipTastePreferenceLines == null)
+            return matchingCount;
+
+        for (int i = 0; i < _vipTastePreferenceLines.Length; i++)
+        {
+            VipTastePreferenceLine line = _vipTastePreferenceLines[i];
+            if (line == null || line.ShopCatalog == null)
+                continue;
+
+            if (BagContainsItemFromShop(bagItems, line.ShopCatalog))
+                matchingCount++;
+        }
+
+        return matchingCount;
+    }
+
+    private static bool BagContainsItemFromShop(BagInventoryEntry[] bagItems, ItemCatalog shop)
+    {
+        if (bagItems == null || shop == null)
+            return false;
 
         for (int i = 0; i < bagItems.Length; i++)
         {
             BagInventoryEntry entry = bagItems[i];
-
             if (entry == null || entry.count <= 0 || string.IsNullOrWhiteSpace(entry.itemName))
                 continue;
 
-            string itemName = entry.itemName.Trim();
-            if (!destination.Contains(itemName))
-                destination.Add(itemName);
+            if (shop.ContainsItem(entry.itemName))
+                return true;
         }
+
+        return false;
     }
 
-    private void CollectCatalogItemNames(List<string> destination)
+    private ShopItemDefinition ResolveAnyShopItem(string itemName)
     {
-        if (destination == null)
-            return;
+        if (string.IsNullOrWhiteSpace(itemName))
+            return null;
 
-        ShopItemDefinition[] items = _itemCatalog != null ? _itemCatalog.Items : null;
-        if (items == null)
-            return;
-
-        for (int i = 0; i < items.Length; i++)
+        if (_vipTastePreferenceLines != null)
         {
-            if (items[i] == null || string.IsNullOrWhiteSpace(items[i].Name))
-                continue;
-
-            string itemName = items[i].Name.Trim();
-            if (!destination.Contains(itemName))
-                destination.Add(itemName);
+            for (int i = 0; i < _vipTastePreferenceLines.Length; i++)
+            {
+                ItemCatalog catalog = _vipTastePreferenceLines[i] != null
+                    ? _vipTastePreferenceLines[i].ShopCatalog
+                    : null;
+                ShopItemDefinition found = PlayerProfileStorage.ResolveCatalogItem(catalog, itemName);
+                if (found != null)
+                    return found;
+            }
         }
+
+        return null;
+    }
+
+    private ItemCatalog FindShopCatalogContaining(string itemName)
+    {
+        if (_vipTastePreferenceLines != null)
+        {
+            for (int i = 0; i < _vipTastePreferenceLines.Length; i++)
+            {
+                ItemCatalog catalog = _vipTastePreferenceLines[i] != null
+                    ? _vipTastePreferenceLines[i].ShopCatalog
+                    : null;
+                if (catalog != null && catalog.ContainsItem(itemName))
+                    return catalog;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Shows what the seated VIP is craving (used when no request is pending).</summary>
@@ -2888,7 +2945,7 @@ public class UIManager : MonoBehaviour
             return;
         }
 
-        string line = ResolveVipPreferenceDialogue(vip.VipTastePreference);
+        string line = ResolveVipPreferenceDialogue(vip.VipTastePreferredShop);
         if (string.IsNullOrWhiteSpace(line))
         {
             InterruptVipPreferenceDialogue();
@@ -2911,19 +2968,19 @@ public class UIManager : MonoBehaviour
         BeginVipPreferenceGiveDishDelay();
     }
 
-    private string ResolveVipPreferenceDialogue(string itemName)
+    private string ResolveVipPreferenceDialogue(ItemCatalog shopCatalog)
     {
-        if (string.IsNullOrWhiteSpace(itemName) || _vipTastePreferenceLines == null)
+        if (shopCatalog == null || _vipTastePreferenceLines == null)
             return null;
 
         for (int i = 0; i < _vipTastePreferenceLines.Length; i++)
         {
             VipTastePreferenceLine line = _vipTastePreferenceLines[i];
 
-            if (line == null || string.IsNullOrWhiteSpace(line.ItemName))
+            if (line == null || line.ShopCatalog == null)
                 continue;
 
-            if (string.Equals(line.ItemName.Trim(), itemName.Trim(), StringComparison.Ordinal))
+            if (line.ShopCatalog == shopCatalog)
                 return line.Dialogue;
         }
 
@@ -3012,16 +3069,19 @@ public class UIManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Offers up to 3 bag items. With more than 3 owned, the VIP's craving is always one of them.
+    /// Offers up to 3 bag items. 3 or fewer: show all, shuffled.
+    /// More than 3: include one item from the VIP's craved shop when possible; fill the rest from other shops,
+    /// then leftover matching items so the player still gets three choices.
     /// </summary>
     private void BuildGiveDishOffers()
     {
         _giveDishOffersDirty = false;
         _giveDishOfferedItems.Clear();
-        EnsureItemCatalog();
+        _giveDishCatalogScratch.Clear();
+        _giveDishCorrectScratch.Clear();
+        _giveDishOtherShopScratch.Clear();
 
         BagInventoryEntry[] bagItems = PlayerProfileStorage.GetBagItemsForCurrentPlayer();
-        _giveDishCatalogScratch.Clear();
 
         for (int i = 0; i < bagItems.Length; i++)
         {
@@ -3039,32 +3099,54 @@ public class UIManager : MonoBehaviour
         if (_giveDishCatalogScratch.Count <= MaxGiveDishButtons)
         {
             _giveDishOfferedItems.AddRange(_giveDishCatalogScratch);
+            ShuffleStrings(_giveDishOfferedItems);
             return;
         }
 
-        string preference = _vipTasteEligibleCustomer != null
-            ? _vipTasteEligibleCustomer.VipTastePreference
+        ItemCatalog preferredShop = _vipTasteEligibleCustomer != null
+            ? _vipTasteEligibleCustomer.VipTastePreferredShop
             : null;
 
-        if (!string.IsNullOrWhiteSpace(preference)
-            && _giveDishCatalogScratch.Remove(preference.Trim()))
+        for (int i = 0; i < _giveDishCatalogScratch.Count; i++)
         {
-            _giveDishOfferedItems.Add(preference.Trim());
+            string itemName = _giveDishCatalogScratch[i];
+            if (preferredShop != null && preferredShop.ContainsItem(itemName))
+                _giveDishCorrectScratch.Add(itemName);
+            else
+                _giveDishOtherShopScratch.Add(itemName);
         }
 
-        while (_giveDishOfferedItems.Count < MaxGiveDishButtons && _giveDishCatalogScratch.Count > 0)
+        if (_giveDishCorrectScratch.Count > 0)
         {
-            int pick = UnityEngine.Random.Range(0, _giveDishCatalogScratch.Count);
-            _giveDishOfferedItems.Add(_giveDishCatalogScratch[pick]);
-            _giveDishCatalogScratch.RemoveAt(pick);
+            int correctPick = UnityEngine.Random.Range(0, _giveDishCorrectScratch.Count);
+            _giveDishOfferedItems.Add(_giveDishCorrectScratch[correctPick]);
+            _giveDishCorrectScratch.RemoveAt(correctPick);
         }
 
-        // Shuffle so the craved dish is not always in the first slot.
-        for (int i = _giveDishOfferedItems.Count - 1; i > 0; i--)
+        FillGiveDishOffersFrom(_giveDishOtherShopScratch);
+        FillGiveDishOffersFrom(_giveDishCorrectScratch);
+        ShuffleStrings(_giveDishOfferedItems);
+    }
+
+    private void FillGiveDishOffersFrom(List<string> source)
+    {
+        if (source == null)
+            return;
+
+        while (_giveDishOfferedItems.Count < MaxGiveDishButtons && source.Count > 0)
+        {
+            int pick = UnityEngine.Random.Range(0, source.Count);
+            _giveDishOfferedItems.Add(source[pick]);
+            source.RemoveAt(pick);
+        }
+    }
+
+    private static void ShuffleStrings(List<string> values)
+    {
+        for (int i = values.Count - 1; i > 0; i--)
         {
             int j = UnityEngine.Random.Range(0, i + 1);
-            (_giveDishOfferedItems[i], _giveDishOfferedItems[j]) =
-                (_giveDishOfferedItems[j], _giveDishOfferedItems[i]);
+            (values[i], values[j]) = (values[j], values[i]);
         }
     }
 
@@ -3088,7 +3170,7 @@ public class UIManager : MonoBehaviour
             string itemName = _giveDishOfferedItems[i];
             entry.ItemName = itemName;
             entry.Root.localScale = Vector3.one;
-            ShopItemDefinition definition = PlayerProfileStorage.ResolveCatalogItem(_itemCatalog, itemName);
+            ShopItemDefinition definition = ResolveAnyShopItem(itemName);
 
             if (entry.Icon != null)
             {
@@ -3162,13 +3244,12 @@ public class UIManager : MonoBehaviour
             return;
         }
 
-        EnsureItemCatalog();
         string givenItem = entry.ItemName;
         RectTransform coinTrailSource = entry.Root;
 
         if (!PlayerProfileStorage.TryGiveBagItemForCurrentPlayer(
                 givenItem,
-                _itemCatalog,
+                FindShopCatalogContaining(givenItem),
                 out int cost,
                 out int worth))
         {
@@ -3177,9 +3258,8 @@ public class UIManager : MonoBehaviour
             return;
         }
 
-        string preference = _vipTasteEligibleCustomer.VipTastePreference;
-        bool matchesPreference = !string.IsNullOrWhiteSpace(preference)
-            && string.Equals(preference.Trim(), givenItem.Trim(), StringComparison.Ordinal);
+        ItemCatalog preferredShop = _vipTasteEligibleCustomer.VipTastePreferredShop;
+        bool matchesPreference = preferredShop != null && preferredShop.ContainsItem(givenItem);
         int payout = matchesPreference ? worth : cost;
 
         // One item per VIP: hide until the next seated VIP.
@@ -3195,6 +3275,9 @@ public class UIManager : MonoBehaviour
             AudioManager.Play(SfxId.GoldCollect);
             PlayCoinTrailFromUi(coinTrailSource);
         }
+
+        if (matchesPreference)
+            AudioManager.Play(SfxId.Happy);
 
         ShowVipTasteSoldDialogue(matchesPreference);
         ShowVipItemTips(payout, matchesPreference, givenItem);
@@ -6281,6 +6364,7 @@ public class UIManager : MonoBehaviour
         if (isVipCollection)
         {
             HideVipButtonHint();
+            AudioManager.Play(SfxId.Happy);
             if (paymentAnchor != null)
                 paymentAnchor.GetComponentInParent<DiningTable>()?.HideVipServedFood();
             // Defer gold + plus UI until the carrier opens the treasure chest.
@@ -6570,7 +6654,10 @@ public class UIManager : MonoBehaviour
                 continue;
 
             UpdateScreenUiPosition(entry.Value.UiRoot, entry.Value.PaymentAnchor.position);
-            entry.Value.UiRoot.localScale = Vector3.one;
+            entry.Value.UiRoot.localScale = Vector3.one * GetPulseScale(
+                _vipCoinCollectionPulseMinScale,
+                _vipCoinCollectionPulseMaxScale,
+                _vipCoinCollectionPulseSpeed);
         }
     }
 
@@ -8551,6 +8638,9 @@ public class UIManager : MonoBehaviour
 
     private void HandleTownButtonClicked()
     {
+        if (RestaurantSceneMode.IsCompetitorScene)
+            AudioManager.Play(SfxId.PortalBig);
+
         SceneManager.LoadScene(TownSceneName);
     }
 
@@ -8582,6 +8672,7 @@ public class UIManager : MonoBehaviour
 
     private void HandleFutureHomeButtonClicked()
     {
+        AudioManager.Play(SfxId.PortalBig);
         PortalTransitionController.PlayLeaveThenLoad(RestaurantSceneMode.MainSceneName);
     }
 

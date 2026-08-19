@@ -226,6 +226,7 @@ public class CompetitorVisitorManager : MonoBehaviour
 
         _activeModel.EnterStationary();
         float waitDuration = Mathf.Max(0f, _waitAtWaypointDuration);
+        AudioManager.Play(SfxId.PranksterLaugh);
         UIManager.Instance?.PlayCompetitorVisitorArrivalDialogue(_activeCompetitor, waitDuration);
 
         float elapsed = 0f;
