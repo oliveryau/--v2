@@ -806,12 +806,15 @@ public class CustomerManager : MonoBehaviour
             PlayerProfileStorage.SetMainSceneVipSpawnStopCountOverrideForCurrentPlayer(_runtimeVipSpawnStopCount);
             _pendingLullAfterPrankster = false;
             PlayerProfileStorage.ClearMainSceneVipSeatedVisitPendingForCurrentPlayer();
+            PlayerProfileStorage.ClearMainScenePortalPresentationForCurrentPlayer();
         }
 
         // Resume / migrate: if enough VIPs already left and none are active, unlock lull now.
-        // Do not present the portal when returning to an already-active lull.
         TryUnlockPostVipLull(offerPortalPresentation: false);
-        PortalUiController.EnsureHidden();
+        if (IsPostVipLullActive() && !PlayerProfileStorage.IsMainScenePortalEnteredForCurrentPlayer())
+            PortalUiController.RestorePersistentPresentation();
+        else
+            PortalUiController.EnsureHidden();
 
         _spawnCount = 0;
 
@@ -1380,6 +1383,25 @@ public class CustomerManager : MonoBehaviour
             return false;
 
         return spawnCount % _vipSpawnInterval == 0;
+    }
+
+    /// <summary>
+    /// First VIP cycle after mission 5: skip the follow-up prankster and open the portal/lull directly.
+    /// Later cycles keep VIP → prankster → portal.
+    /// </summary>
+    public bool ShouldSkipFollowUpPranksterBeforeFirstLull()
+    {
+        if (!RestaurantSceneMode.IsMainScene)
+            return false;
+
+        if (PlayerProfileStorage.IsPostVipLullActiveForCurrentPlayer())
+            return false;
+
+        int stopCount = GetEffectiveVipSpawnStopCount();
+        if (stopCount <= 0)
+            return false;
+
+        return _servedVipCount + GetActiveVipCount() >= stopCount;
     }
 
     /// <summary>
@@ -2474,10 +2496,12 @@ public class CustomerManager : MonoBehaviour
             {
                 UIManager.Instance?.HideVipUi();
 
-                // Last VIP of this cycle: let the follow-up prankster finish, then open lull.
+                // Last VIP of this cycle: wait for the follow-up prankster, then open lull.
+                // First lull after VIP prep skips that prankster: VIP → portal → lull.
                 if (HasReachedVipVisitLimit()
                     && IsVipPranksterAlternationEnabled()
-                    && CanStartVipPhaseContent())
+                    && CanStartVipPhaseContent()
+                    && !ShouldSkipFollowUpPranksterBeforeFirstLull())
                 {
                     _pendingLullAfterPrankster = true;
                 }

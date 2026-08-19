@@ -1108,8 +1108,8 @@ MonoBehaviour:
   - {fileID: 1500050674}
   - {fileID: 1855157216}
   - {fileID: 963014960}
-  _customerSpawnInterval: 4
-  _waitAtWaypointDuration: 10
+  _customerSpawnInterval: 5
+  _waitAtWaypointDuration: 15
   _breakActionDuration: 2
 --- !u!1 &33854782
 GameObject:
@@ -5869,6 +5869,9 @@ MonoBehaviour:
   _seatPaymentUiRoot: {fileID: 527289227}
   _normalCoinCollectionRoot: {fileID: 1950208299}
   _normalCoinCollectionHoldSeconds: 3
+  _vipCoinCollectionPulseMinScale: 0.96
+  _vipCoinCollectionPulseMaxScale: 1.04
+  _vipCoinCollectionPulseSpeed: 8
   _coinVfxRoot: {fileID: 1146497815}
   _coinTrailTargetUi: {fileID: 2037003167}
   _coinTrailCount: 8
@@ -40805,7 +40808,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _stoveStation: {fileID: 1413757005}
-  _cookDuration: 3
+  _cookDuration: 2
 --- !u!4 &983562058
 Transform:
   m_ObjectHideFlags: 0
@@ -65112,7 +65115,7 @@ MonoBehaviour:
   _competitorWaypoint: {fileID: 604312111}
   _exitPoint: {fileID: 2144774824}
   _competitorCatalog: {fileID: 11400000, guid: b7c8d9e0f1a24345c6d7e8f9a0b1c2d3, type: 2}
-  _customerSpawnInterval: 4
+  _customerSpawnInterval: 5
   _waitAtWaypointDuration: 15
 --- !u!1 &1303785964
 GameObject:
@@ -82022,7 +82025,7 @@ MonoBehaviour:
   _spawnInterval: 2
   _maxCustomersForFirstTable: 8
   _maxCustomersPerAdditionalTable: 4
-  _vipSpawnInterval: 3
+  _vipSpawnInterval: 5
   _maxActiveVips: 1
   _servedVipSpawnStopCount: 1
   _postVipServeMaxCustomers: 3

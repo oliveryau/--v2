@@ -177,6 +177,10 @@ public class PranksterManager : MonoBehaviour
         if (HasAnyNonLeavingVip())
             return;
 
+        if (CustomerManager.Instance != null
+            && CustomerManager.Instance.ShouldSkipFollowUpPranksterBeforeFirstLull())
+            return;
+
         CustomerManager.Instance?.NotifyVipLeftForAlternation();
         _customersSinceVipLeft = 0;
         _awaitingPranksterSpawn = true;

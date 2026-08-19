@@ -27,6 +27,10 @@ public class PlayerProfileData
     public bool mainSceneVipSeatedVisitPending;
     /// <summary>True once the post-VIP lull has unlocked (enough visits and all VIPs have left).</summary>
     public bool mainScenePostVipLullUnlocked;
+    /// <summary>True after the player tapped Check and the lull portal finished growing.</summary>
+    public bool mainScenePortalExpanded;
+    /// <summary>True after the player tapped Enter Portal during the current lull.</summary>
+    public bool mainScenePortalEntered;
     /// <summary>
     /// Temporary VIP visit limit after a competitor-steal outing (0 = use scene default stop count).
     /// </summary>
@@ -612,6 +616,40 @@ public static class PlayerProfileStorage
             return;
 
         ModifyCurrentProfile(profile => profile.hasPressedEnterPortal = true);
+    }
+
+    public static bool IsMainScenePortalExpandedForCurrentPlayer() =>
+        TryGetCurrentProfile(out PlayerProfileData profile) && profile.mainScenePortalExpanded;
+
+    public static void SetMainScenePortalExpandedForCurrentPlayer()
+    {
+        if (IsMainScenePortalExpandedForCurrentPlayer())
+            return;
+
+        ModifyCurrentProfile(profile => profile.mainScenePortalExpanded = true);
+    }
+
+    public static bool IsMainScenePortalEnteredForCurrentPlayer() =>
+        TryGetCurrentProfile(out PlayerProfileData profile) && profile.mainScenePortalEntered;
+
+    public static void SetMainScenePortalEnteredForCurrentPlayer()
+    {
+        if (IsMainScenePortalEnteredForCurrentPlayer())
+            return;
+
+        ModifyCurrentProfile(profile => profile.mainScenePortalEntered = true);
+    }
+
+    public static void ClearMainScenePortalPresentationForCurrentPlayer()
+    {
+        if (!IsMainScenePortalExpandedForCurrentPlayer() && !IsMainScenePortalEnteredForCurrentPlayer())
+            return;
+
+        ModifyCurrentProfile(profile =>
+        {
+            profile.mainScenePortalExpanded = false;
+            profile.mainScenePortalEntered = false;
+        });
     }
 
     public static bool IsMissionSellToVipCompletedForCurrentPlayer() =>

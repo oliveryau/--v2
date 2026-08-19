@@ -369,6 +369,11 @@ PrefabInstance:
       propertyPath: m_ConstrainProportionsScale
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -7511558181221131132, guid: d0b1155b2d4ce65498282a4aa12d34e8,
+        type: 3}
+      propertyPath: m_Materials.Array.data[2]
+      value: 
+      objectReference: {fileID: 2100000, guid: 8684e6ab7a11b4f408d6c019e52f1320, type: 2}
     - target: {fileID: 919132149155446097, guid: d0b1155b2d4ce65498282a4aa12d34e8,
         type: 3}
       propertyPath: m_Name
@@ -2000,6 +2005,9 @@ MonoBehaviour:
   _seatPaymentUiRoot: {fileID: 0}
   _normalCoinCollectionRoot: {fileID: 0}
   _normalCoinCollectionHoldSeconds: 3
+  _vipCoinCollectionPulseMinScale: 0.96
+  _vipCoinCollectionPulseMaxScale: 1.04
+  _vipCoinCollectionPulseSpeed: 8
   _coinVfxRoot: {fileID: 1146497815}
   _coinTrailTargetUi: {fileID: 2037003167}
   _coinTrailCount: 5
@@ -2066,7 +2074,6 @@ MonoBehaviour:
   _vipNegativeDialogueColor: {r: 0.9450981, g: 0.3882353, b: 0.3882353, a: 1}
   _vipPreferenceDialogueColor: {r: 1, g: 0.5607843, b: 0, a: 1}
   _giveDishSelectionRoot: {fileID: 0}
-  _itemCatalog: {fileID: 0}
   _vipPreferenceGiveDishDelay: 3
   _vipTasteDialogueDuration: 3
   _vipTasteSoldDialogue: "\u592A\u7F8E\u5473\u4E86\uFF01\u91D1\u5E01\u62FF\u53BB\uFF01"
@@ -4767,6 +4774,11 @@ PrefabInstance:
       propertyPath: m_ConstrainProportionsScale
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -7511558181221131132, guid: d0b1155b2d4ce65498282a4aa12d34e8,
+        type: 3}
+      propertyPath: m_Materials.Array.data[2]
+      value: 
+      objectReference: {fileID: 2100000, guid: 8684e6ab7a11b4f408d6c019e52f1320, type: 2}
     - target: {fileID: 919132149155446097, guid: d0b1155b2d4ce65498282a4aa12d34e8,
         type: 3}
       propertyPath: m_Name
@@ -4861,6 +4873,11 @@ PrefabInstance:
       propertyPath: m_ConstrainProportionsScale
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -7511558181221131132, guid: d0b1155b2d4ce65498282a4aa12d34e8,
+        type: 3}
+      propertyPath: m_Materials.Array.data[2]
+      value: 
+      objectReference: {fileID: 2100000, guid: 8684e6ab7a11b4f408d6c019e52f1320, type: 2}
     - target: {fileID: 919132149155446097, guid: d0b1155b2d4ce65498282a4aa12d34e8,
         type: 3}
       propertyPath: m_Name
@@ -10284,6 +10301,11 @@ PrefabInstance:
       propertyPath: m_ConstrainProportionsScale
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -7511558181221131132, guid: d0b1155b2d4ce65498282a4aa12d34e8,
+        type: 3}
+      propertyPath: m_Materials.Array.data[2]
+      value: 
+      objectReference: {fileID: 2100000, guid: 8684e6ab7a11b4f408d6c019e52f1320, type: 2}
     - target: {fileID: 919132149155446097, guid: d0b1155b2d4ce65498282a4aa12d34e8,
         type: 3}
       propertyPath: m_Name
@@ -10422,7 +10444,7 @@ Transform:
   m_GameObject: {fileID: 1061334245}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 4, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -14884,6 +14906,11 @@ PrefabInstance:
       propertyPath: m_ConstrainProportionsScale
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -7511558181221131132, guid: d0b1155b2d4ce65498282a4aa12d34e8,
+        type: 3}
+      propertyPath: m_Materials.Array.data[2]
+      value: 
+      objectReference: {fileID: 2100000, guid: 8684e6ab7a11b4f408d6c019e52f1320, type: 2}
     - target: {fileID: 919132149155446097, guid: d0b1155b2d4ce65498282a4aa12d34e8,
         type: 3}
       propertyPath: m_Name

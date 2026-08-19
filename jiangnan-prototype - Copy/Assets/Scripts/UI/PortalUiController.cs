@@ -104,6 +104,24 @@ public class PortalUiController : MonoBehaviour
         controller.HidePresentation();
     }
 
+    public static void RestorePersistentPresentation()
+    {
+        if (!RestaurantSceneMode.IsMainScene)
+            return;
+
+        PortalUiController controller = FindControllerIncludingInactive();
+        if (controller == null)
+            return;
+
+        StopDelayedPresent();
+
+        if (!controller.gameObject.activeSelf)
+            controller.gameObject.SetActive(true);
+
+        bool expanded = PlayerProfileStorage.IsMainScenePortalExpandedForCurrentPlayer();
+        controller.RestorePresentationVisible(expanded);
+    }
+
     private static PortalUiController FindControllerIncludingInactive()
     {
         PortalUiController[] controllers =
@@ -226,6 +244,34 @@ public class PortalUiController : MonoBehaviour
         CharacterPanelController.Instance?.FocusCameraAt(_presentationCameraPosition, ensureGroundFloor: true);
     }
 
+    private void RestorePresentationVisible(bool expanded)
+    {
+        StopGrowRoutine();
+        ResolveAll();
+        WireButtons();
+        SyncWorldPortalPosition();
+
+        if (expanded)
+        {
+            ApplyParticleStartSizeRange(_expandedStartSizeRange.x, _expandedStartSizeRange.y, restart: true);
+            _phase = PresentationPhase.Ready;
+            SetCheckPortalButtonActive(false);
+            SetEnterPortalButtonActive(true);
+            SetWaiterDialogueActive(false);
+        }
+        else
+        {
+            ApplyParticleStartSizeRange(_initialStartSizeRange.x, _initialStartSizeRange.y, restart: true);
+            _phase = PresentationPhase.Checking;
+            SetEnterPortalButtonActive(false);
+            SetCheckPortalButtonActive(true);
+            SetWaiterDialogueActive(true);
+        }
+
+        PlayPortalOpenAudio();
+        SyncActiveButtons();
+    }
+
     private void HidePresentation()
     {
         StopGrowRoutine();
@@ -276,6 +322,7 @@ public class PortalUiController : MonoBehaviour
 
         AudioManager.Play(SfxId.UiClick);
         AudioManager.Play(SfxId.PortalBig);
+        PlayerProfileStorage.SetMainScenePortalExpandedForCurrentPlayer();
         SetCheckPortalButtonActive(false);
         StopGrowRoutine();
         _growRoutine = StartCoroutine(GrowPortalParticleRoutine());
@@ -290,6 +337,7 @@ public class PortalUiController : MonoBehaviour
         AudioManager.Play(SfxId.PortalBig);
         StopPortalOpenAudio();
         PlayerProfileStorage.SetEnterPortalPressedForCurrentPlayer();
+        PlayerProfileStorage.SetMainScenePortalEnteredForCurrentPlayer();
         PortalTransitionController.PlayLeaveThenLoad(RestaurantSceneMode.FutureSceneName);
     }
 
