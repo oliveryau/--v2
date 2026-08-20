@@ -16,6 +16,7 @@ public class PortalUiController : MonoBehaviour
     private const string CheckPortalButtonName = "Check Portal Button";
     private const string PortalParticleName = "Portal Particle";
     private const string WaiterDialogueName = "Waiter Dialogue";
+    private const string WaiterIconName = "Waiter Icon";
     private const string ScreenCanvasName = "UI Canvas";
     private const string PortalPointName = "Portal Point";
     private const string EnterPortalUnknownLabel = "? ? ?";
@@ -49,6 +50,10 @@ public class PortalUiController : MonoBehaviour
     [SerializeField] private float _portalButtonPulseMaxScale = 1.03f;
     [SerializeField] private float _portalButtonPulseSpeed = 3f;
     [SerializeField] private GameObject _waiterDialogueRoot;
+    [SerializeField] private Button _waiterIconButton;
+    [SerializeField] private float _waiterIconPulseMinScale = 0.96f;
+    [SerializeField] private float _waiterIconPulseMaxScale = 1.04f;
+    [SerializeField] private float _waiterIconPulseSpeed = 4f;
     [SerializeField] private Canvas _screenCanvas;
     [SerializeField] private Camera _worldCamera;
 
@@ -59,6 +64,7 @@ public class PortalUiController : MonoBehaviour
     private PresentationPhase _phase = PresentationPhase.Hidden;
     private bool _enterButtonWired;
     private bool _checkButtonWired;
+    private bool _waiterIconButtonWired;
     private Coroutine _growRoutine;
     private AudioSource _portalAudioSource;
     private static Coroutine _delayedPresentRoutine;
@@ -179,6 +185,7 @@ public class PortalUiController : MonoBehaviour
 
         SyncWorldPortalPosition();
         SyncActiveButtons();
+        SyncWaiterIconPulse();
     }
 
     private static IEnumerator DelayedPresentCoroutine(PortalUiController controller, float delay)
@@ -295,6 +302,7 @@ public class PortalUiController : MonoBehaviour
     {
         ResolveEnterPortalButton();
         ResolveCheckPortalButton();
+        ResolveWaiterIconButton();
 
         if (_enterPortalButton != null && !_enterButtonWired)
         {
@@ -313,6 +321,19 @@ public class PortalUiController : MonoBehaviour
             _checkPortalButtonComponent.onClick.AddListener(HandleCheckPortalButtonClicked);
             _checkButtonWired = true;
         }
+
+        if (_waiterIconButton != null && !_waiterIconButtonWired)
+        {
+            _waiterIconButton.onClick.RemoveListener(HandleWaiterIconClicked);
+            _waiterIconButton.onClick.AddListener(HandleWaiterIconClicked);
+            _waiterIconButtonWired = true;
+        }
+    }
+
+    private void HandleWaiterIconClicked()
+    {
+        AudioManager.Play(SfxId.UiClick);
+        CharacterPanelController.Instance?.FocusCameraAt(_presentationCameraPosition, ensureGroundFloor: true);
     }
 
     private void HandleCheckPortalButtonClicked()
@@ -421,6 +442,7 @@ public class PortalUiController : MonoBehaviour
         ResolveCheckPortalButton();
         ResolvePortalParticle();
         ResolveWaiterDialogue();
+        ResolveWaiterIconButton();
         ResolveScreenCanvas();
         ResolveWorldCamera();
         ResolvePortalAudioSource();
@@ -525,6 +547,28 @@ public class PortalUiController : MonoBehaviour
             return;
 
         _waiterDialogueRoot = FindSceneObjectByNameIncludingInactive(WaiterDialogueName);
+    }
+
+    private void ResolveWaiterIconButton()
+    {
+        if (_waiterIconButton != null)
+            return;
+
+        if (_waiterDialogueRoot == null)
+            ResolveWaiterDialogue();
+
+        Transform icon = null;
+        if (_waiterDialogueRoot != null)
+            icon = _waiterDialogueRoot.transform.Find(WaiterIconName);
+
+        GameObject iconObject = icon != null
+            ? icon.gameObject
+            : FindSceneObjectByNameIncludingInactive(WaiterIconName);
+
+        if (iconObject == null)
+            return;
+
+        _waiterIconButton = iconObject.GetComponent<Button>() ?? iconObject.AddComponent<Button>();
     }
 
     private void ResolveScreenCanvas()
@@ -708,6 +752,41 @@ public class PortalUiController : MonoBehaviour
 
         if (_checkPortalButton != null)
             _checkPortalButton.localScale = Vector3.one;
+
+        ResetWaiterIconScale();
+    }
+
+    private void SyncWaiterIconPulse()
+    {
+        if (_waiterIconButton == null)
+            ResolveWaiterIconButton();
+
+        if (_waiterIconButton == null)
+            return;
+
+        if (!_waiterIconButton.isActiveAndEnabled)
+        {
+            ResetWaiterIconScale();
+            return;
+        }
+
+        _waiterIconButton.transform.localScale = Vector3.one * GetWaiterIconPulseScale();
+    }
+
+    private void ResetWaiterIconScale()
+    {
+        if (_waiterIconButton != null)
+            _waiterIconButton.transform.localScale = Vector3.one;
+    }
+
+    private float GetWaiterIconPulseScale()
+    {
+        float speed = _waiterIconPulseSpeed;
+        if (speed <= 0f)
+            return 1f;
+
+        float pulseT = (Mathf.Sin(Time.time * speed) + 1f) * 0.5f;
+        return Mathf.Lerp(_waiterIconPulseMinScale, _waiterIconPulseMaxScale, pulseT);
     }
 
     private float GetPortalButtonPulseScale()
@@ -730,6 +809,9 @@ public class PortalUiController : MonoBehaviour
 
         if (_waiterDialogueRoot.activeSelf != active)
             _waiterDialogueRoot.SetActive(active);
+
+        if (!active)
+            ResetWaiterIconScale();
     }
 
     private static GameObject FindSceneObjectByNameIncludingInactive(string objectName)
