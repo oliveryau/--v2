@@ -1517,7 +1517,7 @@ NavMeshAgent:
   m_Enabled: 1
   m_AgentTypeID: 0
   m_Radius: 0.5
-  m_Speed: 3
+  m_Speed: 2.5
   m_Acceleration: 8
   avoidancePriority: 50
   m_AngularSpeed: 120
@@ -5370,7 +5370,7 @@ NavMeshAgent:
   m_Enabled: 1
   m_AgentTypeID: 0
   m_Radius: 0.5
-  m_Speed: 3
+  m_Speed: 2.5
   m_Acceleration: 8
   avoidancePriority: 50
   m_AngularSpeed: 120
@@ -5692,7 +5692,7 @@ MonoBehaviour:
     type: 3}
   _builtVfxPoint: {fileID: 374538325}
   _buildVfxLifetime: 3
-  _deliveryDuration: 1.7
+  _deliveryDuration: 2
 --- !u!114 &185606769
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -22746,7 +22746,7 @@ NavMeshAgent:
   m_Enabled: 1
   m_AgentTypeID: 0
   m_Radius: 0.5
-  m_Speed: 3
+  m_Speed: 2.5
   m_Acceleration: 8
   avoidancePriority: 50
   m_AngularSpeed: 120
@@ -24751,7 +24751,7 @@ MonoBehaviour:
     type: 3}
   _builtVfxPoint: {fileID: 1382957494}
   _buildVfxLifetime: 3
-  _deliveryDuration: 0.75
+  _deliveryDuration: 1
 --- !u!114 &651118683
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -38413,7 +38413,7 @@ MonoBehaviour:
     type: 3}
   _builtVfxPoint: {fileID: 925931979}
   _buildVfxLifetime: 3
-  _deliveryDuration: 1.2
+  _deliveryDuration: 1.5
 --- !u!114 &914509805
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -40857,7 +40857,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _stoveStation: {fileID: 1413757005}
-  _cookDuration: 2
+  _cookDuration: 3
 --- !u!4 &983562058
 Transform:
   m_ObjectHideFlags: 0
@@ -58321,7 +58321,7 @@ MonoBehaviour:
     type: 3}
   _builtVfxPoint: {fileID: 2109110685}
   _buildVfxLifetime: 3
-  _deliveryDuration: 1
+  _deliveryDuration: 1.25
 --- !u!114 &1220082959
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -81255,7 +81255,7 @@ NavMeshAgent:
   m_Enabled: 1
   m_AgentTypeID: 0
   m_Radius: 0.5
-  m_Speed: 3
+  m_Speed: 2.5
   m_Acceleration: 8
   avoidancePriority: 50
   m_AngularSpeed: 120
@@ -81723,7 +81723,7 @@ MonoBehaviour:
     type: 3}
   _builtVfxPoint: {fileID: 792888910}
   _buildVfxLifetime: 3
-  _deliveryDuration: 1.5
+  _deliveryDuration: 1.75
 --- !u!114 &1520149997
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -82071,7 +82071,7 @@ MonoBehaviour:
   _customerQueue: {fileID: 1549707738}
   _spawnPoint: {fileID: 2144774824}
   _exitPoint: {fileID: 2144774824}
-  _spawnInterval: 2
+  _spawnInterval: 2.5
   _maxCustomersForFirstTable: 8
   _maxCustomersPerAdditionalTable: 4
   _vipSpawnInterval: 5
@@ -82084,8 +82084,8 @@ MonoBehaviour:
   _resumePrewarmMaxCustomers: 8
   _resumePrewarmLullMinCustomers: 1
   _resumePrewarmLullMaxCustomers: 2
-  _queueWaitTimeout: 10
-  _foodWaitTimeout: 18
+  _queueWaitTimeout: 15
+  _foodWaitTimeout: 20
   _eatDuration: 4
   _vipWaypointHoldSeconds: 5
   _competitorQueueHoldSeconds: 3
@@ -90834,7 +90834,7 @@ MonoBehaviour:
     type: 3}
   _builtVfxPoint: {fileID: 661704896}
   _buildVfxLifetime: 3
-  _deliveryDuration: 1.2
+  _deliveryDuration: 1.5
 --- !u!114 &1676987564
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -111047,7 +111047,7 @@ MonoBehaviour:
     type: 3}
   _builtVfxPoint: {fileID: 1568797926}
   _buildVfxLifetime: 3
-  _deliveryDuration: 1.25
+  _deliveryDuration: 1.5
 --- !u!114 &1866049478
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -111701,7 +111701,7 @@ MonoBehaviour:
     type: 3}
   _builtVfxPoint: {fileID: 1505741459}
   _buildVfxLifetime: 3
-  _deliveryDuration: 1.5
+  _deliveryDuration: 1.75
 --- !u!114 &1887213400
 MonoBehaviour:
   m_ObjectHideFlags: 0
